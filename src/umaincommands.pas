@@ -367,6 +367,18 @@ type
    procedure cm_OpenDriveByIndex(const Params: array of string);
    procedure cm_AddPlugin(const Params: array of string);
 
+   // @Mine@
+   // 新增 cm_ 命令
+   // 测试使用
+   procedure cm_Test(const Params: array of string);
+   // 复制面板信息
+   procedure cm_CopyPanelInfoToClip(const Params: array of string);
+   // 复制当前路径
+   procedure cm_CopyCurrentPathToClip(const Params: array of string);
+   // 进入光标所在目录
+   procedure cm_EnterActiveDir(const Params: array of string);
+   // @@
+
    // Internal commands
    procedure cm_ExecuteToolbarItem(const Params: array of string);
   end;
@@ -5129,6 +5141,51 @@ begin
     end;
   end;
 end;
+
+// @Mine@
+// 新增 cm_ 命令
+
+procedure TMainCommands.cm_Test(const Params: array of string);
+var
+  sParamValue : String;
+begin
+  GetParamValue(Params[0], 'mine', sParamValue);
+  Clipboard.Clear;
+  ClipboardSetText(sParamValue);
+  // if (frmMain.SelectedPanel = fpRight) then frmMain.SelectedPanel := fpLeft;
+  // ClipboardSetText(FloatToStr(frmMain.MainSplitterPos) + IntToStr());
+end;
+
+procedure TMainCommands.cm_CopyPanelInfoToClip(const Params: array of string);
+var
+  sPanelInfo : String = '';
+begin
+  if (frmMain.SelectedPanel = fpLeft) then
+    sPanelInfo := 'left '
+  else
+    sPanelInfo := 'right ';
+
+  Clipboard.Clear;
+  ClipboardSetText(sPanelInfo + FloatToStr(frmMain.MainSplitterPos));
+end;
+
+procedure TMainCommands.cm_CopyCurrentPathToClip(const Params: array of string);
+begin
+  Clipboard.Clear;
+  ClipboardSetText(frmMain.ActiveFrame.CurrentPath);
+end;
+
+procedure TMainCommands.cm_EnterActiveDir(const Params: array of string);
+var
+  activeFile : TFile;
+begin
+  activeFile := frmMain.ActiveFrame.CloneActiveFile;
+  if assigned(activeFile) then
+    frmMain.ActiveFrame.ChangePathToChild(activeFile);
+  FreeAndNil(activeFile);
+end;
+
+// @@
 
 { TMainCommands.cm_ConfigPlugins }
 procedure TMainCommands.cm_ConfigPlugins(const {%H-}Params: array of string);

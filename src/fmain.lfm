@@ -2779,6 +2779,28 @@ object frmMain: TfrmMain
       Caption = 'Add Plugin'
       OnExecute = actExecute
     end
+    object actTest: TAction
+      Tag = 18
+      Category = 'Tools'
+      Caption = 'Test @Mine@ * 4'
+      OnExecute = actExecute
+    end
+    object actCopyPanelInfoToClip: TAction
+      Tag = 12
+      Category = 'Clipboard'
+      Caption = 'Copy panel info to clipboard'
+      OnExecute = actExecute
+    end
+    object actCopyCurrentPathToClip: TAction
+      Tag = 12
+      Category = 'Clipboard'
+      Caption = 'Copy current path to clipboard'
+    end
+    object actEnterActiveDir: TAction
+      Tag = 14
+      Category = 'Navigation'
+      Caption = 'Enter active dir'
+    end
   end
   object pmHotList: TPopupMenu
     Images = imgLstDirectoryHotlist

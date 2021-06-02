@@ -38,7 +38,7 @@ if "%1"=="" ( call :beta
   echo Available modes: components, plugins, default, nightly, all, beta
 )))))))
 
-pause
+::pause
 GOTO:EOF
 
 :components

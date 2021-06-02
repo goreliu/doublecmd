@@ -481,10 +481,15 @@ begin
         if FileSourceFiles[i].Name = '..' then
         begin
           HaveUpDir := True;
+          // @Mine@
+          // 不显示文件列表中的 ..
+          // 只新增下一行，并且注释掉下面一大块
+          FileSourceFiles.Delete(i);
           Break;
         end;
       end;
 
+      (* --
       if (not HaveUpDir) and
          ((not FFileSource.IsPathAtRoot(FCurrentPath)) or
           // Add '..' to go to higher level file source, if there is more than one.
@@ -503,6 +508,8 @@ begin
         end;
         FileSourceFiles.Insert(AFile, 0);
       end;
+      *)
+      // @@
     end;
 
     if Aborted then

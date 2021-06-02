@@ -686,7 +686,11 @@ begin
     begin
       Key := 0;
 
-      CancelFilter;
+      // @Mine@
+      // 隐藏而不是退出，可以配置是否隐藏
+      // -- CancelFilter;
+      DoHide;
+      // @@
     end;
   end;
 end;

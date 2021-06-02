@@ -1008,7 +1008,12 @@ begin
     until ((iStart = 0) or (iCount < 0));
 
     //4. If user user wanted to execute an internal command, let's do it.
-    if frmMain.Commands.Commands.ExecuteCommand(sCmd, [sParams]) = cfrSuccess then
+    // @Mine@
+    // 通过命令行给 cm_ 命令传入多个参数，以 " | " 分隔
+    // 格式：cm_xxx arg1=value1 | arg2=value2
+    // -- if frmMain.Commands.Commands.ExecuteCommand(sCmd, [sParams]) = cfrSuccess then
+    if frmMain.Commands.Commands.ExecuteCommand(sCmd, sParams.Split([' | '])) = cfrSuccess then
+    // @@
     begin
       Result := True;
       exit;
