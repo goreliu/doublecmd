@@ -15,6 +15,7 @@
 *.wcx
 *.wdx
 *.wfx
+*.wlx
 units/x86_64-win64-win32
 units/i386-win32-win32
 
