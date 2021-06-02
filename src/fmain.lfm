@@ -2879,77 +2879,34 @@ object frmMain: TfrmMain
       Caption = 'Add Plugin'
       OnExecute = actExecute
     end
-    object actLoadList: TAction
-      Tag = 7
-      Category = 'Miscellaneous'
-      Caption = 'Load List'
-      Hint = 'Load list of files/folders from the specified text file'
-      OnExecute = actExecute
-    end
-    object actSaveFileDetailsToFile: TAction
-      Tag = 10
-      Category = 'Mark'
-      Caption = 'Save all shown columns to file'
-      OnExecute = actExecute
-    end
-    object actShowTabsList: TAction
-      Tag = 21
-      Category = 'Tabs'
-      Caption = 'Show Tabs List'
-      Hint = 'Show list of all open tabs'
-      OnExecute = actExecute
-    end
-    object actMapNetworkDrive: TAction
-      Tag = 6
-      Category = 'Network'
-      Caption = 'Map Network Drive...'
-      OnExecute = actExecute
-    end
-    object actMainFontZoomOut: TAction
-      Tag = 7
-      Category = 'Miscellaneous'
-      Caption = 'Zoom Out'
-      HelpType = htKeyword
-      OnExecute = actExecute
-    end
-    object actMainFontZoomIn: TAction
-      Tag = 7
-      Category = 'Miscellaneous'
-      Caption = 'Zoom In'
-      HelpType = htKeyword
-      OnExecute = actExecute
-    end
-    object actSetSortMode: TAction
-      Tag = 7
-      Category = 'Configuration'
-      Caption = 'Set Sort Mode'
-      HelpType = htKeyword
-      OnExecute = actExecute
-    end
-    object actAddToStash: TAction
-      Tag = 4
-      Category = 'File Operations'
-      Caption = 'Add to Stash'
-      OnExecute = actExecute
-    end
-    object actRemoveFromStash: TAction
-      Tag = 4
-      Category = 'File Operations'
-      Caption = 'Remove Stash Items'
-      OnExecute = actExecute
-    end
-    object actEmptyStash: TAction
-      Tag = 4
-      Category = 'File Operations'
-      Caption = 'Empty Stash'
-      OnExecute = actExecute
-    end
     object actCallPlatformFunctions: TAction
       Tag = 18
       Category = 'Tools'
       Caption = 'Call platform functions'
       Hint = 'Call platform functions (the function to be called is specified by the parameter ''func'')'
       OnExecute = actExecute
+    end
+    object actTest: TAction
+      Tag = 18
+      Category = 'Tools'
+      Caption = 'Test @Mine@ * 4'
+      OnExecute = actExecute
+    end
+    object actCopyPanelInfoToClip: TAction
+      Tag = 12
+      Category = 'Clipboard'
+      Caption = 'Copy panel info to clipboard'
+      OnExecute = actExecute
+    end
+    object actCopyCurrentPathToClip: TAction
+      Tag = 12
+      Category = 'Clipboard'
+      Caption = 'Copy current path to clipboard'
+    end
+    object actEnterActiveDir: TAction
+      Tag = 14
+      Category = 'Navigation'
+      Caption = 'Enter active dir'
     end
   end
   object pmHotList: TPopupMenu

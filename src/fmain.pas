@@ -576,6 +576,13 @@ type
     miSetAllTabsOptionDirsInNewTab: TMenuItem;
     miOpenDirInNewTab: TMenuItem;
     actResaveFavoriteTabs: TAction;
+    // @Mine@
+    // 新增 cm_ 命令对应动作
+    actTest: TAction;
+    actCopyPanelInfoToClip: TAction;
+    actCopyCurrentPathToClip: TAction;
+    actEnterActiveDir: TAction;
+    // @@
     procedure actExecute(Sender: TObject);
     procedure btnF3MouseWheelDown(Sender: TObject; Shift: TShiftState;
       {%H-}MousePos: TPoint; var {%H-}Handled: Boolean);
@@ -6858,7 +6865,11 @@ begin
 
       VK_RETURN, VK_SELECT:
         begin
-          if (Shift * [ssCtrl, ssAlt, ssMeta, ssAltGr] = []) then
+          // @Mine@
+          // 按回车时即使同时按了这些建，依然执行命令
+          // -- if (Shift * [ssCtrl, ssAlt, ssMeta, ssAltGr] = []) then
+          if (True) then
+          // @@
           begin
             ExecuteCommandLine(ssShift in Shift);
             Key := 0;
@@ -7085,7 +7096,11 @@ begin
     edtCommand.Items.Delete(edtCommand.Items.Count-1);
   edtCommand.DroppedDown:= False;
 
-  if (fspDirectAccess in ActiveFrame.FileSource.GetProperties) then
+  // @Mine@
+  // 在 wfx 插件里依然正常执行 cm_ 命令
+  // -- if (fspDirectAccess in ActiveFrame.FileSource.GetProperties) then
+  if (True) then
+  // @@
     begin
       if FileNameCaseSensitive then
         sDir:= sCmd
