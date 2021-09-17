@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: Double Commander 1.0.0 alpha r9716\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2008-01-17 23:08+0300\n"
-"PO-Revision-Date: 2021-03-08 10:07+0100\n"
+"PO-Revision-Date: 2021-07-10 12:05+0200\n"
 "Last-Translator: kroy <kroysoft@citromail.hu>\n"
 "Language-Team: unDoRito -- HTC-iP <dr.dabzse@gmail.com>\n"
 "Language: hu\n"
@@ -86,7 +86,7 @@ msgstr "Hely &tartalékolása"
 
 #: tfilesystemcopymoveoperationoptionsui.chkcopyonwrite.caption
 msgid "Copy on write"
-msgstr ""
+msgstr "Másolás íráskor"
 
 #: tfilesystemcopymoveoperationoptionsui.chkverify.caption
 msgid "&Verify"
@@ -140,7 +140,7 @@ msgstr "Kiadás"
 #: tfrmabout.lblcommit.caption
 msgctxt "tfrmabout.lblcommit.caption"
 msgid "Commit"
-msgstr ""
+msgstr "Kommit"
 
 #: tfrmabout.lblfreepascalver.caption
 msgctxt "tfrmabout.lblfreepascalver.caption"
@@ -1590,7 +1590,7 @@ msgstr "Nem régebbi mint:"
 
 #: tfrmfinddlg.cbofficexml.caption
 msgid "Offi&ce XML"
-msgstr ""
+msgstr "Offi&ce XML"
 
 #: tfrmfinddlg.cbopenedtabs.caption
 msgid "Opened tabs"
@@ -2218,6 +2218,10 @@ msgid "Directory &Hotlist"
 msgstr "Kedvenc &könyvtárak"
 
 #: tfrmmain.actdoanycmcommand.caption
+msgid "Execute &internal command..."
+msgstr ""
+
+#: tfrmmain.actdoanycmcommand.hint
 msgid "Select any command and execute it"
 msgstr "Válassz egy parancsot és futtasd"
 
@@ -2754,11 +2758,11 @@ msgstr "&Szimbolikus hivatkozás készítése.."
 
 #: tfrmmain.actsyncchangedir.caption
 msgid "Synchronous navigation"
-msgstr ""
+msgstr "Szinkron navigáció"
 
 #: tfrmmain.actsyncchangedir.hint
 msgid "Synchronous directory changing in both panels"
-msgstr ""
+msgstr "Szinkron könyvtár váltás mindkét panelen"
 
 #: tfrmmain.actsyncdirs.caption
 msgid "Syn&chronize dirs..."
@@ -5916,6 +5920,10 @@ msgctxt "TFRMOPTIONSFILEOPERATIONS.CBSKIPFILEOPERROR.CAPTION"
 msgid "S&kip file operations errors and write them to log window"
 msgstr "Fájlműveleti hibá&k átugrása és írja naplóablakba"
 
+#: tfrmoptionsfileoperations.cbtestarchiveconfirmation.caption
+msgid "Test archive operation"
+msgstr ""
+
 #: tfrmoptionsfileoperations.cbverifychecksumconfirmation.caption
 msgid "Verify checksum operation"
 msgstr "Ellenőrző összeg vizsgálata folyamatban"
@@ -6177,7 +6185,7 @@ msgstr "Fá&jlméret formátum:"
 
 #: tfrmoptionsfilesviews.lblfootersizeformat.caption
 msgid "&Footer format:"
-msgstr ""
+msgstr "&Lábléc formátum:"
 
 #: tfrmoptionsfilesviews.lblgigabyte.caption
 msgid "&Gigabyte:"
@@ -6185,7 +6193,7 @@ msgstr "&Gigabájt:"
 
 #: tfrmoptionsfilesviews.lblheadersizeformat.caption
 msgid "&Header format:"
-msgstr ""
+msgstr "&Fejléc formátum:"
 
 #: tfrmoptionsfilesviews.lblkilobyte.caption
 msgid "&Kilobyte:"
@@ -6833,6 +6841,10 @@ msgstr "Új létrehozása ezzel a kódolással:"
 #: tfrmoptionsmisc.chkgotoroot.caption
 msgid "Always &go to the root of a drive when changing drives"
 msgstr "&Mindig ugorjon a gyökérkönyvtárba a meghajtó váltásakor"
+
+#: tfrmoptionsmisc.chkshowcurdirtitlebar.caption
+msgid "Show &current directory in the main window title bar"
+msgstr ""
 
 #: tfrmoptionsmisc.chkshowwarningmessages.caption
 msgctxt "tfrmoptionsmisc.chkshowwarningmessages.caption"
@@ -8898,7 +8910,7 @@ msgstr "Kiadás"
 #: tfrmstartingsplash.lblcommit.caption
 msgctxt "tfrmstartingsplash.lblcommit.caption"
 msgid "Commit"
-msgstr ""
+msgstr "Kommit"
 
 #: tfrmstartingsplash.lblfreepascalver.caption
 msgctxt "tfrmstartingsplash.lblfreepascalver.caption"
@@ -10164,6 +10176,10 @@ msgstr "_EjtettUnicodeUTF8Szoveg"
 msgid " Adds: "
 msgstr " Többlet: "
 
+#: ulng.rsdiffcomparing
+msgid "Comparing..."
+msgstr ""
+
 #: ulng.rsdiffdeletes
 msgid " Deletes: "
 msgstr " Hiányzó: "
@@ -10179,6 +10195,26 @@ msgstr "Egyező:"
 #: ulng.rsdiffmodifies
 msgid " Modifies: "
 msgstr "Eltérő:"
+
+#: ulng.rsdifftextdifferenceencoding
+#, fuzzy
+msgctxt "ulng.rsdifftextdifferenceencoding"
+msgid "Encoding"
+msgstr "Kódolás"
+
+#: ulng.rsdifftextdifferencelineending
+msgid "Line-endings"
+msgstr ""
+
+#: ulng.rsdifftextidentical
+msgid "The text is identical, but the following options are used:"
+msgstr ""
+
+#: ulng.rsdifftextidenticalnotmatch
+msgid ""
+"The text is identical, but the files do not match!\n"
+"The following differences were found:\n"
+msgstr ""
 
 #: ulng.rsdlgbuttonabort
 msgid "Ab&ort"
@@ -11092,7 +11128,7 @@ msgstr "Nem tudom a(z) %s fájlt ide másolni: %s"
 
 #: ulng.rsmsgerrcannotmovedirectory
 msgid "Cannot move directory %s"
-msgstr ""
+msgstr "Ez a könyvtár nem mozgatható: \"%s\""
 
 #: ulng.rsmsgerrcannotmovefile
 msgid "Cannot move file %s"
@@ -11967,6 +12003,10 @@ msgstr "Add meg a TC eszköztár mentésének helyét és nevét"
 #: ulng.rsmsgterminateprocess
 msgid "WARNING: Terminating a process can cause undesired results including loss of data and system instability. The process will not be given the chance to save its state or data before it is terminated. Are you sure you want to terminate the process?"
 msgstr "FIGYELEM: A folyamat leállítása nemkívánatos eredményeket okozhat, beleértve az adatok elvesztését és a rendszer instabillá válását. A folyamat így nem kap lehetőséget arra, hogy állapotát vagy adatait mentse a leállítása előtt. Biztosan le akarod állítani a folyamatot?"
+
+#: ulng.rsmsgtestarchive
+msgid "Do you want to test selected archives?"
+msgstr ""
 
 #: ulng.rsmsgthisisnowinclipboard
 msgid "\"%s\" is now in the clipboard"
@@ -13860,6 +13900,10 @@ msgctxt "ulng.rsvfsnetwork"
 msgid "Network"
 msgstr "Hálózat"
 
+#: ulng.rsvfsrecyclebin
+msgid "Recycle Bin"
+msgstr ""
+
 #: ulng.rsviewabouttext
 msgid "Internal Viewer of Double Commander."
 msgstr "A Double Commander belső nézőkéje"
@@ -13909,5 +13953,5 @@ msgstr "Nem történt csere."
 
 #: umaincommands.rsfavoritetabs_setupnotexist
 msgid "No setup named \"%s\""
-msgstr ""
+msgstr "Nincs \"%s\" nevű beállítás"
 

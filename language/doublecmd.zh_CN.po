@@ -87,7 +87,7 @@ msgstr "保留空间(&R)"
 
 #: tfilesystemcopymoveoperationoptionsui.chkcopyonwrite.caption
 msgid "Copy on write"
-msgstr ""
+msgstr "写入时复制"
 
 #: tfilesystemcopymoveoperationoptionsui.chkverify.caption
 msgid "&Verify"
@@ -1159,7 +1159,7 @@ msgstr "当前操作："
 #: tfrmfileop.lblfrom.caption
 msgctxt "TFRMFILEOP.LBLFROM.CAPTION"
 msgid "From:"
-msgstr "从："
+msgstr "从:"
 
 #: tfrmfileop.lblto.caption
 msgid "To:"
@@ -1790,7 +1790,7 @@ msgstr "查找"
 
 #: tfrmfindview.cbbackwards.caption
 msgid "&Backwards"
-msgstr ""
+msgstr "向后(&B)"
 
 #: tfrmfindview.cbcasesens.caption
 msgid "C&ase sensitive"
@@ -2184,6 +2184,10 @@ msgid "Directory &Hotlist"
 msgstr "常用文件夹列表(&H)"
 
 #: tfrmmain.actdoanycmcommand.caption
+msgid "Execute &internal command..."
+msgstr "执行内部命令(&I)..."
+
+#: tfrmmain.actdoanycmcommand.hint
 msgid "Select any command and execute it"
 msgstr "选择任何命令并执行"
 
@@ -5813,6 +5817,10 @@ msgstr "在复制/移动对话框显示标签选择面板(&W)"
 msgid "S&kip file operations errors and write them to log window"
 msgstr "忽略文件操作错误，并记录到日志窗口(&K)"
 
+#: tfrmoptionsfileoperations.cbtestarchiveconfirmation.caption
+msgid "Test archive operation"
+msgstr "测试存档操作"
+
 #: tfrmoptionsfileoperations.cbverifychecksumconfirmation.caption
 msgid "Verify checksum operation"
 msgstr "验证校验和操作"
@@ -6658,6 +6666,10 @@ msgstr "创建新文件的编码："
 #: tfrmoptionsmisc.chkgotoroot.caption
 msgid "Always &go to the root of a drive when changing drives"
 msgstr "更换驱动器时，总是转到根文件夹(&G)"
+
+#: tfrmoptionsmisc.chkshowcurdirtitlebar.caption
+msgid "Show &current directory in the main window title bar"
+msgstr "在主窗口标题栏中显示当前目录(&C)"
 
 #: tfrmoptionsmisc.chkshowwarningmessages.caption
 msgid "Show &warning messages (\"OK\" button only)"
@@ -8767,7 +8779,7 @@ msgstr "链接名(&L)"
 
 #: tfrmsyncdirsdlg.actdeleteboth.caption
 msgid "Delete on both sides"
-msgstr ""
+msgstr "两边都删除"
 
 #: tfrmsyncdirsdlg.actdeleteleft.caption
 msgid "<- Delete left"
@@ -8799,7 +8811,7 @@ msgstr "选择复制方向 <- （从右到左）"
 
 #: tfrmsyncdirsdlg.actselectdeleteboth.caption
 msgid "Select for deleting <-> (both)"
-msgstr ""
+msgstr "选择删除<-> (两边都有)"
 
 #: tfrmsyncdirsdlg.actselectdeleteleft.caption
 msgid "Select for deleting <- (left)"
@@ -9944,11 +9956,15 @@ msgstr "_删除的Unicode UTF16 文本"
 
 #: ulng.rsdefaultsuffixdroppedtextunicodeutf8filename
 msgid "_DroppedUnicodeUTF8text"
-msgstr ""
+msgstr "_删除的Unicode UTF8 文本"
 
 #: ulng.rsdiffadds
 msgid " Adds: "
 msgstr " 地址："
+
+#: ulng.rsdiffcomparing
+msgid "Comparing..."
+msgstr "比较..."
 
 #: ulng.rsdiffdeletes
 msgid " Deletes: "
@@ -9965,6 +9981,28 @@ msgstr " 匹配："
 #: ulng.rsdiffmodifies
 msgid " Modifies: "
 msgstr " 修改："
+
+#: ulng.rsdifftextdifferenceencoding
+#, fuzzy
+msgctxt "ulng.rsdifftextdifferenceencoding"
+msgid "Encoding"
+msgstr "编码"
+
+#: ulng.rsdifftextdifferencelineending
+msgid "Line-endings"
+msgstr "行尾"
+
+#: ulng.rsdifftextidentical
+msgid "The text is identical, but the following options are used:"
+msgstr "文本是相同的，但使用了以下选项:"
+
+#: ulng.rsdifftextidenticalnotmatch
+msgid ""
+"The text is identical, but the files do not match!\n"
+"The following differences were found:\n"
+msgstr ""
+"文本相同，但文件不匹配!\n"
+"发现以下差异:\n"
 
 #: ulng.rsdlgbuttonabort
 msgid "Ab&ort"
@@ -11747,6 +11785,10 @@ msgstr "输入要保存的 TC 工具栏文件的位置和文件名"
 #: ulng.rsmsgterminateprocess
 msgid "WARNING: Terminating a process can cause undesired results including loss of data and system instability. The process will not be given the chance to save its state or data before it is terminated. Are you sure you want to terminate the process?"
 msgstr "警告：终止进程可能会导致意外结果，包括数据丢失和系统不稳定。终止前，该进程将无法保存其状态或数据。您确定要终止该进程吗？"
+
+#: ulng.rsmsgtestarchive
+msgid "Do you want to test selected archives?"
+msgstr "您想测试选定的档案吗"
 
 #: ulng.rsmsgthisisnowinclipboard
 msgid "\"%s\" is now in the clipboard"
@@ -13615,6 +13657,10 @@ msgstr "路径不带结束分隔符（默认值）"
 msgctxt "ulng.rsvfsnetwork"
 msgid "Network"
 msgstr "网络"
+
+#: ulng.rsvfsrecyclebin
+msgid "Recycle Bin"
+msgstr "回收站"
 
 #: ulng.rsviewabouttext
 msgid "Internal Viewer of Double Commander."

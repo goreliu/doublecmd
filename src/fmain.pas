@@ -231,6 +231,7 @@ type
     lblRightDriveInfo: TLabel;
     lblLeftDriveInfo: TLabel;
     lblCommandPath: TLabel;
+    mnuDoAnyCmCommand: TMenuItem;
     miConfigArchivers: TMenuItem;
     mnuConfigSavePos: TMenuItem;
     mnuConfigSaveSettings: TMenuItem;
@@ -708,6 +709,7 @@ type
     FOperationsPanel: TOperationsPanel;
     FSyncChangeParent: Boolean;
     FSyncChangeDir: String;
+    sStaticTitleBarString: String;
 
     // frost_asm begin
     // mainsplitter
@@ -842,12 +844,14 @@ type
                                         out DestPath, DestMask: String); overload;
     procedure SetActiveFrame(panel: TFilePanelSelect);
     procedure SetActiveFrame(FileView: TFileView);
+    procedure UpdateFileView;
     procedure UpdateShellTreeView;
     procedure UpdateTreeViewPath;
     procedure UpdateTreeView;
     procedure UpdateDiskCount;
     procedure UpdateSelectedDrives;
     procedure UpdateGUIFunctionKeys;
+    procedure UpdateMainTitleBar;
     procedure CreateDiskPanel(dskPanel : TKASToolBar);
     procedure SetPanelDrive(aPanel: TFilePanelSelect; Drive: PDrive; ActivateIfNeeded: Boolean);
     function CreateFileView(sType: String; Page: TFileViewPage; AConfig: TXmlConfig; ANode: TXmlNode): TFileView;
@@ -901,6 +905,7 @@ type
     property LeftTabs: TFileViewNotebook read nbLeft;
     property RightTabs: TFileViewNotebook read nbRight;
     property MainSplitterPos: Double read FMainSplitterPos write SetMainSplitterPos;
+    property StaticTitle: String read sStaticTitleBarString write sStaticTitleBarString;
   end;
 
 var
@@ -1086,9 +1091,8 @@ begin
 
   ConvertToolbarBarConfig(gpCfgDir + 'default.bar');
   CreateDefaultToolbar;
+  sStaticTitleBarString := GenerateTitle();
 
-  //Caption of main window
-  Self.Caption := GenerateTitle();
   // Remove the initial caption of the button, which is just a text of the associated action.
   // The text would otherwise be briefly shown before the drive button was updated.
   btnLeftDrive.Caption := '';
@@ -2517,6 +2521,7 @@ begin
 
   UpdatePrompt;
   UpdateTreeViewPath;
+  UpdateMainTitleBar;
 end;
 
 procedure TfrmMain.nbPageMouseUp(Sender: TObject; Button: TMouseButton;
@@ -4403,6 +4408,7 @@ begin
               glsDirHistory.Move(Index, 0);
             end;
             UpdateTreeViewPath;
+            UpdateMainTitleBar;
           end;
 
           if actSyncChangeDir.Checked and (FileView = ActiveFrame) then
@@ -4458,6 +4464,7 @@ begin
       UpdateSelectedDrive(Page.Notebook);
       UpdateFreeSpace(Page.Notebook.Side);
     end;
+  UpdateFileView;
 end;
 
 procedure TfrmMain.FileViewFilesChanged(FileView: TFileView);
@@ -4489,6 +4496,19 @@ begin
     if gTermWindow and Assigned(Cons) then
       Cons.Terminal.SetCurrentDir(FileView.CurrentPath);
   end;
+end;
+
+procedure TfrmMain.UpdateFileView;
+var
+  AFileView: TFileView;
+begin
+  AFileView:= ActiveFrame;
+  if AFileView is TColumnsFileView then
+    actColumnsView.Checked:= True
+  else if AFileView is TBriefFileView then
+    actBriefView.Checked:= True
+  else if AFileView is TThumbFileView then
+    actThumbnailsView.Checked:= True;
 end;
 
 procedure TfrmMain.UpdateShellTreeView;
@@ -5361,6 +5381,7 @@ begin
 
     UpdateHotDirIcons; // Preferable to be loaded even if not required in popupmenu *because* in the tree it's a must, especially when checking for missing directories
     ShowTrayIcon(gAlwaysShowTrayIcon);
+    UpdateMainTitleBar;
 
     FInitializedView := True;
   finally
@@ -5777,6 +5798,7 @@ begin
   if PanelSelected = AValue then Exit;
   PanelSelected := AValue;
   UpdateTreeViewPath;
+  UpdateMainTitleBar;
   UpdatePrompt;
   if actSyncChangeDir.Checked then begin
     FSyncChangeDir:= ExcludeTrailingBackslash(ActiveFrame.CurrentPath);
@@ -6060,25 +6082,23 @@ end;
 
 procedure TfrmMain.UpdateDriveButtonSelection(DriveButton: TSpeedButton; FileView: TFileView);
 var
-  BitmapTmp: Graphics.TBitmap = nil;
-  DriveIndex: Integer;
   Drive: PDrive;
+  BitmapTmp: Graphics.TBitmap = nil;
 begin
+  DriveButton.Tag := FindMatchingDrive(FileView.CurrentAddress, FileView.CurrentPath);
+
   if not gDrivesListButton then
     Exit;
 
-  DriveIndex := FindMatchingDrive(FileView.CurrentAddress, FileView.CurrentPath);
-  if DriveIndex >= 0 then
+  if DriveButton.Tag >= 0 then
   begin
-    Drive := DrivesList[DriveIndex];
+    Drive := DrivesList[DriveButton.Tag];
     DriveButton.Caption := Drive^.DisplayName;
-    DriveButton.Tag := DriveIndex;
     BitmapTmp := PixMapManager.GetDriveIcon(Drive, gDiskIconsSize, DriveButton.Color);
   end
   else
   begin
     DriveButton.Caption := '';
-    DriveButton.Tag := -1;
 
     if FileView.FileSource.IsClass(TArchiveFileSource) then
       BitmapTmp := PixMapManager.GetArchiveIcon(gDiskIconsSize, DriveButton.Color)
@@ -6170,6 +6190,24 @@ begin
   end;
   UpdateDriveButtonSelection(btnLeftDrive, FrameLeft);
   UpdateDriveButtonSelection(btnRightDrive, FrameRight);
+end;
+
+procedure TfrmMain.UpdateMainTitleBar;
+var sTmp: String;
+begin
+    if gShowCurDirTitleBar and (fspDirectAccess in ActiveFrame.FileSource.Properties) then
+    begin
+        sTmp := ActiveFrame.CurrentPath;
+        Self.Caption:= Format('%s (%s) - %s',
+            [GetLastDir(sTmp),
+            sTmp,
+            sStaticTitleBarString]
+            );
+    end
+    else
+    begin
+        Self.Caption := sStaticTitleBarString;
+    end;
 end;
 
 procedure TfrmMain.UpdateGUIFunctionKeys;

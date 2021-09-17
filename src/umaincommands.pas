@@ -739,6 +739,7 @@ end;
 
 procedure TMainCommands.DoContextMenu(Panel: TFileView; X, Y: Integer; Background: Boolean; UserWishForContextMenu:TUserWishForContextMenu);
 var
+  Index: Integer;
   aFile: TFile = nil;
   aFiles: TFiles = nil;
   sPath, sName: String;
@@ -781,6 +782,14 @@ begin
     try
       if aFiles.Count > 0 then
       try
+        if fspLinksToLocalFiles in Panel.FileSource.Properties then
+        begin
+          for Index:= 0 to aFiles.Count - 1 do
+          begin
+            aFile:= aFiles[Index];
+            Panel.FileSource.GetLocalName(aFile);
+          end;
+        end;
         ShowContextMenu(frmMain, aFiles, X, Y, Background, nil, UserWishForContextMenu);
       except
         on e: EContextMenuException do
@@ -1329,16 +1338,36 @@ end;
 
 procedure TMainCommands.cm_TestArchive(const Params: array of string);
 var
+  Param: String;
+  BoolValue: Boolean;
   SelectedFiles: TFiles;
+  bConfirmation, HasConfirmationParam: Boolean;
+  QueueId: TOperationsManagerQueueIdentifier = FreeOperationsQueueId;
 begin
   with frmMain do
   begin
-    SelectedFiles := ActiveFrame.CloneSelectedOrActiveFiles;
-    try
-      TestArchive(ActiveFrame, SelectedFiles);
-    finally
-      if Assigned(SelectedFiles) then
+    HasConfirmationParam := False;
+
+    for Param in Params do
+    begin
+      if GetParamBoolValue(Param, 'confirmation', BoolValue) then
+      begin
+        HasConfirmationParam := True;
+        bConfirmation := BoolValue;
+      end;
+    end;
+    if not HasConfirmationParam then begin
+      bConfirmation := focTestArchive in gFileOperationsConfirmations;
+    end;
+
+    if (bConfirmation = False) or (ShowDeleteDialog(rsMsgTestArchive, ActiveFrame.FileSource, QueueId)) then
+    begin
+      SelectedFiles := ActiveFrame.CloneSelectedOrActiveFiles;
+      try
+        TestArchive(ActiveFrame, SelectedFiles, QueueId);
+      finally
         FreeAndNil(SelectedFiles);
+      end;
     end;
   end;
 end;

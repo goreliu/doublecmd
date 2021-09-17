@@ -123,24 +123,25 @@ implementation
 
 uses
   ExtDlgs, LCLProc, Menus, Graphics, InterfaceBase, WSForms, LMessages, LCLIntf,
-  uConnectionManager
+  fMain, uConnectionManager
   {$IF DEFINED(MSWINDOWS)}
-  , LCLStrConsts, ComObj, fMain, DCOSUtils, uOSUtils, uFileSystemFileSource
+  , LCLStrConsts, ComObj, DCOSUtils, uOSUtils, uFileSystemFileSource
   , uTotalCommander, FileUtil, Windows, ShlObj, uShlObjAdditional
   , uWinNetFileSource, uVfsModule, uLng, uMyWindows, DCStrUtils
   , uDCReadSVG, uFileSourceUtil, uGdiPlusJPEG, uListGetPreviewBitmap
   , Dialogs, Clipbrd, uShowMsg, uDebug, JwaDbt, uThumbnailProvider
+  , uRecycleBinFileSource
     {$IFDEF LCLQT5}
     , qt5, qtwidgets, uDarkStyle
     {$ENDIF}
   {$ENDIF}
   {$IFDEF UNIX}
-  , BaseUnix, fFileProperties, uJpegThumb
+  , BaseUnix, Errors, fFileProperties, uJpegThumb
     {$IF NOT DEFINED(DARWIN)}
     , uDCReadSVG, uMagickWand, uGio, uGioFileSource, uVfsModule, uVideoThumb
     , uDCReadWebP, uFolderThumb, uAudioThumb
     {$ELSE}
-    , MacOSAll, fMain, uQuickLook, uMyDarwin, uShowMsg, uLng
+    , MacOSAll, uQuickLook, uMyDarwin, uShowMsg, uLng
     {$ENDIF}
     {$IF NOT DEFINED(DARWIN)}
     , fOpenWith
@@ -582,8 +583,15 @@ begin
 {$ENDIF}
   // Register network file source
   RegisterVirtualFileSource(rsVfsNetwork, TWinNetFileSource);
-  if (IsUserAdmin = dupAccept) then // if run under administrator
-    MainForm.Caption:= MainForm.Caption + ' - Administrator';
+  if CheckWin32Version(5, 1) then
+    RegisterVirtualFileSource(rsVfsRecycleBin, TRecycleBinFileSource);
+
+  // If run under administrator
+  if (IsUserAdmin = dupAccept) then
+  begin
+    with TfrmMain(MainForm) do
+      StaticTitle:= StaticTitle + ' - Administrator';
+  end;
 
   // Add main window message handler
   {$PUSH}{$HINTS OFF}
@@ -638,8 +646,10 @@ var
 {$ENDIF}
 begin
   if fpGetUID = 0 then // if run under root
-    MainForm.Caption:= MainForm.Caption + ' - ROOT PRIVILEGES';
-
+  begin
+    with TfrmMain(MainForm) do
+      StaticTitle:= StaticTitle + ' - ROOT PRIVILEGES';
+  end;
   {$IF NOT DEFINED(DARWIN)}
   if HasGio then RegisterVirtualFileSource('GVfs', TGioFileSource, False);
   {$ENDIF}
@@ -887,6 +897,29 @@ procedure ShowOpenWithDialog(TheOwner: TComponent; const FileList: TStringList);
 begin
   fOpenWith.ShowOpenWithDlg(TheOwner, FileList);
 end;
+{$ENDIF}
+
+{$IF DEFINED(UNIX)}
+procedure handle_sigterm(signal: longint); cdecl;
+begin
+  WriteLn('SIGTERM');
+  frmMain.Close;
+end;
+
+procedure RegisterHandler;
+var
+  sa: sigactionrec;
+begin
+  FillChar(sa, SizeOf(sa), #0);
+  sa.sa_handler := @handle_sigterm;
+  if (fpSigAction(SIGTERM, @sa, nil) = -1) then
+  begin
+    Errors.PError('fpSigAction', GetLastOSError);
+  end;
+end;
+
+initialization
+  RegisterHandler;
 {$ENDIF}
 
 finalization

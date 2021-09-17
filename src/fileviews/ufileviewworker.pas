@@ -247,7 +247,7 @@ implementation
 
 uses
   {$IFDEF timeFileView} uDebug, {$ENDIF}
-  LCLProc, Graphics, DCFileAttributes, uIMCode,
+  LCLProc, Graphics, DCFileAttributes,
   uFileSourceOperationTypes, uOSUtils, DCStrUtils, uDCUtils, uExceptions,
   uGlobs, uPixMapManager, uFileSourceProperty,
   uFileSourceCalcStatisticsOperation,
@@ -583,6 +583,8 @@ end;
 class function TFileListBuilder.InternalMatchesFilter(aFile: TFile;
                                                       const aFileFilter: String;
                                                       const aFilterOptions: TQuickSearchOptions): Boolean;
+const
+  ACaseSensitive: array[Boolean] of TMaskOptions = ([], [moCaseSensitive]);
 begin
   if (gShowSystemFiles = False) and AFile.IsSysFile and (AFile.Name <> '..') then
     Result := True
@@ -610,7 +612,7 @@ begin
     begin
       if MatchesMask(AFile.Name,
                      aFileFilter,
-                     aFilterOptions.SearchCase = qscSensitive)
+                     ACaseSensitive[aFilterOptions.SearchCase = qscSensitive])
       then
         Result := False;
     end;
@@ -647,7 +649,7 @@ begin
     else
     begin
       // Match the file name and Pinyin letter
-      if aMasks.Matches(AFile.Name) or aMasks.Matches(MakeSpellCode(AFile.Name)) then
+      if aMasks.Matches(AFile.Name) then
          Result := False;
     end;
   end
@@ -697,14 +699,15 @@ var
   AFile: TFile;
   AFilter: Boolean;
   Masks: TMaskList;
-  CaseSence: Boolean;
+  AOptions: TMaskOptions = [moPinyin];
 begin
   filteredDisplayFiles.Clear;
-  CaseSence:= qscSensitive in [aFilterOptions.SearchCase];
+  if qscSensitive in [aFilterOptions.SearchCase] then
+    AOptions += [moCaseSensitive];
 
   if Assigned(allDisplayFiles) then
   try
-    Masks:= TMaskList.Create(aFileFilter, ';,', CaseSence);
+    Masks:= TMaskList.Create(aFileFilter, ';,', AOptions);
 
     for I := 0 to Masks.Count - 1 do
     begin

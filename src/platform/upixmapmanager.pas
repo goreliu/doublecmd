@@ -1867,14 +1867,27 @@ begin
       end;
     end;
 
-    if (DirectAccess = False) and (AFile.Attributes = (FILE_ATTRIBUTE_NORMAL or FILE_ATTRIBUTE_VIRTUAL)) and Assigned(AFile.LinkProperty) then
+    if (DirectAccess = False) then
     begin
-      if not LoadIcon then
-        Result := -1
-      else begin
-        Result := GetPluginIcon(AFile.LinkProperty.LinkTo, FiDirIconID);
+      if (AFile.Attributes = (FILE_ATTRIBUTE_NORMAL or FILE_ATTRIBUTE_VIRTUAL)) and Assigned(AFile.LinkProperty) then
+      begin
+        if not LoadIcon then
+          Result := -1
+        else begin
+          Result := GetPluginIcon(AFile.LinkProperty.LinkTo, FiDirIconID);
+        end;
+        Exit;
+      end
+      else if (AFile.Attributes = (FILE_ATTRIBUTE_OFFLINE or FILE_ATTRIBUTE_VIRTUAL)) and Assigned(AFile.LinkProperty) then
+      begin
+        if not LoadIcon then
+          Result := -1
+        else begin
+          Result := CheckAddPixmap(AFile.LinkProperty.LinkTo);
+          if Result < 0 then Result := FiDirIconID;
+        end;
+        Exit;
       end;
-      Exit;
     end;
 
     if IsDirectory or IsLinkToDirectory then
@@ -2177,7 +2190,6 @@ begin
       end;
 
       SFI.hIcon := 0;
-      Result := Graphics.TBitMap.Create;
       iIconLarge:= GetSystemMetrics(SM_CXICON);
       iIconSmall:= GetSystemMetrics(SM_CXSMICON);
 

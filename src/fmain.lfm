@@ -1195,6 +1195,9 @@ object frmMain: TfrmMain
       object miRunTerm: TMenuItem
         Action = actRunTerm
       end
+      object mnuDoAnyCmCommand: TMenuItem
+        Action = actDoAnyCmCommand
+      end
       object miLine9: TMenuItem
         Caption = '-'
       end
@@ -1492,6 +1495,7 @@ object frmMain: TfrmMain
       Tag = 16
       Category = 'Window'
       Caption = '&Horizontal Panels Mode'
+      GroupIndex = 5
       OnExecute = actExecute
     end
     object actPanelsSplitterPerPos: TAction
@@ -1650,6 +1654,7 @@ object frmMain: TfrmMain
       Category = 'View'
       Caption = 'Show &Hidden/System Files'
       Checked = True
+      GroupIndex = 2
       HelpType = htKeyword
       OnExecute = actExecute
     end
@@ -1928,6 +1933,7 @@ object frmMain: TfrmMain
       Tag = 19
       Category = 'View'
       Caption = 'Enable/disable ignore list file to not show file names'
+      GroupIndex = 4
       OnExecute = actExecute
     end
     object actCopyNamesToClip: TAction
@@ -2217,21 +2223,27 @@ object frmMain: TfrmMain
     object actBriefView: TAction
       Tag = 1
       Category = 'Active Panel'
+      AutoCheck = True
       Caption = 'Brief view'
+      GroupIndex = 6
       Hint = 'Brief View'
       OnExecute = actExecute
     end
     object actColumnsView: TAction
       Tag = 1
       Category = 'Active Panel'
+      AutoCheck = True
       Caption = 'Full'
+      GroupIndex = 6
       Hint = 'Columns View'
       OnExecute = actExecute
     end
     object actThumbnailsView: TAction
       Tag = 1
       Category = 'Active Panel'
+      AutoCheck = True
       Caption = 'Thumbnails'
+      GroupIndex = 6
       Hint = 'Thumbnails View'
       OnExecute = actExecute
     end
@@ -2251,6 +2263,7 @@ object frmMain: TfrmMain
       Tag = 1
       Category = 'Active Panel'
       Caption = '&Quick View Panel'
+      GroupIndex = 1
       OnExecute = actExecute
     end
     object actSortByName: TAction
@@ -2468,7 +2481,8 @@ object frmMain: TfrmMain
     object actDoAnyCmCommand: TAction
       Tag = 18
       Category = 'Tools'
-      Caption = 'Select any command and execute it'
+      Caption = 'Execute &internal command...'
+      Hint = 'Select any command and execute it'
       OnExecute = actExecute
     end
     object actSetFileProperties: TAction
@@ -2563,6 +2577,7 @@ object frmMain: TfrmMain
       Tag = 16
       Category = 'Window'
       Caption = '&Tree View Panel'
+      GroupIndex = 3
       OnExecute = actExecute
     end
     object actFocusTreeView: TAction

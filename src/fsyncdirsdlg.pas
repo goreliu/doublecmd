@@ -845,7 +845,9 @@ begin
       FillRect(aRect);
       Font.Bold := True;
       Font.Color := clWindowText;
-      TextOut(aRect.Left + 2, aRect.Top + 2, FVisibleItems[aRow]);
+      with hCols[0] do
+        TextRect(Rect(Left, aRect.Top, Left + Width, aRect.Bottom),
+          Left + 2, aRect.Top + 2, FVisibleItems[aRow]);
     end else begin
       case r.FState of
       srsNotEq:       Font.Color := gSyncUnknownColor;
@@ -857,10 +859,15 @@ begin
       end;
       if Assigned(r.FFileL) then
       begin
-        TextOut(aRect.Left + 2, aRect.Top + 2, FVisibleItems[aRow]);
+        with hCols[0] do
+          TextRect(Rect(Left, aRect.Top, Left + Width, aRect.Bottom),
+            Left + 2, aRect.Top + 2, FVisibleItems[aRow]);
         s := IntToStr(r.FFileL.Size);
-        x := hCols[1].Left + hCols[1].Width - 2 - TextWidth(s);
-        TextOut(x, aRect.Top + 2, s);
+        with hCols[1] do begin
+          x := Left + Width - 8 - TextWidth(s);
+          TextRect(Rect(Left, aRect.Top, Left + Width, aRect.Bottom),
+            x, aRect.Top + 2, s);
+        end;
         s := DateTimeToStr(r.FFileL.ModificationTime);
         with hCols[2] do
           TextRect(Rect(Left, aRect.Top, Left + Width, aRect.Bottom),
@@ -870,8 +877,11 @@ begin
       begin
         TextOut(hCols[6].Left + 2, aRect.Top + 2, FVisibleItems[aRow]);
         s := IntToStr(r.FFileR.Size);
-        x := hCols[5].Left + hCols[5].Width - 2 - TextWidth(s);
-        TextOut(x, aRect.Top + 2, s);
+        with hCols[5] do begin
+          x := Left + Width - 8 - TextWidth(s);
+          TextRect(Rect(Left, aRect.Top, Left + Width, aRect.Bottom),
+            x, aRect.Top + 2, s);
+        end;
         s := DateTimeToStr(r.FFileR.ModificationTime);
         with hCols[4] do
           TextRect(Rect(Left, aRect.Top, Left + Width, aRect.Bottom),
@@ -1088,7 +1098,8 @@ procedure TfrmSyncDirsDlg.FillFoundItemsDG;
         if Assigned(r.FFileL) and not Assigned(r.FFileR) then Inc(FuniqueL) else
         if Assigned(r.FFileR) and not Assigned(r.FFileL) then Inc(FuniqueR);
         if r.FState = srsEqual then Inc(Fequal) else
-        if r.FState = srsNotEq then Inc(Fnoneq);
+        if r.FState = srsNotEq then Inc(Fnoneq) else
+        if Assigned(r.FFileL) and Assigned(r.FFileR) then Inc(Fnoneq);
       end;
     end;
   end;

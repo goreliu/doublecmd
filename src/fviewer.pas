@@ -1357,10 +1357,9 @@ begin
     begin
       if WlxPlugins.GetWlxModule(I).FileParamVSDetectStr(AFileName, bForce) then
       begin
-        DCDebug('I = ' + IntToStr(I));
         if not WlxPlugins.LoadModule(I) then Continue;
         WlxModule:= WlxPlugins.GetWlxModule(I);
-        DCDebug('WlxModule.Name = ', WlxModule.Name);
+        WlxModule.QuickView:= bQuickView;
         if WlxModule.CallListLoad(Self.Handle, sFileName, ShowFlags) = 0 then
         begin
           WlxModule.UnloadModule;
@@ -2632,7 +2631,7 @@ begin
   begin
     pnlImage.TabStop:= True;
     Status.Panels[sbpTextEncoding].Text:= EmptyStr;
-    if CanFocus and pnlImage.CanFocus then pnlImage.SetFocus;
+    if (not bQuickView) and CanFocus and pnlImage.CanFocus then pnlImage.SetFocus;
     PanelEditImage.Visible:= not (bQuickView or (miFullScreen.Checked and not PanelEditImage.MouseEntered));
   end;
 

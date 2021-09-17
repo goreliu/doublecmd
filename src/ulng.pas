@@ -49,6 +49,7 @@ resourcestring
   rsMsgNewFile = 'New file';
   rsMsgDelFlDr = 'Delete %d selected files/directories?';
   rsMsgDelSel = 'Delete selected "%s"?';
+  rsMsgTestArchive = 'Do you want to test selected archives?';
   rsMsgVerifyChecksum = 'Do you want to verify selected checksums?';
   rsMsgObjectNotExists = 'Object does not exist!';
   // 12.05.2009 - another message, when deleting to trash
@@ -397,6 +398,7 @@ resourcestring
   rsMsgErrInvalidLink = 'Invalid link';
   // Vfs
   rsVfsNetwork = 'Network';
+  rsVfsRecycleBin = 'Recycle Bin';
 
   // Buttons.
   rsDlgButtonOK = '&OK';
@@ -572,7 +574,12 @@ resourcestring
   rsDiffModifies = ' Modifies: ';
   rsDiffAdds = ' Adds: ';
   rsDiffDeletes = ' Deletes: ';
+  rsDiffComparing = 'Comparing...';
   rsDiffFilesIdentical = 'The two files are identical!';
+  rsDiffTextIdentical = 'The text is identical, but the following options are used:';
+  rsDiffTextIdenticalNotMatch =  'The text is identical, but the files do not match!'+#$0A+'The following differences were found:';
+  rsDiffTextDifferenceEncoding = 'Encoding';
+  rsDiffTextDifferenceLineEnding = 'Line-endings';
   // Find files dialog
   rsFindSearchFiles = 'Find files';
   rsFindDefineTemplate = 'Define template';
