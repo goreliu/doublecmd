@@ -172,7 +172,8 @@ type
 
 const
   { Default hotkey list version number }
-  hkVersion = 52;
+  hkVersion = 53;
+  // 53 - In "Main" context, change shortcut "Alt+`" to "Alt+0" for the "cm_ActivateTabByIndex".
   // 52 - In "Main" context, add shortcut "Ctrl+Shift+B" for "cm_FlatViewSel".
   // 51 - In "Multi-Rename" context, added the "Shift+F4" shortcut for the "cm_EditNewNames".
   // 50 - To load shortcut keys for the "Multi-Rename" which is now driven with "cm_Actions".
@@ -1027,6 +1028,16 @@ begin
         end;
       end;
 
+      if HotMan.Version < 53 then
+      begin
+        HMHotKey:= Find(['Alt+`']);
+        if Assigned(HMHotKey) and (HMHotKey.Command = 'cm_ActivateTabByIndex') then
+        begin
+          if HMHotKey.SameParams(['index=-1']) then
+            HMHotKey.Shortcuts[0]:= 'Alt+0';
+        end;
+      end;
+
       AddIfNotExists(['Alt+F8','','',
                       'Ctrl+Down','',''], 'cm_ShowCmdLineHistory');
       AddIfNotExists(['Ctrl+B'],[],'cm_FlatView');
@@ -1098,7 +1109,7 @@ begin
          'Alt+7','','index=7','',
          'Alt+8','','index=8','',
          'Alt+9','','index=9','',
-         'Alt+`','','index=-1',''],
+         'Alt+0','','index=-1',''],
        'cm_ActivateTabByIndex');
       AddIfNotExists([
         'Ctrl+1','','index=1','',
@@ -1604,7 +1615,7 @@ begin
   gAutoFillColumns := False;
   gAutoSizeColumn := 1;
   gColumnsAutoSaveWidth := True;
-  gColumnsTitleStyle := {$IFDEF LCLWIN32}tsNative{$ELSE}tsStandard{$ENDIF};
+  gColumnsTitleStyle := tsNative;
   gCustomColumnsChangeAllColumns := False;
   gDateTimeFormat := DefaultDateTimeFormat;
   gCutTextToColWidth := True;
@@ -1681,21 +1692,21 @@ begin
   gFonts[dcfConsole].MaxValue := 200;
 
   gFonts[dcfPathEdit].Name := 'default';
-  gFonts[dcfPathEdit].Size := 8;
+  gFonts[dcfPathEdit].Size := 10;
   gFonts[dcfPathEdit].Style := [];
   gFonts[dcfPathEdit].Quality := fqDefault;
   gFonts[dcfPathEdit].MinValue := 6;
   gFonts[dcfPathEdit].MaxValue := 200;
 
   gFonts[dcfFunctionButtons].Name := 'default';
-  gFonts[dcfFunctionButtons].Size := 8;
+  gFonts[dcfFunctionButtons].Size := 10;
   gFonts[dcfFunctionButtons].Style := [];
   gFonts[dcfFunctionButtons].Quality := fqDefault;
   gFonts[dcfFunctionButtons].MinValue := 6;
   gFonts[dcfFunctionButtons].MaxValue := 200;
 
   gFonts[dcfSearchResults].Name := 'default';
-  gFonts[dcfSearchResults].Size := 9;
+  gFonts[dcfSearchResults].Size := 10;
   gFonts[dcfSearchResults].Style := [];
   gFonts[dcfSearchResults].Quality := fqDefault;
   gFonts[dcfSearchResults].MinValue := 6;

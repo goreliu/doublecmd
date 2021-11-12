@@ -43,7 +43,7 @@ uses
   //Lazarus, Free-Pascal, etc.
   LazUtf8, SysUtils, Classes, Graphics, Forms, StdCtrls, Menus, Controls,
   LCLType, StringHashList, Grids, ExtCtrls, Buttons, ActnList, EditBtn,
-  KASButton,
+  KASButton, KASToolPanel,
 
   //DC
   DCXmlConfig, uOSForms, uRegExprW, uFileProperty, uFormCommands,
@@ -134,9 +134,9 @@ type
     cmbExtensionStyle: TComboBox;
     gbPresets: TGroupBox;
     cbPresets: TComboBox;
-    btnPresets: TBitBtn;
+    btnPresets: TKASButton;
     spltMainSplitter: TSplitter;
-    pnlOptionsRight: TPanel;
+    pnlOptionsRight: TKASToolPanel;
     gbFindReplace: TGroupBox;
     lbFind: TLabel;
     edFind: TEdit;
@@ -229,6 +229,7 @@ type
     procedure FormCreate({%H-}Sender: TObject);
     procedure FormCloseQuery({%H-}Sender: TObject; var CanClose: boolean);
     procedure FormClose({%H-}Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormShow(Sender: TObject);
     procedure StringGridKeyDown({%H-}Sender: TObject; var Key: word; Shift: TShiftState);
     procedure StringGridMouseDown({%H-}Sender: TObject; Button: TMouseButton; {%H-}Shift: TShiftState; X, Y: integer);
     procedure StringGridMouseUp({%H-}Sender: TObject; Button: TMouseButton; {%H-}Shift: TShiftState; {%H-}X, {%H-}Y: integer);
@@ -379,7 +380,7 @@ uses
   fMain, uFileSourceOperation, uOperationsManager, uOSUtils, uDCUtils, uDebug,
   DCOSUtils, DCStrUtils, uLng, uGlobs, uSpecialDir, uFileProcs, uShowForm,
   fSelectTextRange, fSelectPathRange, uShowMsg, uFileFunctions, dmCommonData,
-  fMultiRenameWait, fSortAnything;
+  fMultiRenameWait, fSortAnything, DCConvertEncoding;
 
 type
   tMaskHelper = record
@@ -658,6 +659,18 @@ begin
   end;
 end;
 
+procedure TfrmMultiRename.FormShow(Sender: TObject);
+var
+  APoint: TPoint;
+begin
+{$IF DEFINED(LCLQT5)}
+  gbPresets.Constraints.MaxHeight:= cbPresets.Height + (gbPresets.Height - gbPresets.ClientHeight) + 
+                                    gbPresets.ChildSizing.TopBottomSpacing * 2;
+{$ENDIF}
+  APoint:= TPoint.Create(cbUseSubs.Left, 0);
+  fneRenameLogFileFilename.BorderSpacing.Left:= gbFindReplace.ClientToParent(APoint, pnlOptionsRight).X;
+end;
+
 { TfrmMultiRename.StringGridKeyDown }
 procedure TfrmMultiRename.StringGridKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
 var
@@ -775,7 +788,7 @@ end;
 procedure TfrmMultiRename.edFindChange(Sender: TObject);
 begin
   if cbRegExp.Checked then
-    FRegExp.Expression := UTF8Decode(edFind.Text)
+    FRegExp.Expression := CeUtf8ToUtf16(edFind.Text)
   else
   begin
     FFindText.DelimitedText := edFind.Text;
@@ -1257,10 +1270,10 @@ var
 begin
   btnAnyNameMask.Action := actAnyNameMask;
   btnAnyNameMask.Caption := '...';
-  btnAnyNameMask.Width := fneRenameLogFileFilename.ButtonWidth;;
+  btnAnyNameMask.Width := fneRenameLogFileFilename.ButtonWidth;
   btnAnyExtMask.Action := actAnyExtMask;
   btnAnyExtMask.Caption := '...';
-  btnAnyExtMask.Width := fneRenameLogFileFilename.ButtonWidth;;;
+  btnAnyExtMask.Width := fneRenameLogFileFilename.ButtonWidth;
   btnRelativeRenameLogFile.Action := actInvokeRelativePath;
   btnRelativeRenameLogFile.Caption := '';
   btnRelativeRenameLogFile.Width := fneRenameLogFileFilename.ButtonWidth;
@@ -1272,7 +1285,7 @@ begin
   btnPresets.Action := actShowPresetsMenu;
   btnPresets.Caption := '';
   btnPresets.Hint := actShowPresetsMenu.Caption;
-  btnPresets.Width := fneRenameLogFileFilename.ButtonWidth;;;
+  btnPresets.Constraints.MinWidth := fneRenameLogFileFilename.ButtonWidth;
 
   miPresets := TMenuItem.Create(mmMainMenu);
   miPresets.Caption := gbPresets.Caption;
@@ -2036,7 +2049,7 @@ begin
   begin
     if cbRegExp.Checked then
       try
-        Result := UTF16ToUTF8(FRegExp.Replace(UTF8Decode(Result), UTF8Decode(edReplace.Text), cbUseSubs.Checked));
+        Result := UTF16ToUTF8(FRegExp.Replace(CeUtf8ToUtf16(Result), CeUtf8ToUtf16(edReplace.Text), cbUseSubs.Checked));
       except
         Result := rsMsgErrRegExpSyntax;
         bError := True;
