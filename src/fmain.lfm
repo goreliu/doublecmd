@@ -2325,6 +2325,7 @@ object frmMain: TfrmMain
       Tag = 1
       Category = 'Active Panel'
       Caption = 'Open drive list'
+      OnExecute = actExecute
     end
     object actExchange: TAction
       Tag = 14
@@ -2835,6 +2836,13 @@ object frmMain: TfrmMain
       Tag = 14
       Category = 'Navigation'
       Caption = 'Enter active dir'
+    end
+    object actLoadList: TAction
+      Tag = 7
+      Category = 'Miscellaneous'
+      Caption = 'Load List'
+      Hint = 'Load list of files/folders from the specified text file'
+      OnExecute = actExecute
     end
   end
   object pmHotList: TPopupMenu

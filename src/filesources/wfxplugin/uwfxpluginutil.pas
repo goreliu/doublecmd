@@ -138,7 +138,10 @@ end;
 
 function WfxFileTimeToDateTime(FileTime: TWfxFileTime): TDateTime;
 begin
-  Result:= WinFileTimeToDateTime(TWinFileTime(FileTime));
+  if (FileTime.dwLowDateTime = $FFFFFFFE) and (FileTime.dwHighDateTime = $FFFFFFFF) then
+    Result:= Default(TDateTime)
+  else
+    Result:= WinFileTimeToDateTime(TWinFileTime(FileTime));
 end;
 
 function DateTimeToWfxFileTime(DateTime: TDateTime): TWfxFileTime;
@@ -496,7 +499,10 @@ begin
   if caoCopyTime in FCopyAttributesOptions then
   begin
     if (FMode = wpohmCopyOut) then
-      mbFileSetTime(TargetFileName, DateTimeToFileTime(SourceFile.ModificationTime))
+    begin
+      if SourceFile.ModificationTimeProperty.IsValid then
+        mbFileSetTime(TargetFileName, DateTimeToFileTime(SourceFile.ModificationTime));
+    end
     else begin
       WfxFileTime := DateTimeToWfxFileTime(SourceFile.ModificationTime);
       FWfxPluginFileSource.WfxModule.WfxSetTime(TargetFileName, nil, nil, @WfxFileTime);
