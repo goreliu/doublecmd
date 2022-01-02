@@ -45,7 +45,8 @@ rem Copy needed files
 copy windows\doublecmd.iss %BUILD_PACK_DIR%\
 
 rem Copy libraries
-copy windows\lib\%CPU_TARGET%\*.dll    %BUILD_DC_TMP_DIR%\
+copy windows\lib\%CPU_TARGET%\*.dll             %BUILD_DC_TMP_DIR%\
+copy windows\lib\%CPU_TARGET%\winpty-agent.exe  %BUILD_DC_TMP_DIR%\
 
 cd /D %BUILD_DC_TMP_DIR%
 
@@ -57,7 +58,7 @@ call %BUILD_DC_TMP_DIR%\install\windows\install.bat
 
 cd /D %BUILD_PACK_DIR%
 rem Create *.exe package
-%ISCC_EXE% /F"doublecmd-%DC_VER%.%CPU_TARGET%-%OS_TARGET%" doublecmd.iss
+%ISCC_EXE% /F"doublecmd-%DC_VER%.%CPU_TARGET%-%OS_TARGET%" /DDisplayVersion=%DC_VER% doublecmd.iss
 
 rem Move created package
 move release\*.exe %PACK_DIR%
