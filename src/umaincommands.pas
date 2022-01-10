@@ -3873,14 +3873,7 @@ end;
 
 procedure TMainCommands.cm_ToggleFullscreenConsole(const Params: array of string);
 begin
-  with frmMain do
-  begin
-    ToggleFullscreenConsole;
-    if IsCommandLineVisible then
-    begin
-      edtCommand.SetFocus;
-    end;
-  end;
+  frmMain.ToggleFullscreenConsole;
 end;
 
 procedure TMainCommands.cm_RunTerm(const Params: array of string);

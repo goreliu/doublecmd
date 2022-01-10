@@ -1247,8 +1247,19 @@ begin
 end;
 
 procedure TfrmMain.ConsoleSplitterMoved(Sender: TObject);
+var
+  AHeight: Integer;
 begin
-  nbConsole.Height := nbConsole.Height + nbConsole.Tag - pnlCommand.Height;
+  AHeight:= nbConsole.Height + nbConsole.Tag - pnlCommand.Height;
+  if AHeight > 0 then
+  begin
+    nbConsole.Height := AHeight;
+    cmdConsole.Visible:= True;
+  end
+  else begin
+    cmdConsole.Hide;
+    nbConsole.Height := 0;
+  end;
 end;
 
 procedure TfrmMain.dskToolButtonMouseDown(Sender: TObject;
@@ -5177,11 +5188,13 @@ begin
   else if nbConsole.Height < (nbConsole.Height + pnlNotebooks.Height - 1) then
   begin
     nbConsole.Height := nbConsole.Height + pnlNotebooks.Height;
-    if (not gCmdLine) and cmdConsole.CanFocus then cmdConsole.SetFocus;
+    if not cmdConsole.Visible then cmdConsole.Visible:= True;
+    if cmdConsole.CanFocus then cmdConsole.SetFocus;
   end
   else begin
+    cmdConsole.Hide;
     nbConsole.Height := 0;
-    if (not gCmdLine) and ActiveFrame.CanFocus then ActiveFrame.SetFocus;
+    if ActiveFrame.CanFocus then ActiveFrame.SetFocus;
   end;
 end;
 

@@ -28,18 +28,19 @@ type
   // terminal character result
   TEscapeResult = (erChar, erCode, erNothing);
   // terminal escape codes
-  TEscapeCode = (ecUnknown, ecNotCompleted, ecCursorUp, ecCursorDown,
-    ecCursorLeft, ecCursorRight, ecCursorHome, ecCursorEnd, ecCursorMove, ecCursorMoveX, ecCursorMoveY,
+  TEscapeCode = (ecUnknown, ecNotCompleted, ecCursorUp, ecCursorDown, ecCursorLeft,
+    ecCursorRight, ecCursorHome, ecCursorEnd, ecCursorMove, ecCursorMoveX, ecCursorMoveY,
     ecReverseLineFeed, ecAppCursorLeft, ecAppCursorRight, ecAppCursorUp, ecAppCursorDown,
-    ecAppCursorHome, ecAppCursorEnd, ecInsertKey, ecDeleteKey, ecPageUpKey, ecPageDownKey,
+    ecAppCursorHome, ecAppCursorEnd, ecCursorNextLine, ecCursorPrevLine, ecInsertKey,
+    ecDeleteKey, ecPageUpKey, ecPageDownKey,
     ecMouseDown, ecMouseUp, ecEraseLineLeft, ecEraseLineRight, ecEraseScreenFrom,
-    ecEraseLine, ecEraseScreen, ecEraseChar, ecSetTab, ecClearTab, ecClearAllTabs,
+    ecEraseLine, ecEraseScreen, ecEraseChar, ecDeleteChar, ecSetTab, ecClearTab, ecClearAllTabs,
     ecIdentify, ecIdentResponse, ecQueryDevice, ecReportDeviceOK,
     ecReportDeviceFailure, ecQueryCursorPos, ecReportCursorPos,
-    ecAttributes, ecSetMode, ecResetMode, ecReset, ecCharSet,
+    ecAttributes, ecSetMode, ecResetMode, ecReset, ecCharSet, ecSoftReset,
     ecSaveCaretAndAttr, ecRestoreCaretAndAttr, ecSaveCaret, ecRestoreCaret,
-    ecTest, ecFuncKey, ecSetTextParams, ecScrollRegion, ecReverseIndex,
-    ecKeypadApp, ecKeypadNum);
+    ecTest, ecFuncKey, ecSetTextParams, ecScrollRegion, ecDeleteLine,
+    ecInsertLine, ecKeypadApp, ecKeypadNum, ecScrollUp, ecScrollDown);
 
   // terminal escape codes processor
   TEscapeCodes = class
@@ -181,7 +182,7 @@ begin
     'B': Result := ecCursorDown;
     'C': Result := ecCursorRight;
     'D': Result := ecCursorLeft;
-    'H': Result := ecCursorHome;
+    'H': Result := ecCursorMove;
     'I': Result := ecReverseLineFeed;
     'J': Result := ecEraseScreenFrom;
     'K': Result := ecEraseLineRight;
@@ -335,7 +336,7 @@ begin
     case Str[1] of
       'H': Result := ecSetTab;
       'c': Result := ecReset;
-      'M': Result := ecReverseIndex;
+      'M': Result := ecReverseLineFeed;
       '7': Result := ecSaveCaretAndAttr;
       '8': Result := ecRestoreCaretAndAttr;
       '=': Result := ecKeypadApp;
@@ -364,6 +365,8 @@ begin
     end
     else if Str[1] = '(' then
     begin
+      FParams.Clear;
+      FParams.Add(Str[2]);
       Result:= ecCharSet;
     end;
   end;
@@ -502,14 +505,16 @@ begin
       'B': Result := ecCursorDown;
       'C': Result := ecCursorRight;
       'D': Result := ecCursorLeft;
-      'H': Result := ecCursorHome;
-      'F': Result := ecCursorEnd;
+      'E': Result := ecCursorNextLine;
+      'F': Result := ecCursorPrevLine;
+      'H': Result := ecCursorMove;
       'f': Result := ecCursorMove;
       'd': Result := ecCursorMoveY;
       'G': Result := ecCursorMoveX;
       'J': Result := CodeEraseScreen;
       'K': Result := CodeEraseLine;
       'X': Result := ecEraseChar;
+      'P': Result := ecDeleteChar;
       'g': Result := CodeTab;
       'm': Result := ecAttributes;
       'h': Result := ecSetMode;
@@ -520,6 +525,11 @@ begin
       'c': Result := CodeIdentify;
       'R': Result := ecReportCursorPos;
       'r': Result := ecScrollRegion;
+      'S': Result := ecScrollUp;
+      'T': Result := ecScrollDown;
+      'L': Result := ecInsertLine;
+      'M': Result := ecDeleteLine;
+      'p': Result := ecSoftReset;
     else
       Result := ecUnknown;
     end;

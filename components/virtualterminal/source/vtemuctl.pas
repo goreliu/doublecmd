@@ -64,11 +64,17 @@ type
   private
     FBuffer: PByte;
     FTabs: Pointer;
+    FTopLeft: TPoint;
+    FCaretPos: TPoint;
+    FScrollRange: TRect;
     FOwner: TCustomComTerminal;
+  strict private
+    FRows: Integer;
+    FColumns: Integer;
   public
     constructor Create(AOwner: TCustomComTerminal);
     destructor Destroy; override;
-    procedure Init;
+    procedure Init(ARows, AColumns: Integer);
     procedure SetChar(Column, Row: Integer; TermChar: TComTermChar);
     function GetChar(Column, Row: Integer): TComTermChar;
     procedure SetTab(Column: Integer; Put: Boolean);
@@ -81,8 +87,13 @@ type
     procedure EraseLineLeft(Column, Row: Integer);
     procedure EraseLineRight(Column, Row: Integer);
     procedure EraseChar(Column, Row, Count: Integer);
+    procedure DeleteChar(Column, Row, Count: Integer);
+    procedure DeleteLine(Row, Count: Integer);
+    procedure InsertLine(Row, Count: Integer);
     function GetLineLength(Line: Integer): Integer;
     function GetLastLine: Integer;
+    property Rows: Integer read FRows;
+    property Columns: Integer read FColumns;
   end;
 
   // terminal types
@@ -100,6 +111,7 @@ type
   end;
   TTermMode = record
     Keys: TArrowKeys;
+    CharSet: Boolean;
     MouseMode: Boolean;
     MouseTrack: Boolean;
   end;
@@ -132,6 +144,7 @@ type
     FAutoFollow : Boolean;
     FFontHeight: Integer;
     FFontWidth: Integer;
+    FPartChar: TUTF8Char;
     FEmulation: TTermEmulation;
     FCaret: TTermCaret;
     FCaretPos: TPoint;
@@ -141,6 +154,8 @@ type
     FCaretHeight: Integer;
     FSaveAttr: TTermAttributes;
     FBuffer: TComTermBuffer;
+    FMainBuffer: TComTermBuffer;
+    FAlternateBuffer: TComTermBuffer;
     FParams: TStrings;
     FEscapeCodes: TEscapeCodes;
     FTermAttr: TTermAttributes;
@@ -337,6 +352,8 @@ constructor TComTermBuffer.Create(AOwner: TCustomComTerminal);
 begin
   inherited Create;
   FOwner := AOwner;
+  FTopLeft := Classes.Point(1, 1);
+  FCaretPos := Classes.Point(1, 1);
 end;
 
 // destroy class
@@ -356,7 +373,7 @@ procedure TComTermBuffer.SetChar(Column, Row: Integer;
 var
   Address: Integer;
 begin
-  Address := (Row - 1) * FOwner.Columns + Column - 1;
+  Address := (Row - 1) * FColumns + Column - 1;
   Move(
     TermChar,
     (FBuffer + (SizeOf(TComTermChar) * Address))^,
@@ -368,7 +385,7 @@ function TComTermBuffer.GetChar(Column, Row: Integer): TComTermChar;
 var
   Address: Integer;
 begin
-  Address := (Row - 1) * FOwner.Columns + Column - 1;
+  Address := (Row - 1) * FColumns + Column - 1;
   Move(
     (FBuffer + (SizeOf(TComTermChar) * Address))^,
     Result,
@@ -377,95 +394,61 @@ end;
 
 // scroll down up line
 procedure TComTermBuffer.ScrollDown;
-var
-  BytesToMove: Integer;
-  SourceAddr: Pointer;
-  ScrollRect: TRect;
 begin
-  BytesToMove := (FOwner.Rows - 1) * FOwner.Columns * SizeOf(TComTermChar);
-  SourceAddr := (FBuffer + FOwner.Columns * SizeOf(TComTermChar));
-  // scroll in buffer
-  Move(SourceAddr^, FBuffer^, BytesToMove);
-  SourceAddr := (FBuffer +
-    (FOwner.Rows - 1) * FOwner.Columns * SizeOf(TComTermChar));
-  FillChar(SourceAddr^, FOwner.Columns * SizeOf(TComTermChar), 0);
-  // calculate scrolling rectangle
-  with ScrollRect do
-  begin
-    Left := 0;
-    Right := Min(FOwner.ClientWidth, FOwner.Columns * FOwner.FFontWidth);
-    Top := 0;
-    Bottom := Min(FOwner.ClientHeight, FOwner.Rows * FOwner.FFontHeight);
-  end;
-  // scroll on screen
-  if FOwner.DoubleBuffered then
-    FOwner.Invalidate
-  else
-    ScrollWindowEx(FOwner.Handle, 0, -FOwner.FFontHeight,
-      @ScrollRect, nil, 0, nil, SW_INVALIDATE or SW_ERASE);
+  DeleteLine(FScrollRange.Top, 1);
 end;
 
 // scroll up one line
 procedure TComTermBuffer.ScrollUp;
-var
-  BytesToMove: Integer;
-  DestAddr: Pointer;
-  ScrollRect: TRect;
 begin
-  BytesToMove := (FOwner.Rows - 1) * FOwner.Columns * SizeOf(TComTermChar);
-  DestAddr := (FBuffer + FOwner.Columns * SizeOf(TComTermChar));
-  // scroll in buffer
-  Move(FBuffer^, DestAddr^, BytesToMove);
-  FillChar(FBuffer^, FOwner.Columns * SizeOf(TComTermChar), 0);
-  // calculate scrolling rectangle
-  with ScrollRect do
-  begin
-    Left := 0;
-    Right := Min(FOwner.ClientWidth, FOwner.Columns * FOwner.FFontWidth);
-    Top := 0;
-    Bottom := Min(FOwner.ClientHeight, FOwner.Rows * FOwner.FFontHeight);
-  end;
-  // scroll on screen
-  if FOwner.DoubleBuffered then
-    FOwner.Invalidate
-  else
-    ScrollWindowEx(FOwner.Handle, 0, FOwner.FFontHeight,
-      @ScrollRect, nil, 0, nil, SW_INVALIDATE or SW_ERASE);
+  InsertLine(FScrollRange.Top, 1)
 end;
 
 procedure TComTermBuffer.EraseLineLeft(Column, Row: Integer);
 var
-  BytesToDelete: Integer;
-  SourceAddr: Pointer;
+  Index: Integer;
+  Count: Integer;
+  B: PComTermChar;
 begin
   // in memory
-  BytesToDelete := (Column + 1) * SizeOf(TComTermChar);
-  SourceAddr := (FBuffer +
-    ((Row - 1) * FOwner.Columns - 1) * SizeOf(TComTermChar));
-  FillChar(SourceAddr^, BytesToDelete, 0);
+  Count:= (Column + 1);
+  B:= PComTermChar(FBuffer) + ((Row - 1) * FColumns - 1);
+  for Index:= 0 to Count - 1 do
+  begin
+    B[Index].Ch:= #32;
+    B[Index].BackColor:= FOwner.FTermAttr.BackColor;
+    B[Index].FrontColor:= FOwner.FTermAttr.FrontColor;
+  end;
+
   // on screen
   if FOwner.DoubleBuffered then
     FOwner.Invalidate
   else
-    FOwner.InvalidatePortion(Classes.Rect(Column, Row, FOwner.Columns, Row));
+    FOwner.InvalidatePortion(Classes.Rect(Column, Row, FColumns, Row));
 end;
 
 // erase line
 procedure TComTermBuffer.EraseLineRight(Column, Row: Integer);
 var
-  BytesToDelete: Integer;
-  SourceAddr: Pointer;
+  Index: Integer;
+  Count: Integer;
+  B: PComTermChar;
 begin
   // in memory
-  BytesToDelete := (FOwner.Columns - Column + 1) * SizeOf(TComTermChar);
-  SourceAddr := (FBuffer +
-    ((Row - 1) * FOwner.Columns + Column - 1) * SizeOf(TComTermChar));
-  FillChar(SourceAddr^, BytesToDelete, 0);
+  Count:= (FColumns - Column + 1);
+  B:= PComTermChar(FBuffer) + ((Row - 1) * FColumns + Column - 1);
+  for Index:= 0 to Count - 1 do
+  begin
+    B[Index].Ch:= #32;
+    B[Index].BackColor:= FOwner.FTermAttr.BackColor;
+    B[Index].FrontColor:= FOwner.FTermAttr.FrontColor;
+  end;
+
   // on screen
   if FOwner.DoubleBuffered then
     FOwner.Invalidate
   else
-    FOwner.InvalidatePortion(Classes.Rect(Column, Row, FOwner.Columns, Row));
+    FOwner.InvalidatePortion(Classes.Rect(Column, Row, FColumns, Row));
 end;
 
 procedure TComTermBuffer.EraseChar(Column, Row, Count: Integer);
@@ -473,59 +456,179 @@ var
   Index: Integer;
   B: PComTermChar;
 begin
+  if (Column + Count > FColumns) then
+    Count:= FColumns - Column;
+
   // in memory
-  B:= PComTermChar(FBuffer) + ((Row - 1) * FOwner.Columns + Column - 1);
+  B:= PComTermChar(FBuffer) + ((Row - 1) * FColumns + Column - 1);
   for Index:= 0 to Count - 1 do
   begin
     B[Index].Ch:= #32;
+    B[Index].BackColor:= FOwner.FTermAttr.BackColor;
+    B[Index].FrontColor:= FOwner.FTermAttr.FrontColor;
   end;
 
   // on screen
   if FOwner.DoubleBuffered then
     FOwner.Invalidate
   else
-    FOwner.InvalidatePortion(Classes.Rect(Column, Row, FOwner.Columns, Row));
+    FOwner.InvalidatePortion(Classes.Rect(Column, Row, FColumns, Row));
+end;
+
+procedure TComTermBuffer.DeleteChar(Column, Row, Count: Integer);
+var
+  Index: Integer;
+  DstAddr: PComTermChar;
+  SrcAddr: PComTermChar;
+begin
+  if (Column + Count > FColumns) then
+    Count:= FColumns - Column;
+
+  // in memory
+  DstAddr:= PComTermChar(FBuffer) + ((Row - 1) * FColumns + Column - 1);
+  SrcAddr:= PComTermChar(FBuffer) + ((Row - 1) * FColumns + Column + Count - 1);
+
+  // Move characters
+  Count:= (FColumns - (Column + Count));
+  Move(SrcAddr^, DstAddr^, Count * SizeOf(TComTermChar));
+
+  // Erase moved
+  for Index:= 0 to Count - 1 do
+  begin
+    SrcAddr[Index].Ch:= #32;
+    SrcAddr[Index].BackColor:= FOwner.FTermAttr.BackColor;
+    SrcAddr[Index].FrontColor:= FOwner.FTermAttr.FrontColor;
+  end;
+
+  // on screen
+  if FOwner.DoubleBuffered then
+    FOwner.Invalidate
+  else
+    FOwner.InvalidatePortion(Classes.Rect(Column, Row, FColumns, Row));
+end;
+
+procedure TComTermBuffer.DeleteLine(Row, Count: Integer);
+var
+  Index: Integer;
+  B: PComTermChar;
+  DstAddr: Pointer;
+  SrcAddr: Pointer;
+  BytesToMove: Integer;
+  Top, Bottom, Height: Integer;
+begin
+  Top:= FScrollRange.Top;
+  Bottom:= FScrollRange.Bottom;
+  Height:= FScrollRange.Height + 1;
+  if Count > Height then Count:= Height;
+
+  DstAddr := (FBuffer + (Row - 1) * FColumns * SizeOf(TComTermChar));
+  SrcAddr := (FBuffer + (Row + Count - 1) * FColumns * SizeOf(TComTermChar));
+  BytesToMove := (Bottom - Top - Count + 1) * FColumns * SizeOf(TComTermChar);
+
+  // scroll in buffer
+  Move(SrcAddr^, DstAddr^, BytesToMove);
+
+  B:= PComTermChar(FBuffer) + ((Bottom - Count) * FColumns);
+  for Index:= 0 to Count * FColumns - 1 do
+  begin
+    B[Index].Ch:= #32;
+    B[Index].BackColor:= FOwner.FTermAttr.BackColor;
+    B[Index].FrontColor:= FOwner.FTermAttr.FrontColor;
+  end;
+
+  // on screen
+  if FOwner.DoubleBuffered then
+    FOwner.Invalidate
+  else
+    FOwner.InvalidatePortion(Classes.Rect(1, Top, FColumns, Bottom));
+end;
+
+procedure TComTermBuffer.InsertLine(Row, Count: Integer);
+var
+  Index: Integer;
+  B: PComTermChar;
+  DstAddr: Pointer;
+  SrcAddr: Pointer;
+  BytesToMove: Integer;
+  Top, Bottom, Height: Integer;
+begin
+  Top:= FScrollRange.Top;
+  Bottom:= FScrollRange.Bottom;
+  Height:= FScrollRange.Height + 1;
+  if Count > Height then Count:= Height;
+
+  SrcAddr := (FBuffer + (Row - 1) * FColumns * SizeOf(TComTermChar));
+  DstAddr := (FBuffer + (Row + Count - 1) * FColumns * SizeOf(TComTermChar));
+  BytesToMove := (Bottom - Top - Count + 1) * FColumns * SizeOf(TComTermChar);
+
+  // scroll in buffer
+  Move(SrcAddr^, DstAddr^, BytesToMove);
+
+  B:= PComTermChar(FBuffer) + ((Row - 1) * FColumns);
+  for Index:= 0 to Count * FColumns - 1 do
+  begin
+    B[Index].Ch:= #32;
+    B[Index].BackColor:= FOwner.FTermAttr.BackColor;
+    B[Index].FrontColor:= FOwner.FTermAttr.FrontColor;
+  end;
+
+  // on screen
+  if FOwner.DoubleBuffered then
+    FOwner.Invalidate
+  else
+    FOwner.InvalidatePortion(Classes.Rect(1, Top, FColumns, Bottom));
 end;
 
 // erase screen
 procedure TComTermBuffer.EraseScreen(Column, Row: Integer);
 var
-  BytesToDelete: Integer;
-  SourceAddr: Pointer;
+  Index: Integer;
+  Count: Integer;
+  B: PComTermChar;
 begin
   // in memory
-  BytesToDelete := (FOwner.Columns - Column + 1 +
-    (FOwner.Rows - Row) * FOwner.Columns) * SizeOf(TComTermChar);
-  SourceAddr := (FBuffer +
-    ((Row - 1) * FOwner.Columns + Column - 1) * SizeOf(TComTermChar));
-  FillChar(SourceAddr^, BytesToDelete, 0);
+  B:= PComTermChar(FBuffer) + ((Row - 1) * FColumns + Column - 1);
+  Count:= (FColumns - Column + 1 + (FRows - Row) * FColumns);
+  for Index:= 0 to Count - 1 do
+  begin
+    B[Index].Ch:= #32;
+    B[Index].BackColor:= FOwner.FTermAttr.BackColor;
+    B[Index].FrontColor:= FOwner.FTermAttr.FrontColor;
+  end;
+
   // on screen
   if FOwner.DoubleBuffered then
     FOwner.Invalidate
   else
-    FOwner.InvalidatePortion(Classes.Rect(Column, Row, FOwner.Columns, FOwner.Rows))
+    FOwner.InvalidatePortion(Classes.Rect(Column, Row, FColumns, FRows))
 end;
 
 // init buffer
-procedure TComTermBuffer.Init;
+procedure TComTermBuffer.Init(ARows, AColumns: Integer);
 var
   I: Integer;
 begin
+  if ARows > 0 then
+    FRows:= ARows;
+  if AColumns > 0 then
+    FColumns:= AColumns;
   if FBuffer <> nil then
   begin
     FreeMem(FBuffer);
     FreeMem(FTabs);
   end;
-  GetMem(FBuffer, FOwner.Columns * FOwner.Rows * SizeOf(TComTermChar));
-  FillChar(FBuffer^, FOwner.Columns * FOwner.Rows * SizeOf(TComTermChar), 0);
-  GetMem(FTabs, FOwner.Columns * SizeOf(Boolean));
-  FillChar(FTabs^, FOwner.Columns * SizeOf(Boolean), 0);
+  GetMem(FBuffer, FColumns * FRows * SizeOf(TComTermChar));
+  FillChar(FBuffer^, FColumns * FRows * SizeOf(TComTermChar), 0);
+  GetMem(FTabs, FColumns * SizeOf(Boolean));
+  FillChar(FTabs^, FColumns * SizeOf(Boolean), 0);
   I := 1;
-  while (I <= FOwner.Columns) do
+  while (I <= FColumns) do
   begin
     SetTab(I, True);
     Inc(I, 8);
   end;
+  FScrollRange.Top:= 1;
+  FScrollRange.Bottom:= FRows;
 end;
 
 // get tab at Column
@@ -546,12 +649,12 @@ var
   I: Integer;
 begin
   I := Column;
-  while (I <= FOwner.Columns) do
+  while (I <= FColumns) do
     if GetTab(I) then
       Break
     else
       Inc(I);
-  if I > FOwner.Columns then
+  if I > FColumns then
     Result := 0
   else
     Result := I;
@@ -560,7 +663,7 @@ end;
 // clear all tabs
 procedure TComTermBuffer.ClearAllTabs;
 begin
-  FillChar(FTabs^, FOwner.Columns * SizeOf(Boolean), 0);
+  FillChar(FTabs^, FColumns * SizeOf(Boolean), 0);
 end;
 
 function TComTermBuffer.GetLineLength(Line: Integer): Integer;
@@ -568,7 +671,7 @@ var
   I: Integer;
 begin
   Result := 0;
-  for I := 1 to FOwner.Columns do
+  for I := 1 to FColumns do
     if GetChar(I, Line).Ch <> #0 then
       Result := I;
 end;
@@ -578,12 +681,11 @@ var
   J: Integer;
 begin
   Result := 0;
-  for J := 1 to FOwner.Rows do
+  for J := 1 to FRows do
     if GetLineLength(J) > 0 then
       Result := J;
 end;
 
-// get last character in buffer
 (*****************************************
  * TComCustomTerminal control            *
  *****************************************)
@@ -610,15 +712,20 @@ begin
   FAutoFollow := True;
   FCaretPos := Classes.Point(1, 1);
   FTopLeft := Classes.Point(1, 1);
-  FBuffer := TComTermBuffer.Create(Self);
+  FMainBuffer := TComTermBuffer.Create(Self);
+  FAlternateBuffer := TComTermBuffer.Create(Self);
   FTermAttr.FrontColor := Font.Color;
   FTermAttr.BackColor := Color;
 
+  FBuffer:= FMainBuffer;
   FParams:= TStringList.Create;
 
   CreateEscapeCodes;
   if not (csDesigning in ComponentState) then
-    FBuffer.Init;
+  begin
+    FMainBuffer.Init(FRows, FColumns);
+    FAlternateBuffer.Init(FVisibleRows, FColumns);
+  end;
 
   SetBounds(Left, Top, 400, 250);
 end;
@@ -627,7 +734,8 @@ end;
 destructor TCustomComTerminal.Destroy;
 begin
   PtyDevice := nil;
-  FBuffer.Free;
+  FMainBuffer.Free;
+  FAlternateBuffer.Free;
   FEscapeCodes.Free;
   FParams.Free;
   inherited Destroy;
@@ -636,7 +744,7 @@ end;
 // clear terminal screen
 procedure TCustomComTerminal.ClearScreen;
 begin
-  FBuffer.Init;
+  FBuffer.Init(0, 0);
   MoveCaret(1, 1);
   Invalidate;
 end;
@@ -644,12 +752,12 @@ end;
 // move caret
 procedure TCustomComTerminal.MoveCaret(AColumn, ARow: Integer);
 begin
-  if AColumn > FColumns then
+  if AColumn > FBuffer.Columns then
   begin
     if FWrapLines then
-      FCaretPos.X := FColumns + 1
+      FCaretPos.X := FBuffer.Columns + 1
     else
-      FCaretPos.X := FColumns
+      FCaretPos.X := FBuffer.Columns
   end
   else
     if AColumn < 1 then
@@ -657,8 +765,8 @@ begin
     else
       FCaretPos.X := AColumn;
 
-  if ARow > FRows then
-    FCaretPos.Y := FRows
+  if ARow > FBuffer.Rows then
+    FCaretPos.Y := FBuffer.Rows
   else
     if ARow < 1 then
       FCaretPos.Y := 1
@@ -686,6 +794,13 @@ begin
     begin
       L:= UTF8CodepointSizeFast(@Buffer[I]);
       Ch:= Copy(Buffer, I, L);
+
+      // got partial character
+      if (I + L - 1 > Size) then
+      begin
+        FPartChar:= Ch;
+        Break;
+      end;
 
       if (FEscapeCodes <> nil) then
       begin
@@ -726,24 +841,23 @@ end;
 // load screen buffer from file
 procedure TCustomComTerminal.LoadFromStream(Stream: TStream);
 var
-  I: Integer;
-  Ch: Char;
+  ABuffer: TBytes;
 begin
   HideCaret;
-  for I := 0 to Stream.Size - 1 do
-  begin
-    Stream.Read(Ch, 1);
-    PutChar(Ch);
-  end;
+  ABuffer:= Default(TBytes);
+  SetLength(ABuffer, Stream.Size);
+  Stream.ReadBuffer(ABuffer[0], Length(ABuffer));
+  RxBuf(Self, ABuffer[0], Length(ABuffer));
   ShowCaret;
 end;
 
 // save screen buffer to file
 procedure TCustomComTerminal.SaveToStream(Stream: TStream);
 var
-  I, J, LastChar, LastLine: Integer;
+  I, J: Integer;
   Ch: TUTF8Char;
   EndLine: string;
+  LastChar, LastLine: Integer;
 begin
   EndLine := #13#10;
   LastLine := FBuffer.GetLastLine;
@@ -758,7 +872,7 @@ begin
         // replace null characters with blanks
         if Ch = #0 then
           Ch := #32;
-        Stream.Write(Ch, 1);
+        Stream.Write(Ch, Length(Ch));
       end;
     end;
     // new line
@@ -853,14 +967,15 @@ begin
     FVisibleRows := ARows;
     FRows := Max(FRows, FVisibleRows);
     AdjustSize;
-    UpdateScrollRange;
     if not ((csLoading in ComponentState) or (csDesigning in ComponentState)) then
     begin
-      FBuffer.Init;
+      FMainBuffer.Init(FRows, FColumns);
+      FAlternateBuffer.Init(FVisibleRows, FColumns);
       if Assigned(FPtyDevice) then
         FPtyDevice.SetScreenSize(FColumns, FVisibleRows);
       Invalidate;
     end;
+    UpdateScrollRange;
   end;
 end;
 
@@ -932,7 +1047,7 @@ var
 begin
   inherited KeyDown(Key, Shift);
 
-  if (Key = VK_TAB) then
+  if (Key in [VK_TAB, VK_ESCAPE]) then
   begin
     SendChar(Chr(Key));
     Key:= 0;
@@ -1054,9 +1169,10 @@ var
   I, J, X, Y: Integer;
   Ch: TComTermChar;
 begin
-  if (Rect.Bottom + FTopLeft.Y - 1) > FRows then
+  HideCaret;
+  if (Rect.Bottom + FTopLeft.Y - 1) > FBuffer.Rows then
     Dec(Rect.Bottom);
-  if (Rect.Right + FTopLeft.X - 1) > FColumns then
+  if (Rect.Right + FTopLeft.X - 1) > FBuffer.Columns then
     Dec(Rect.Right);
   for J := Rect.Top to Rect.Bottom do
   begin
@@ -1069,6 +1185,7 @@ begin
         DrawChar(I, J, Ch);
     end;
   end;
+  ShowCaret;
 end;
 
 procedure TCustomComTerminal.PaintDesign;
@@ -1089,9 +1206,9 @@ begin
     MoveCaret(FCaretPos.X, FCaretPos.Y);
     // don't paint whole screen, but only the invalidated portion
     ARect.Left := Canvas.ClipRect.Left div FFontWidth + 1;
-    ARect.Right := Min(Canvas.ClipRect.Right div FFontWidth + 1, FColumns);
+    ARect.Right := Min(Canvas.ClipRect.Right div FFontWidth + 1, FBuffer.Columns);
     ARect.Top := Canvas.ClipRect.Top div FFontHeight + 1;
-    ARect.Bottom := Min(Canvas.ClipRect.Bottom div FFontHeight + 1, FRows);
+    ARect.Bottom := Min(Canvas.ClipRect.Bottom div FFontHeight + 1, FBuffer.Rows);
     PaintTerminal(ARect);
   end;
 end;
@@ -1146,9 +1263,9 @@ end;
 
 procedure TCustomComTerminal.WrapLine;
 begin
-  if FCaretPos.X = FColumns + 1 then
+  if FCaretPos.X = FBuffer.Columns + 1 then
   begin
-    if FCaretPos.Y = FRows then
+    if FCaretPos.Y = FBuffer.Rows then
     begin
       FBuffer.ScrollDown;
       MoveCaret(1, FCaretPos.Y);
@@ -1173,14 +1290,14 @@ begin
     acReturn: MoveCaret(1, FCaretPos.Y);
     acLineFeed:
       begin
-        if FCaretPos.Y = FRows then
+        if FCaretPos.Y = FBuffer.FScrollRange.Bottom then
           FBuffer.ScrollDown
         else
           MoveCaret(FCaretPos.X, FCaretPos.Y + 1);
       end;
     acReverseLineFeed:
       begin
-        if FCaretPos.Y = 1 then
+        if FCaretPos.Y = FBuffer.FScrollRange.Top then
           FBuffer.ScrollUp
         else
           MoveCaret(FCaretPos.X, FCaretPos.Y - 1);
@@ -1259,7 +1376,7 @@ begin
       1:  FTermAttr.Bold := True;
       4:  FTermAttr.Underline := True;
       7:  FTermAttr.Invert := True;
-      21: FTermAttr.Bold := False;
+      22: FTermAttr.Bold := False;
       24: FTermAttr.Underline := False;
       27: FTermAttr.Invert := False;
 
@@ -1308,7 +1425,7 @@ begin
     else
       FTermMode.Keys := akTerminal;
   end
-  else if Str = '7' then
+  else if Str = '?7' then
     FWrapLines := OnOff
   else if Str = '?3' then
   begin
@@ -1321,6 +1438,20 @@ begin
     FTermMode.MouseTrack:= OnOff
   else if Str = '?1006' then
     FTermMode.MouseMode:= OnOff
+  else if Str = '?1049' then
+  begin
+    FBuffer.FTopLeft:= FTopLeft;
+    FBuffer.FCaretPos:= FCaretPos;
+    if OnOff then
+      FBuffer := FAlternateBuffer
+    else begin
+      FBuffer := FMainBuffer;
+    end;
+    FTopLeft:= FBuffer.FTopLeft;
+    FCaretPos:= FBuffer.FCaretPos;
+    UpdateScrollRange;
+    Invalidate;
+  end
   else begin
     DoUnhandledMode(Str, OnOff);
   end;
@@ -1386,12 +1517,10 @@ procedure TCustomComTerminal.UpdateScrollPos;
 begin
   if FScrollBars in [ssBoth, ssHorizontal] then
   begin
-    FTopLeft.X := GetScrollPos(Handle, SB_HORZ) + 1;
     SetScrollPos(Handle, SB_HORZ, FTopLeft.X - 1, True);
   end;
   if FScrollBars in [ssBoth, ssVertical] then
   begin
-    FTopLeft.Y := GetScrollPos(Handle, SB_VERT) + 1;
     SetScrollPos(Handle, SB_VERT, FTopLeft.Y - 1, True);
   end;
 end;
@@ -1418,8 +1547,13 @@ var
   end;
 
   procedure SetRange(Code, Max: Integer);
+  var
+    Info: TScrollInfo;
   begin
-    SetScrollRange(Handle, Code, 0, Max - 1, False);
+    Info:= Default(TScrollInfo);
+    Info.fMask := SIF_RANGE;
+    Info.nMax := Max - 1;
+    SetScrollInfo(Handle, Code, Info, False);
   end;
 
   // set horizontal range
@@ -1431,11 +1565,11 @@ var
     if OldScrollBars in [ssBoth, ssHorizontal] then
     begin
       AColumns := AWidth div FFontWidth;
-      if AColumns >= FColumns then
+      if AColumns >= FBuffer.Columns then
         SetRange(SB_HORZ, 1) // screen is wide enough, hide scroll bar
       else
       begin
-        Max := FColumns - (AColumns - 1);
+        Max := FBuffer.Columns - (AColumns - 1);
         SetRange(SB_HORZ, Max);
       end;
     end;
@@ -1449,18 +1583,18 @@ var
     if OldScrollBars in [ssBoth, ssVertical] then
     begin
       ARows := AHeight div FFontHeight;
-      if ARows >= FRows then
+      if ARows >= FBuffer.Rows then
         SetRange(SB_VERT, 1)  // screen is high enough, hide scroll bar
       else
       begin
-        Max := FRows - (ARows - 1);
+        Max := FBuffer.Rows - (ARows - 1);
         SetRange(SB_VERT, Max);
       end;
     end;
   end;
 
 begin
-  if (FScrollBars = ssNone) then
+  if (FScrollBars = ssNone) or (FBuffer = nil) then
     Exit;
   AHeight := ClientHeight;
   AWidth := ClientWidth;
@@ -1569,13 +1703,12 @@ begin
   Result := True;
   with FEscapeCodes do
     case ACode of
-      ecCursorUp,
-      ecAppCursorUp: MoveCaret(FCaretPos.X, FCaretPos.Y - GetParam(1, AParams));
+      ecCursorUp: MoveCaret(FCaretPos.X, FCaretPos.Y - GetParam(1, AParams));
       ecCursorDown: MoveCaret(FCaretPos.X, FCaretPos.Y + GetParam(1, AParams));
       ecCursorRight: MoveCaret(FCaretPos.X + GetParam(1, AParams), FCaretPos.Y);
       ecCursorLeft: MoveCaret(FCaretPos.X - GetParam(1, AParams), FCaretPos.Y);
-      ecCursorEnd: MoveCaret(FColumns, FCaretPos.Y);
-      ecCursorHome,
+      ecCursorNextLine: MoveCaret(1, FCaretPos.Y + GetParam(1, AParams));
+      ecCursorPrevLine: MoveCaret(1, FCaretPos.Y - GetParam(1, AParams));
       ecCursorMove: MoveCaret(GetParam(2, AParams), GetParam(1, AParams));
       ecCursorMoveX: MoveCaret(GetParam(1, AParams), FCaretPos.Y);
       ecCursorMoveY: MoveCaret(FCaretPos.X, GetParam(1, AParams));
@@ -1593,6 +1726,7 @@ begin
         begin
           FBuffer.EraseChar(FCaretPos.X, FCaretPos.Y, GetParam(1, AParams));
         end;
+      ecDeleteChar: FBuffer.DeleteChar(FCaretPos.X, FCaretPos.Y, GetParam(1, AParams));
       ecIdentify:
       begin
         AParams.Clear;
@@ -1624,6 +1758,27 @@ begin
       end;
       ecQueryDevice: SendCodeNoEcho(ecReportDeviceOK, nil);
       ecTest: PerformTest('E');
+      ecScrollRegion:
+      begin
+        FBuffer.FScrollRange.Top:= GetParam(1, AParams);
+        FBuffer.FScrollRange.Bottom:= GetParam(2, AParams);
+      end;
+      ecScrollDown,
+      ecInsertLine: FBuffer.InsertLine(FCaretPos.Y, GetParam(1, AParams));
+      ecScrollUp,
+      ecDeleteLine: FBuffer.DeleteLine(FCaretPos.Y, GetParam(1, AParams));
+      ecSoftReset:
+      begin
+        FTermMode.CharSet:= False;
+        FBuffer.FScrollRange.Top:= 1;
+        FBuffer.FScrollRange.Bottom:= FBuffer.Rows;
+      end;
+      ecCharSet:
+      begin
+        // Designate Character Set
+        if (AParams.Count > 0) and (Length(AParams[0]) > 0) then
+          FTermMode.CharSet:= (AParams[0] = '0');
+      end
     else
       Result := False;
     end;
@@ -1706,8 +1861,8 @@ begin
     BackColor := Color;
     Underline := False;
   end;
-  for I := 1 to FColumns do
-    for J := 1 to FRows do
+  for I := 1 to FBuffer.Columns do
+    for J := 1 to FBuffer.Rows do
       FBuffer.SetChar(I, J, TermCh);
   Invalidate;
 end;
@@ -1747,7 +1902,24 @@ begin
     #32..#255:
       begin
         TermCh := GetCharAttr;
-        TermCh.Ch := Ch;
+        if not FTermMode.CharSet then
+          TermCh.Ch := Ch
+        else begin
+          case Ch[1] of
+            'j': TermCh.Ch := '┘';
+            'k': TermCh.Ch := '┐';
+            'l': TermCh.Ch := '┌';
+            'm': TermCh.Ch := '└';
+            'n': TermCh.Ch := '┼';
+            'q': TermCh.Ch := '─';
+            't': TermCh.Ch := '├';
+            'u': TermCh.Ch := '┤';
+            'v': TermCh.Ch := '┴';
+            'w': TermCh.Ch := '┬';
+            'x': TermCh.Ch := '│';
+            else TermCh.Ch := Ch;
+          end;
+        end;
         if FWrapLines then WrapLine;
         FBuffer.SetChar(FCaretPos.X, FCaretPos.Y, TermCh);
         DrawChar(FCaretPos.X - FTopLeft.X + 1,
@@ -1790,10 +1962,10 @@ begin
   FSaveAttr := FTermAttr;
 end;
 
-procedure TCustomComTerminal.RxBuf(Sender: TObject; const Buffer;  Count: Integer);
+procedure TCustomComTerminal.RxBuf(Sender: TObject; const Buffer; Count: Integer);
 var
+  L: Integer;
   Str: String;
-  sa : Ansistring;
 
   // append line feeds to carriage return
   procedure AppendLineFeeds;
@@ -1814,30 +1986,31 @@ var
   var
     I: Integer;
   begin
-    SetLength(Str, Count);
     for I := 1 to Length(Str) do
-      Str[I] := Char(Byte(Sa[I]) and $0FFFFFFF);
-  end;
-
-  procedure Force8BitData;
-  var
-    I: Integer;
-  begin
-    SetLength(Str, Count);
-    for I := 1 to Length(Str) do
-      Str[I] := Char(Byte(Sa[I]));
+      Str[I] := Char(Byte(Str[I]) and $0FFFFFFF);
   end;
 
 begin
-  SetLength(sa,count);
-  Move(Buffer, Sa[1], Count);
-//  Move(Buffer, Str[1], Count);
-//  Str := AnsiString(sa);
+  if (Length(FPartChar) = 0) then
+  begin
+    SetLength(Str, Count);
+    Move(Buffer, Str[1], Count);
+  end
+  else begin
+    L:= Length(FPartChar);
+    SetLength(Str, Count + L);
+    Move(FPartChar[1], Str[1], L);
+    Move(Buffer, Str[L + 1], Count);
+    FPartChar:= EmptyStr;
+  end;
   if FForce7Bit then
-    Force7BitData
-  else Force8BitData;
+  begin
+    Force7BitData;
+  end;
   if FAppendLF then
+  begin
     AppendLineFeeds;
+  end;
   StringReceived(Str);
 end;
 
@@ -1869,14 +2042,15 @@ begin
   begin
     FColumns := Min(Max(2, Value), 256);
     AdjustSize;
-    UpdateScrollRange;
     if not ((csLoading in ComponentState) or (csDesigning in ComponentState)) then
     begin
-      FBuffer.Init;
+      FMainBuffer.Init(0, FColumns);
+      FAlternateBuffer.Init(0, FColumns);
       if Assigned(FPtyDevice) then
         FPtyDevice.SetScreenSize(FColumns, FVisibleRows);
       Invalidate;
     end;
+    UpdateScrollRange;
   end;
 end;
 
@@ -1888,11 +2062,11 @@ begin
   if ARows <> FRows then
   begin
     FRows := ARows;
-    UpdateScrollRange;
     if not ((csLoading in ComponentState) or (csDesigning in ComponentState)) then
     begin
-      FBuffer.Init;
+      FMainBuffer.Init(FRows, 0);
     end;
+    UpdateScrollRange;
   end;
 end;
 
