@@ -233,7 +233,7 @@ type
     FMouseBlockBeg:      PtrInt;
     FMouseBlockSide:     TCharSide;
     FSelecting:          Boolean;
-    FTextWidth: 	 Integer; // max char count or width in window
+    FTextWidth:          Integer; // max char count or width in window
     FTextHeight:         Integer; // measured values of font, rec calc at font changed
     FScrollBarVert:      TScrollBar;
     FScrollBarHorz:      TScrollBar;
@@ -245,6 +245,7 @@ type
     FTabSpaces:          Integer; // tab width in spaces
     FMaxTextWidth:       Integer; // maximum of chars on one line unwrapped text (max 16384)
     FExtraLineSpacing:   Integer;
+    FLeftMargin:         Integer;
     FOnGuessEncoding:    TGuessEncodingEvent;
     FOnFileOpen:         TFileOpenEvent;
     FCaretVisible:       Boolean;
@@ -509,6 +510,7 @@ type
     property ColCount: Integer Read FColCount Write SetColCount;
     property MaxTextWidth: Integer read FMaxTextWidth write SetMaxTextWidth;
     property TabSpaces: Integer read FTabSpaces write SetTabSpaces;
+    property LeftMargin: Integer read FLeftMargin write FLeftMargin;
     property ExtraLineSpacing: Integer read FExtraLineSpacing write FExtraLineSpacing;
     property OnGuessEncoding: TGuessEncodingEvent Read FOnGuessEncoding Write FOnGuessEncoding;
     property OnFileOpen: TFileOpenEvent read FOnFileOpen write FOnFileOpen;
@@ -551,7 +553,6 @@ uses
 
 
 const
-  //cTextWidth      = 80;  // wrap on 80 chars
   cBinWidth       = 80;
 
   // These strings must be Ascii only.
@@ -611,6 +612,7 @@ begin
   FTextHeight:= 14; // dummy value
   FColCount  := 1;
   FTabSpaces := 8;
+  FLeftMargin := 4;
   FMaxTextWidth := 1024;
 
   FLineList := TPtrIntList.Create;
@@ -1668,8 +1670,9 @@ end;
 
 procedure TViewerControl.WriteText;
 var
-  yIndex, xIndex, w, scrollTab, i: Integer;
+  yIndex, xIndex, w, i: Integer;
   LineStart, iPos: PtrInt;
+  CharLenInBytes: Integer;
   DataLength: PtrInt;
   sText: String;
 begin
@@ -1696,15 +1699,19 @@ begin
 
       if DataLength > 0 then
       begin
+        if (Mode = vcmText) and (FHPosition > 0) then
+        begin
+          for i:= 1 to FHPosition do
+          begin
+            GetNextCharAsAscii(LineStart, CharLenInBytes);
+            DataLength -= CharLenInBytes;
+            LineStart += CharLenInBytes;
+          end;
+          if (DataLength <= 0) then Continue;
+        end;
         sText := GetText(LineStart, DataLength, 0);
 
-        if (Mode = vcmText) and (FHPosition > 0) then
-          scrollTab := -Canvas.TextWidth(UTF8Copy(sText, 1, FHPosition))
-        else begin
-          scrollTab := 0;
-        end;
-
-        OutText(scrollTab + xIndex * w, yIndex * FTextHeight, sText, LineStart, DataLength);
+        OutText(FLeftMargin + xIndex * w, yIndex * FTextHeight, sText, LineStart, DataLength);
       end;
     end;
   end;
@@ -1727,7 +1734,7 @@ begin
     s := TransformCustom(iPos, FHighLimit);  // get line text for render
 
     if s <> '' then
-      OutCustom(0, yIndex * FTextHeight, s, LineStart, iPos - LineStart);  // render line to canvas
+      OutCustom(FLeftMargin, yIndex * FTextHeight, s, LineStart, iPos - LineStart);  // render line to canvas
   end;
 end;
 
@@ -1746,7 +1753,7 @@ begin
     AddLineOffset(iPos);
     s := TransformBin(iPos, FHighLimit);
     if s <> '' then
-      OutBin(0, yIndex * FTextHeight, s, LineStart, iPos - LineStart);
+      OutBin(FLeftMargin, yIndex * FTextHeight, s, LineStart, iPos - LineStart);
   end;
 end;
 
@@ -1808,6 +1815,12 @@ var
 begin
   if not IsFileOpen then
     Exit;
+
+  // Double byte text can have only even position
+  if (Encoding in ViewerEncodingDoubleByte) and Odd(Value) then
+  begin
+    Value := Value - 1;
+  end;
 
   // Speedup if total nr of lines is less then nr of lines that can be displayed.
   if (FPosition = FLowLimit) and                // only if already at the top
@@ -2594,6 +2607,7 @@ var
     tmpPosition: PtrInt;
     s, ss, sText: String;
   begin
+    ss := EmptyStr;
     tmpPosition := StartLine;
     sText := TransformBin(tmpPosition, EndLine);
     for I := 1 to Length(sText) do
@@ -2746,10 +2760,15 @@ var
           Inc(len); // Assume there is one character after conversion
                     // (otherwise use Inc(len, UTF8Length(s))).
 
-      if len <= FHPosition then
+        if len <= FHPosition then
         begin
           i := i + CharLenInBytes;
           Continue;
+        end;
+
+        if (CharLenInBytes = 1) and (s[1] < ' ') then
+        begin
+          s := ' ';
         end;
 
         ss := ss + s;
@@ -2776,6 +2795,12 @@ var
 begin
   if FLineList.Count = 0 then
     Exit(-1);
+
+  if (x < FLeftMargin) then
+    x := 0
+  else begin
+    x := x - FLeftMargin;
+  end;
 
   yIndex := y div FTextHeight;
   if yIndex >= FLineList.Count then
