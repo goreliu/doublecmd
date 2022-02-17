@@ -295,10 +295,16 @@ begin
     if not FUpdatingActiveFile then
     begin
       SetLastActiveFile(NewFileIndex, TopRowIndex);
+      // @Mine@
+      // https://github.com/doublecmd/doublecmd/issues/339
+      // 引入了新问题，快速预览功能有时异常，会显示列表第一项内容
+      if Assigned(OnChangeActiveFile) then
+        OnChangeActiveFile(Self, FFiles[NewFileIndex].FSFile);
     end;
 
-    if Assigned(OnChangeActiveFile) then
-      OnChangeActiveFile(Self, FFiles[NewFileIndex].FSFile);
+    // if Assigned(OnChangeActiveFile) then
+    //  OnChangeActiveFile(Self, FFiles[NewFileIndex].FSFile);
+    // @@
 
     if FlatView and (FSelectedCount = 0) then UpdateFlatFileName;
   end;
