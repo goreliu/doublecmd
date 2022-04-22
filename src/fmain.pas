@@ -1178,7 +1178,7 @@ begin
   LoadTabs;
 
   // Must be after LoadTabs
-  TDriveWatcher.Initialize(GetWindowHandle(Self));
+  TDriveWatcher.Initialize(GetWindowHandle(Application.MainForm));
   TDriveWatcher.AddObserver(@OnDriveWatcherEvent);
 
 {$IF (DEFINED(LCLQT) or DEFINED(LCLQT5)) and not DEFINED(MSWINDOWS)}
@@ -1486,7 +1486,7 @@ begin
     // Button was moved.
     SaveToolBar(Toolbar)
   else
-    if Sender is TKASToolButton and not Draging then
+    if (Sender is TKASToolButton) and not Draging then
       begin
         ToolItem := TKASToolButton(Sender).ToolItem;
         if ToolItem is TKASProgramItem then

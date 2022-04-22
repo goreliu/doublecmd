@@ -92,6 +92,7 @@ type
     actCopyToClipboardFormatted: TAction;
     actChangeEncoding: TAction;
     actAutoReload: TAction;
+    actWrapText: TAction;
     actShowCaret: TAction;
     actPrint: TAction;
     actPrintSetup: TAction;
@@ -108,6 +109,7 @@ type
     actExitViewer: TAction;
     actMirrorVert: TAction;
     actSave: TAction;
+    actShowOffice: TAction;
     actShowPlugins: TAction;
     actShowAsBook: TAction;
     actShowAsWrapText: TAction;
@@ -139,6 +141,7 @@ type
     DrawPreview: TDrawGrid;
     GifAnim: TGifAnim;
     memFolder: TMemo;
+    miWrapText: TMenuItem;
     miPen: TMenuItem;
     miRect: TMenuItem;
     miEllipse: TMenuItem;
@@ -180,6 +183,7 @@ type
     pnlImage: TPanel;
     pnlText: TPanel;
     miDiv3: TMenuItem;
+    miOffice: TMenuItem;
     miEncoding: TMenuItem;
     miPlugins: TMenuItem;
     miSeparator: TMenuItem;
@@ -204,7 +208,6 @@ type
     miText: TMenuItem;
     miBin: TMenuItem;
     miHex: TMenuItem;
-    miWrapText: TMenuItem;
     miAbout: TMenuItem;
     miAbout2: TMenuItem;
     miDiv1: TMenuItem;
@@ -346,6 +349,7 @@ type
     FThread: TThread;
 
     FRegExp: TRegExprEx;
+    FPluginEncoding: Integer;
 
     //---------------------
     WlxPlugins: TWLXModuleList;
@@ -353,11 +357,13 @@ type
     ActivePlugin: Integer;
     //---------------------
     function GetListerRect: TRect;
+    function CheckOffice(const sFileName: String): Boolean;
     function CheckPlugins(const sFileName: String; bForce: Boolean = False): Boolean;
     function CheckGraphics(const sFileName:String):Boolean;
     function LoadGraphics(const sFileName:String): Boolean;
     procedure AdjustImageSize;
     procedure DoSearch(bQuickSearch: Boolean; bSearchBackwards: Boolean);
+    procedure UpdateTextEncodingsMenu(APlugin: Boolean);
     procedure MakeTextEncodingsMenu;
     procedure ActivatePanel(Panel: TPanel);
     procedure ReopenAsTextIfNeeded;
@@ -445,11 +451,14 @@ type
     procedure cm_ShowGraphics    (const Params: array of string);
     procedure cm_ShowPlugins     (const Params: array of string);
 
+    procedure cm_ShowOffice      (const Params: array of string);
+
     procedure cm_ExitViewer      (const Params: array of string);
 
     procedure cm_Print(const Params:array of string);
     procedure cm_PrintSetup(const Params:array of string);
     procedure cm_ShowCaret(const Params: array of string);
+    procedure cm_WrapText(const Params: array of string);
   end;
 
 procedure ShowViewer(const FilesToView:TStringList; WaitData: TWaitData = nil);
@@ -462,7 +471,7 @@ uses
   FileUtil, IntfGraphics, Math, uLng, uShowMsg, uGlobs, LCLType, LConvEncoding,
   DCClassesUtf8, uFindMmap, DCStrUtils, uDCUtils, LCLIntf, uDebug, uHotkeyManager,
   uConvEncoding, DCBasicTypes, DCOSUtils, uOSUtils, uFindByrMr, uFileViewWithGrid,
-  fPrintSetup, uFindFiles, uAdministrator
+  fPrintSetup, uFindFiles, uAdministrator, uOfficeXML
 {$IFDEF LCLGTK2}
   , uGraphics
 {$ENDIF}
@@ -628,11 +637,13 @@ begin
   memFolder.Color:= gBackColor;
 
   actShowCaret.Checked := gShowCaret;
+  actWrapText.Checked := gViewerWrapText;
   ViewerControl.ShowCaret := gShowCaret;
   ViewerControl.TabSpaces := gTabSpaces;
   ViewerControl.MaxTextWidth := gMaxTextWidth;
   ViewerControl.LeftMargin := gViewerLeftMargin;
   ViewerControl.ExtraLineSpacing := gViewerLineSpacing;
+  if gViewerWrapText then ViewerControl.Mode:= vcmWrap;
 end;
 
 constructor TfrmViewer.Create(TheOwner: TComponent);
@@ -710,11 +721,15 @@ begin
       end
     else if CheckGraphics(aFileName) and LoadGraphics(aFileName) then
       ActivatePanel(pnlImage)
-    else
-      begin
-        ViewerControl.FileName := aFileName;
-        ActivatePanel(pnlText)
-      end;
+    else if CheckOffice(aFileName) then
+    begin
+      ActivatePanel(pnlText);
+      miOffice.Checked:= True;
+    end
+    else begin
+      ViewerControl.FileName := aFileName;
+      ActivatePanel(pnlText)
+    end;
 
     Status.Panels[sbpFileName].Text:= aFileName;
   finally
@@ -1136,9 +1151,54 @@ begin
 end;
 
 procedure TfrmViewer.WMCommand(var Message: TLMCommand);
+var
+  Index: Integer;
 begin
   case Message.NotifyCode of
-    itm_next: if Message.ItemID = 0 then cm_LoadNextFile([]);
+    itm_center:
+      miCenter.Checked:= Boolean(Message.ItemID);
+    itm_next: begin
+      if Message.ItemID = 0 then cm_LoadNextFile([]);
+    end;
+    itm_wrap: begin
+      gViewerWrapText:= Boolean(Message.ItemID);
+      actWrapText.Checked:= gViewerWrapText;
+    end;
+    itm_fit: begin
+      case Message.ItemID of
+        0:
+        begin
+          miStretch.Checked:= False;
+          miStretchOnlyLarge.Checked:= False;
+        end;
+        2, 3:
+        begin
+          miStretch.Checked:= (Message.ItemID = 2);
+          miStretchOnlyLarge.Checked:= (Message.ItemID = 3);
+        end;
+      end;
+    end;
+    itm_fontstyle: begin
+      case Message.ItemID of
+        lcp_ansi:
+        begin
+          FPluginEncoding:= lcp_ansi;
+          Index:= miEncoding.IndexOfCaption(ViewerEncodingsNames[veAnsi]);
+        end;
+        lcp_ascii:
+        begin
+          FPluginEncoding:= lcp_ascii;
+          Index:= miEncoding.IndexOfCaption(ViewerEncodingsNames[veOem]);
+        end;
+        else begin
+          Index:= 0;
+          FPluginEncoding:= 0;
+        end;
+        miEncoding.Items[Index].Checked:= True;
+        ViewerControl.Encoding:= TViewerEncoding(Index);
+        Status.Panels[sbpTextEncoding].Text := rsViewEncoding + ': ' + ViewerControl.EncodingName;
+      end;
+    end;
   end;
 end;
 
@@ -1327,7 +1387,9 @@ end;
 
 function TfrmViewer.PluginShowFlags : Integer;
 begin
-  Result:= IfThen(miStretch.Checked, lcp_fittowindow, 0) or
+  Result:= FPluginEncoding or
+           IfThen(miWrapText.Checked, lcp_wraptext, 0) or
+           IfThen(miStretch.Checked, lcp_fittowindow, 0) or
            IfThen(miCenter.Checked, lcp_center, 0) or
            IfThen(miStretchOnlyLarge.Checked, lcp_fittowindow or lcp_fitlargeronly, 0)
 end;
@@ -1956,7 +2018,7 @@ begin
         end;
       '4':
         begin
-          cm_ShowAsWrapText(['']);
+          cm_ShowAsDec(['']);
           Key := #0;
         end;
       '6':
@@ -1967,6 +2029,11 @@ begin
       '7':
         begin
           cm_ShowPlugins(['']);
+          Key := #0;
+        end;
+      '8':
+        begin
+          cm_ShowOffice(['']);
           Key := #0;
         end;
     end;
@@ -2138,7 +2205,7 @@ end;
 
 procedure TfrmViewer.ReopenAsTextIfNeeded;
 begin
-  if bImage or bAnimation or bPlugin or miPlugins.Checked then
+  if bImage or bAnimation or bPlugin or miPlugins.Checked or miOffice.Checked then
   begin
     Image.Picture := nil;
     ViewerControl.FileName := FileList.Strings[iActiveFile];
@@ -2242,6 +2309,19 @@ begin
   if Splitter.Visible then
   begin
     Inc(Result.Left, Splitter.Left + Splitter.Width);
+  end;
+end;
+
+function TfrmViewer.CheckOffice(const sFileName: String): Boolean;
+var
+  AText: String;
+begin
+  Result:= OfficeMask.Matches(sFileName) and LoadFromOffice(sFileName, AText);
+  if Result then
+  begin
+    ViewerControl.Text:= AText;
+    ViewerControl.Mode:= vcmText;
+    ViewerControl.Encoding:= veUtf8;
   end;
 end;
 
@@ -2592,6 +2672,27 @@ begin
   end;
 end;
 
+procedure TfrmViewer.UpdateTextEncodingsMenu(APlugin: Boolean);
+var
+  I: Integer;
+  Encoding: TViewerEncoding;
+begin
+  if not APlugin then
+  begin
+    for I:= 0 to miEncoding.Count - 1 do
+    begin
+      miEncoding.Items[I].Visible:= True;
+    end;
+  end
+  else begin
+    for I:= 0 to miEncoding.Count - 1 do
+    begin
+      Encoding:= TViewerEncoding(I);
+      miEncoding.Items[I].Visible:= Encoding in [veAutoDetect, veAnsi, veOem];
+    end;
+  end;
+end;
+
 procedure TfrmViewer.ViewerPositionChanged(Sender:TObject);
 begin
   if ViewerControl.FileSize > 0 then
@@ -2615,8 +2716,10 @@ begin
   if Panel = nil then
   begin
     Status.Panels[sbpFileSize].Text:= EmptyStr;
-    Status.Panels[sbpTextEncoding].Text:= EmptyStr;
     Status.Panels[sbpPluginName].Text:= FWlxModule.Name;
+
+    UpdateTextEncodingsMenu(True);
+    Status.Panels[sbpTextEncoding].Text := rsViewEncoding + ': ' + ViewerControl.EncodingName;
   end
   else if Panel = pnlText then
   begin
@@ -2625,13 +2728,14 @@ begin
 
     case ViewerControl.Mode of
       vcmText: miText.Checked := True;
-      vcmWrap: miWrapText.Checked := True;
+      vcmWrap: miText.Checked := True;
       vcmBin:  miBin.Checked := True;
       vcmHex:  miHex.Checked := True;
       vcmDec:  miDec.Checked := True;
       vcmBook: miLookBook.Checked := True;
     end;
 
+    UpdateTextEncodingsMenu(False);
     FRegExp.ChangeEncoding(ViewerControl.EncodingName);
     Status.Panels[sbpFileSize].Text:= cnvFormatFileSize(ViewerControl.FileSize) + ' (100 %)';
     Status.Panels[sbpTextEncoding].Text := rsViewEncoding + ': ' + ViewerControl.EncodingName;
@@ -2641,7 +2745,7 @@ begin
     pnlImage.TabStop:= True;
     Status.Panels[sbpTextEncoding].Text:= EmptyStr;
     if (not bQuickView) and CanFocus and pnlImage.CanFocus then pnlImage.SetFocus;
-    PanelEditImage.Visible:= not (bQuickView or (miFullScreen.Checked and not PanelEditImage.MouseEntered));
+    PanelEditImage.Visible:= not (bQuickView or (miFullScreen.Checked and not PanelEditImage.MouseInClient));
   end;
 
   bAnimation           := (Panel = pnlImage) and (GifAnim.Visible);
@@ -2649,7 +2753,7 @@ begin
   bPlugin              := (Panel = nil);
   miPlugins.Checked    := (Panel = nil);
   miGraphics.Checked   := (Panel = pnlImage);
-  miEncoding.Visible   := (Panel = pnlText);
+  miEncoding.Visible   := (Panel = nil) or (Panel = pnlText);
   miAutoReload.Visible := (Panel = pnlText);
   miEdit.Visible       := (Panel = pnlText) or (Panel = nil);
   miImage.Visible      := (bImage or bPlugin);
@@ -2660,6 +2764,9 @@ begin
   miScreenshot.Visible := bImage;
   miSave.Visible       := bImage;
   miSaveAs.Visible     := bImage;
+
+  actShowCaret.Enabled := (Panel = pnlText);
+  actWrapText.Enabled  := bPlugin or ((Panel = pnlText) and (ViewerControl.Mode in [vcmText, vcmWrap]));
 
   pmiSelectAll.Visible     := (Panel = pnlText);
   pmiCopyFormatted.Visible := (Panel = pnlText);
@@ -2957,6 +3064,7 @@ end;
 
 procedure TfrmViewer.cm_ChangeEncoding(const Params: array of string);
 var
+  Encoding: String;
   MenuItem: TMenuItem;
 begin
   if miEncoding.Visible and (Length(Params) > 0) then
@@ -2965,8 +3073,20 @@ begin
     if Assigned(MenuItem) then
     begin
       MenuItem.Checked := True;
-      FRegExp.ChangeEncoding(Params[0]);
-      ViewerControl.EncodingName := Params[0];
+      Encoding:= NormalizeEncoding(Params[0]);
+      if bPlugin then
+      begin
+        if (Encoding = EncodingAnsi) then
+          FPluginEncoding:= lcp_ansi
+        else if (Encoding = EncodingOem) then
+          FPluginEncoding:= lcp_ascii
+        else begin
+          FPluginEncoding:= 0;
+        end;
+        FWlxModule.CallListSendCommand(lc_newparams, PluginShowFlags);
+      end;
+      FRegExp.ChangeEncoding(Encoding);
+      ViewerControl.EncodingName := Encoding;
       Status.Panels[sbpTextEncoding].Text := rsViewEncoding + ': ' + ViewerControl.EncodingName;
     end;
   end;
@@ -3043,7 +3163,10 @@ end;
 
 procedure TfrmViewer.cm_ShowAsText(const Params: array of string);
 begin
-  ShowTextViewer(vcmText);
+  if gViewerWrapText then
+    ShowTextViewer(vcmWrap)
+  else
+    ShowTextViewer(vcmText);
 end;
 
 procedure TfrmViewer.cm_ShowAsBin(const Params: array of string);
@@ -3063,6 +3186,8 @@ end;
 
 procedure TfrmViewer.cm_ShowAsWrapText(const Params: array of string);
 begin
+  gViewerWrapText:= True;
+  actWrapText.Checked:= True;
   ShowTextViewer(vcmWrap);
 end;
 
@@ -3102,6 +3227,16 @@ begin
   end;
 end;
 
+procedure TfrmViewer.cm_ShowOffice(const Params: array of string);
+begin
+  if CheckOffice(FileList.Strings[iActiveFile]) then
+  begin
+    ExitPluginMode;
+    ActivatePanel(pnlText);
+    miOffice.Checked:= True;
+  end;
+end;
+
 procedure TfrmViewer.cm_ExitViewer(const Params: array of string);
 begin
   Close;
@@ -3130,6 +3265,25 @@ begin
     gShowCaret:= not gShowCaret;
     actShowCaret.Checked:= gShowCaret;
     ViewerControl.ShowCaret:= gShowCaret;
+  end;
+end;
+
+procedure TfrmViewer.cm_WrapText(const Params: array of string);
+begin
+  gViewerWrapText:= not gViewerWrapText;
+  actWrapText.Checked:= gViewerWrapText;
+
+  if bPlugin then
+    FWlxModule.CallListSendCommand(lc_newparams, PluginShowFlags)
+  else if not miGraphics.Checked then
+  begin
+    if ViewerControl.Mode in [vcmText, vcmWrap] then
+    begin
+      if gViewerWrapText then
+        ViewerControl.Mode:= vcmWrap
+      else
+        ViewerControl.Mode:= vcmText;
+    end;
   end;
 end;
 

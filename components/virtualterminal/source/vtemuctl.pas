@@ -204,7 +204,7 @@ type
     procedure PerformTest(ACh: Char);
     procedure UpdateScrollPos;
     procedure UpdateScrollRange;
-    procedure WrapLine;
+    procedure WrapLine(AWidth: Integer);
   protected
     procedure CMFontChanged(var Message: TMessage); message CM_FONTCHANGED;
     procedure CMColorChanged(var Message: TMessage); message CM_COLORCHANGED;
@@ -230,6 +230,7 @@ type
     procedure DoStrRecieved(var Str: string); dynamic;
     procedure DoUnhandledCode(Code: TEscapeCode; Data: string); dynamic;
     procedure DoUnhandledMode(const Data: string; OnOff: Boolean); dynamic;
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -339,7 +340,7 @@ type
 implementation
 
 uses
-  SysUtils, Dialogs, Math, VTColorTable;
+  SysUtils, Dialogs, Math, VTColorTable, VTWideCharWidth;
 
 const
   TMPF_FIXED_PITCH = $01;
@@ -1014,6 +1015,13 @@ begin
       Invalidate;
     end;
     UpdateScrollRange;
+
+    if (FCaretPos.Y = FBuffer.Rows) or
+       ((FCaretPos.Y - FTopLeft.Y) >= FVisibleRows) then
+    begin
+      ARows:= FCaretPos.Y - FVisibleRows;
+      ModifyScrollBar(SB_Vert, SB_THUMBPOSITION, ARows);
+    end;
   end;
 end;
 
@@ -1299,9 +1307,9 @@ begin
   Canvas.Font.Color := OldFrontColor;
 end;
 
-procedure TCustomComTerminal.WrapLine;
+procedure TCustomComTerminal.WrapLine(AWidth: Integer);
 begin
-  if FCaretPos.X = FBuffer.Columns + 1 then
+  if FCaretPos.X + AWidth > FBuffer.Columns + 1 then
   begin
     if FCaretPos.Y = FBuffer.Rows then
     begin
@@ -1589,8 +1597,9 @@ var
     Info: TScrollInfo;
   begin
     Info:= Default(TScrollInfo);
-    Info.fMask := SIF_RANGE;
-    Info.nMax := Max - 1;
+    Info.fMask := SIF_RANGE or SIF_PAGE;
+    Info.nMax := Max;
+    Info.nPage := 1;
     SetScrollInfo(Handle, Code, Info, False);
   end;
 
@@ -1872,6 +1881,21 @@ begin
     FOnUnhandledMode(Self, Data, OnOff);
 end;
 
+function TCustomComTerminal.DoMouseWheel(Shift: TShiftState;
+  WheelDelta: Integer; MousePos: TPoint): Boolean;
+var
+  APos: Integer;
+begin
+  Result:= True;
+  APos:= GetScrollPos(Handle, SB_VERT);
+  if WheelDelta < 0 then
+    APos:= APos + Mouse.WheelScrollLines
+  else begin
+    APos:= APos - Mouse.WheelScrollLines;
+  end;
+  ModifyScrollBar(SB_VERT, SB_THUMBPOSITION, APos);
+end;
+
 // create escape codes processor
 procedure TCustomComTerminal.CreateEscapeCodes;
 begin
@@ -1931,6 +1955,7 @@ end;
 // put one character on screen
 procedure TCustomComTerminal.PutChar(Ch: TUTF8Char);
 var
+  AWidth: Integer;
   TermCh: TComTermChar;
 begin
   case Ch[1] of
@@ -1960,11 +1985,20 @@ begin
             else TermCh.Ch := Ch;
           end;
         end;
-        if FWrapLines then WrapLine;
+        AWidth:= UTF8Width(Ch);
+        if AWidth <= 0 then Exit;
+        if FWrapLines then WrapLine(AWidth);
         FBuffer.SetChar(FCaretPos.X, FCaretPos.Y, TermCh);
-        DrawChar(FCaretPos.X - FTopLeft.X + 1,
-          FCaretPos.Y - FTopLeft.Y + 1, TermCh);
+        DrawChar(FCaretPos.X - FTopLeft.X + 1, FCaretPos.Y - FTopLeft.Y + 1, TermCh);
         AdvanceCaret(acChar);
+        Dec(AWidth);
+        while (AWidth > 0) do
+        begin
+          TermCh.Ch := #0;
+          FBuffer.SetChar(FCaretPos.X, FCaretPos.Y, TermCh);
+          AdvanceCaret(acChar);
+          Dec(AWidth);
+        end;
       end;
   end;
   DoChar(Ch);
