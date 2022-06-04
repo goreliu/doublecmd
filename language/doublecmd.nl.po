@@ -13,6 +13,10 @@ msgstr ""
 "X-Native-Language: Nederlands\n"
 "X-Generator: Poedit 2.3\n"
 
+#: foptionscolors.rsdarkmodeoptions
+msgid "Auto;Enabled;Disabled"
+msgstr ""
+
 #: fsyncdirsdlg.rscomparingpercent
 msgid "Comparing... %d%% (ESC to cancel)"
 msgstr "Vergelijken... %d%% (ESC om te annuleren)"
@@ -4134,6 +4138,10 @@ msgstr "Vast aantal kolommen"
 msgid "Fixed columns width"
 msgstr "Vaste kolombreedte"
 
+#: tfrmoptionscolors.rgdarkmode.caption
+msgid "Dark mode"
+msgstr ""
+
 #: tfrmoptionscolumnsview.cbcuttexttocolwidth.caption
 msgid "Cut &text to column width"
 msgstr "Kap tekst af op kolombreedte"
@@ -6772,6 +6780,10 @@ msgstr "Ga altijd naar de root van een schijf bij verandering van schijven"
 msgid "Show &current directory in the main window title bar"
 msgstr "Toon huidige map in de titelbalk van het hoofdvenster"
 
+#: tfrmoptionsmisc.chkshowsplashform.caption
+msgid "Show &splash screen"
+msgstr ""
+
 #: tfrmoptionsmisc.chkshowwarningmessages.caption
 msgid "Show &warning messages (\"OK\" button only)"
 msgstr "Toon waarschuwingen (alleen 'Oké'-knop)"
@@ -7287,11 +7299,6 @@ msgstr "{command} zou hier normaal gesproken aanwezig moeten zijn om het command
 
 #: tfrmoptionsterminal.edrunintermstayopenparams.hint
 msgctxt "TFRMOPTIONSTERMINAL.EDRUNINTERMSTAYOPENPARAMS.HINT"
-msgid "{command} should normally be present here to reflect the command to be run in terminal"
-msgstr "{command} zou hier normaal gesproken aanwezig moeten zijn om het commando weer te geven dat in de terminal moet worden uitgevoerd"
-
-#: tfrmoptionsterminal.edruntermparams.hint
-msgctxt "TFRMOPTIONSTERMINAL.EDRUNTERMPARAMS.HINT"
 msgid "{command} should normally be present here to reflect the command to be run in terminal"
 msgstr "{command} zou hier normaal gesproken aanwezig moeten zijn om het commando weer te geven dat in de terminal moet worden uitgevoerd"
 
@@ -9439,6 +9446,10 @@ msgstr ""
 msgctxt "TFRMVIEWER.ACTSHOWPLUGINS.CAPTION"
 msgid "Plugins"
 msgstr "Invoegtoepassingen"
+
+#: tfrmviewer.actshowtransparency.caption
+msgid "Show transparenc&y"
+msgstr ""
 
 #: tfrmviewer.actstretchimage.caption
 msgid "Stretch"

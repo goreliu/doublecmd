@@ -14,6 +14,10 @@ msgstr ""
 "X-Generator: Poedit 1.8.12\n"
 "X-Native-Language: Português do Brasil\n"
 
+#: foptionscolors.rsdarkmodeoptions
+msgid "Auto;Enabled;Disabled"
+msgstr ""
+
 #: fsyncdirsdlg.rscomparingpercent
 msgid "Comparing... %d%% (ESC to cancel)"
 msgstr "Comparando... %d%% (ESC para cancelar)."
@@ -4264,6 +4268,10 @@ msgstr "Contagem de colunas fixas:"
 msgid "Fixed columns width"
 msgstr "Largura de colunas fixas:"
 
+#: tfrmoptionscolors.rgdarkmode.caption
+msgid "Dark mode"
+msgstr ""
+
 #: tfrmoptionscolumnsview.cbcuttexttocolwidth.caption
 msgid "Cut &text to column width"
 msgstr "Cortar &texto pela largura da coluna."
@@ -7025,6 +7033,10 @@ msgstr "Ir sempre para a raíz da unidade ao mudar de unidades."
 msgid "Show &current directory in the main window title bar"
 msgstr ""
 
+#: tfrmoptionsmisc.chkshowsplashform.caption
+msgid "Show &splash screen"
+msgstr ""
+
 #: tfrmoptionsmisc.chkshowwarningmessages.caption
 msgctxt "TFRMOPTIONSMISC.CHKSHOWWARNINGMESSAGES.CAPTION"
 msgid "Show &warning messages (\"OK\" button only)"
@@ -7579,12 +7591,6 @@ msgstr "{command} deve normalmente estar presente aqui para refletir o comando a
 #: tfrmoptionsterminal.edrunintermstayopenparams.hint
 #, fuzzy
 msgctxt "tfrmoptionsterminal.edrunintermstayopenparams.hint"
-msgid "{command} should normally be present here to reflect the command to be run in terminal"
-msgstr "{command} deve normalmente estar presente aqui para refletir o comando a ser executado no terminal."
-
-#: tfrmoptionsterminal.edruntermparams.hint
-#, fuzzy
-msgctxt "tfrmoptionsterminal.edruntermparams.hint"
 msgid "{command} should normally be present here to reflect the command to be run in terminal"
 msgstr "{command} deve normalmente estar presente aqui para refletir o comando a ser executado no terminal."
 
@@ -9833,6 +9839,10 @@ msgstr ""
 msgctxt "tfrmviewer.actshowplugins.caption"
 msgid "Plugins"
 msgstr "Suplementos"
+
+#: tfrmviewer.actshowtransparency.caption
+msgid "Show transparenc&y"
+msgstr ""
 
 #: tfrmviewer.actstretchimage.caption
 msgctxt "TFRMVIEWER.ACTSTRETCHIMAGE.CAPTION"

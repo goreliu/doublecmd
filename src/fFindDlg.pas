@@ -43,7 +43,7 @@ const
 
 type
   { TfrmFindDlg }
-  TfrmFindDlg = class(TAloneForm, IFormCommands)
+  TfrmFindDlg = class(TModalForm, IFormCommands)
     actIntelliFocus: TAction;
     actCancel: TAction;
     actClose: TAction;
@@ -399,7 +399,11 @@ uses
   uFileViewNotebook, uKeyboard, uOSUtils, uArchiveFileSourceUtil,
   DCOSUtils, uRegExprA, uRegExprW, uDebug, uShowMsg, uConvEncoding,
   uColumns, uFileFunctions, uFileSorting, uWcxArchiveFileSource,
-  DCConvertEncoding, WcxPlugin;
+  DCConvertEncoding, WcxPlugin
+{$IFDEF DARKWIN}
+  , uDarkStyle
+{$ENDIF}
+  ;
 
 const
   TimeUnitToComboIndex: array[TTimeUnit] of integer = (0, 1, 2, 3, 4, 5, 6);
@@ -972,6 +976,11 @@ begin
     FFrmAttributesEdit.OnOk := @OnAddAttribute;
   end;
   FFrmAttributesEdit.Reset;
+{$IFDEF DARKWIN}
+  if g_darkModeEnabled then
+    FFrmAttributesEdit.ShowModal
+  else
+{$ENDIF}
   if not (fsModal in FormState) then
     FFrmAttributesEdit.Show
   else
@@ -2077,6 +2086,9 @@ begin
 
     CloseAction := caFree; // This will destroy the from on next step in the flow.
   end;
+{$IFDEF DARKWIN}
+  if g_darkModeEnabled and (CloseAction <> caFree) then DestroyHandle;
+{$ENDIF}
 end;
 
 { TfrmFindDlg.SetWindowCaption }
@@ -2817,6 +2829,7 @@ end;
 { TfrmFindDlg.cm_Close }
 procedure TfrmFindDlg.cm_Close(const Params: array of string);
 begin
+  Hide;
   Close;
 end;
 

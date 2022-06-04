@@ -132,13 +132,13 @@ uses
   , uWinNetFileSource, uVfsModule, uMyWindows, DCStrUtils
   , uDCReadSVG, uFileSourceUtil, uGdiPlusJPEG, uListGetPreviewBitmap
   , Dialogs, Clipbrd, uDebug, JwaDbt, uThumbnailProvider
-  , uRecycleBinFileSource, uDCReadHEIF
+  , uRecycleBinFileSource, uDCReadHEIF, uDCReadWIC
     {$IFDEF LCLQT5}
     , qt5, qtwidgets, uDarkStyle
     {$ENDIF}
   {$ENDIF}
   {$IFDEF UNIX}
-  , BaseUnix, Errors, fFileProperties, uJpegThumb
+  , BaseUnix, Errors, fFileProperties, uJpegThumb, uOpenDocThumb
     {$IF NOT DEFINED(DARWIN)}
     , uDCReadSVG, uMagickWand, uGio, uGioFileSource, uVfsModule, uVideoThumb
     , uDCReadWebP, uFolderThumb, uAudioThumb, uDefaultTerminal, uDCReadHEIF
@@ -333,7 +333,15 @@ begin
         EnableWindow(FParentWindow, False);
         // If window already created then recreate it to force
         // call CreateParams with appropriate parent window
-        if HandleAllocated then RecreateWnd(Self);
+        if HandleAllocated then
+        begin
+{$IF NOT DEFINED(LCLWIN32)}
+          RecreateWnd(Self);
+{$ELSE}
+          SetWindowLongPtr(Handle, GWL_STYLE, GetWindowLongPtr(Handle, GWL_STYLE) or LONG_PTR(WS_POPUP));
+          SetWindowLongPtr(Handle, GWL_HWNDPARENT, FParentWindow);
+{$ENDIF}
+        end;
         Show;
         try
           EnableWindow(Handle, True);

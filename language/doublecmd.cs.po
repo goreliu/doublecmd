@@ -15,6 +15,10 @@ msgstr ""
 "X-Generator: Poedit 2.2\n"
 "Language: cs\n"
 
+#: foptionscolors.rsdarkmodeoptions
+msgid "Auto;Enabled;Disabled"
+msgstr ""
+
 #: fsyncdirsdlg.rscomparingpercent
 msgid "Comparing... %d%% (ESC to cancel)"
 msgstr "Porovnávám... %d%% (ESC pro zrušení)"
@@ -4137,6 +4141,10 @@ msgstr "Počet pevných sloupců"
 msgid "Fixed columns width"
 msgstr "Pevná šířka sloupce"
 
+#: tfrmoptionscolors.rgdarkmode.caption
+msgid "Dark mode"
+msgstr ""
+
 #: tfrmoptionscolumnsview.cbcuttexttocolwidth.caption
 msgid "Cut &text to column width"
 msgstr "Oříznout &text na šířku sloupce"
@@ -6771,6 +6779,10 @@ msgstr "Vždy &jít do kořenového adresáře při výměně disků"
 msgid "Show &current directory in the main window title bar"
 msgstr ""
 
+#: tfrmoptionsmisc.chkshowsplashform.caption
+msgid "Show &splash screen"
+msgstr ""
+
 #: tfrmoptionsmisc.chkshowwarningmessages.caption
 msgid "Show &warning messages (\"OK\" button only)"
 msgstr "Zobrazit &varovné zprávy (pouze tlačítko \"OK\")"
@@ -7286,11 +7298,6 @@ msgstr "{command} zde za normálních okolností znovu předloží příkaz, kte
 
 #: tfrmoptionsterminal.edrunintermstayopenparams.hint
 msgctxt "tfrmoptionsterminal.edrunintermstayopenparams.hint"
-msgid "{command} should normally be present here to reflect the command to be run in terminal"
-msgstr "{command} zde za normálních okolností znovu předloží příkaz, který chcete spustit v terminálu"
-
-#: tfrmoptionsterminal.edruntermparams.hint
-msgctxt "tfrmoptionsterminal.edruntermparams.hint"
 msgid "{command} should normally be present here to reflect the command to be run in terminal"
 msgstr "{command} zde za normálních okolností znovu předloží příkaz, který chcete spustit v terminálu"
 
@@ -9438,6 +9445,10 @@ msgstr ""
 msgctxt "tfrmviewer.actshowplugins.caption"
 msgid "Plugins"
 msgstr "Doplněk"
+
+#: tfrmviewer.actshowtransparency.caption
+msgid "Show transparenc&y"
+msgstr ""
 
 #: tfrmviewer.actstretchimage.caption
 msgid "Stretch"

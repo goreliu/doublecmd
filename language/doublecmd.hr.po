@@ -14,6 +14,10 @@ msgstr ""
 "X-Language: hr_HR\n"
 "X-Native-Language: hrvatski\n"
 
+#: foptionscolors.rsdarkmodeoptions
+msgid "Auto;Enabled;Disabled"
+msgstr ""
+
 #: fsyncdirsdlg.rscomparingpercent
 msgctxt "fsyncdirsdlg.rscomparingpercent"
 msgid "Comparing... %d%% (ESC to cancel)"
@@ -4429,6 +4433,10 @@ msgstr "Određeni broj stupaca"
 msgid "Fixed columns width"
 msgstr "Određena širina stupca"
 
+#: tfrmoptionscolors.rgdarkmode.caption
+msgid "Dark mode"
+msgstr ""
+
 #: tfrmoptionscolumnsview.cbcuttexttocolwidth.caption
 msgctxt "tfrmoptionscolumnsview.cbcuttexttocolwidth.caption"
 msgid "Cut &text to column width"
@@ -7275,6 +7283,10 @@ msgstr "Uvijek idi u& sistemsku mapu uređaja prilikom menjanja uređaja"
 msgid "Show &current directory in the main window title bar"
 msgstr ""
 
+#: tfrmoptionsmisc.chkshowsplashform.caption
+msgid "Show &splash screen"
+msgstr ""
+
 #: tfrmoptionsmisc.chkshowwarningmessages.caption
 msgctxt "TFRMOPTIONSMISC.CHKSHOWWARNINGMESSAGES.CAPTION"
 msgid "Show &warning messages (\"OK\" button only)"
@@ -7828,12 +7840,6 @@ msgstr "{Naredba} Prisutne naredbe za pokretanje u terminalu"
 #: tfrmoptionsterminal.edrunintermstayopenparams.hint
 #, fuzzy
 msgctxt "tfrmoptionsterminal.edrunintermstayopenparams.hint"
-msgid "{command} should normally be present here to reflect the command to be run in terminal"
-msgstr "{Naredba} Prisutne naredbe za pokretanje u terminalu"
-
-#: tfrmoptionsterminal.edruntermparams.hint
-#, fuzzy
-msgctxt "tfrmoptionsterminal.edruntermparams.hint"
 msgid "{command} should normally be present here to reflect the command to be run in terminal"
 msgstr "{Naredba} Prisutne naredbe za pokretanje u terminalu"
 
@@ -10081,6 +10087,10 @@ msgstr ""
 msgctxt "tfrmviewer.actshowplugins.caption"
 msgid "Plugins"
 msgstr "Priključak"
+
+#: tfrmviewer.actshowtransparency.caption
+msgid "Show transparenc&y"
+msgstr ""
 
 #: tfrmviewer.actstretchimage.caption
 msgctxt "TFRMVIEWER.ACTSTRETCHIMAGE.CAPTION"

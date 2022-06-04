@@ -36,14 +36,20 @@ uses
   uQt5Workaround,
   {$ENDIF}
   {$ENDIF}
+  uEarlyConfig,
   DCConvertEncoding,
+  {$IF DEFINED(LCLWIN32) and DEFINED(DARKWIN)}
+  uWin32WidgetSetDark,
+  {$ENDIF}
   Interfaces,
   {$IFDEF LCLGTK2}
   uGtk2FixCursorPos,
   {$ENDIF}
   {$IFDEF LCLWIN32}
   uDClass,
+  {$IF NOT DEFINED(DARKWIN)}
   uWin32WidgetSetFix,
+  {$ENDIF}
   {$ENDIF}
   LCLProc,
   Classes,
@@ -139,7 +145,7 @@ begin
   // which is called by Application.Initialize.
   uKeyboard.InitializeKeyboard;
 
-{$IF DEFINED(MSWINDOWS) and DEFINED(LCLQT5)}
+{$IF DEFINED(MSWINDOWS) and (DEFINED(LCLQT5) or DEFINED(DARKWIN))}
   ApplyDarkStyle;
 {$ENDIF}
 
@@ -181,7 +187,7 @@ begin
 
   ProcessCommandLineParams; // before load paths
 
-  if not CommandLineParams.NoSplash then
+  if (gSplashForm) and (not CommandLineParams.NoSplash) then
   begin
     // Let's show the starting slash screen to confirm user application has been started
     Application.CreateForm(TfrmStartingSplash, frmStartingSplash);
@@ -222,12 +228,14 @@ begin
       // in Application.CreateForm above.
       uKeyboard.HookKeyboardLayoutChanged;
 
-      if not CommandLineParams.NoSplash then
+      if (gSplashForm) and (not CommandLineParams.NoSplash) then
       begin
         // We may now remove the starting splash screen, most of the application has been started now
         frmStartingSplash.Close;
         frmStartingSplash.Release;
       end;
+
+      frmMain.ShowOnTop;
 
       Application.Run;
 
