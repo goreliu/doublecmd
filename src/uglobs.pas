@@ -352,6 +352,7 @@ var
   glsSearchDirectories: TStringList;
   glsSearchExcludeFiles: TStringList;
   glsSearchExcludeDirectories: TStringList;
+  glsVolumeSizeHistory : TStringListEx;
   glsIgnoreList : TStringListEx;
   gOnlyOneAppInstance,
   gCutTextToColWidth : Boolean;
@@ -534,7 +535,9 @@ var
   gSaveSearchReplaceHistory,
   gSaveDirHistory,
   gSaveCmdLineHistory,
-  gSaveFileMaskHistory : Boolean;
+  gSaveFileMaskHistory,
+  gSaveVolumeSizeHistory,
+  gSaveCreateDirectoriesHistory: Boolean;
   gSortOrderOfConfigurationOptionsTree: TSortConfigurationOptions;
   gCollapseConfigurationOptionsTree: TConfigurationTreeState;
   
@@ -909,6 +912,7 @@ begin
     begin
       LoadHistory('Navigation', glsDirHistory);
       LoadHistory('CommandLine', glsCmdLineHistory);
+      LoadHistory('VolumeSize', glsVolumeSizeHistory);
       LoadHistory('FileMask', glsMaskHistory);
       LoadHistory('SearchText', glsSearchHistory, True);
       LoadHistory('SearchTextPath', glsSearchPathHistory);
@@ -957,13 +961,16 @@ begin
     if gSaveDirHistory then SaveHistory('Navigation', glsDirHistory);
     if gSaveCmdLineHistory then SaveHistory('CommandLine', glsCmdLineHistory);
     if gSaveFileMaskHistory then SaveHistory('FileMask', glsMaskHistory);
+    if gSaveVolumeSizeHistory then SaveHistory('VolumeSize', glsVolumeSizeHistory);
+    if gSaveCreateDirectoriesHistory then begin
+      SaveHistory('CreateDirectories', glsCreateDirectoriesHistory, True);
+    end;
     if gSaveSearchReplaceHistory then
     begin
       SaveHistory('SearchText', glsSearchHistory, True);
       SaveHistory('SearchTextPath', glsSearchPathHistory);
       SaveHistory('ReplaceText', glsReplaceHistory);
       SaveHistory('ReplaceTextPath', glsReplacePathHistory);
-      SaveHistory('CreateDirectories', glsCreateDirectoriesHistory, True);
       SaveHistory('RenameNameMask', glsRenameNameMaskHistory);
       SaveHistory('RenameExtMask', glsRenameExtMaskHistory);
       SaveHistory('SearchDirectories', glsSearchDirectories);
@@ -1512,6 +1519,7 @@ begin
   gFavoriteTabsList := TFavoriteTabsList.Create;
   glsDirHistory := TStringListEx.Create;
   glsCmdLineHistory := TStringListEx.Create;
+  glsVolumeSizeHistory := TStringListEx.Create;
   glsMaskHistory := TStringListEx.Create;
   glsSearchHistory := TStringListEx.Create;
   glsSearchPathHistory := TStringListEx.Create;
@@ -1541,6 +1549,7 @@ begin
   FreeThenNil(gFileInfoToolTip);
   FreeThenNil(glsDirHistory);
   FreeThenNil(glsCmdLineHistory);
+  FreeAndNil(glsVolumeSizeHistory);
   FreeThenNil(gSpecialDirList);
   FreeThenNil(gDirectoryHotlist);
   FreeThenNil(gFavoriteTabsList);
@@ -1944,6 +1953,8 @@ begin
   gSaveDirHistory := True;
   gSaveCmdLineHistory := True;
   gSaveFileMaskHistory := True;
+  gSaveVolumeSizeHistory := True;
+  gSaveCreateDirectoriesHistory := True;
   gPluginInAutoTweak := False;
   gWCXConfigViewMode := wcvmByPlugin;
 
@@ -2211,7 +2222,10 @@ begin
         if mbFileAccess(gpGlobalCfgDir + 'doublecmd.xml', fmOpenRead or fmShareDenyWrite) then
         begin
           LoadConfigCheckErrors(@LoadGlobalConfig, gpGlobalCfgDir + 'doublecmd.xml', ErrorMessage);
-          gConfig.TryGetValue(gConfig.RootNode, 'Configuration/UseConfigInProgramDir', gUseConfigInProgramDir);
+          if gConfig.TryGetValue(gConfig.RootNode, 'Configuration/UseConfigInProgramDir', gUseConfigInProgramDir) then
+          begin
+            gConfig.DeleteNode(gConfig.RootNode, 'Configuration/UseConfigInProgramDir');
+          end;
 
           if not gUseConfigInProgramDir then
           begin
@@ -2975,6 +2989,8 @@ begin
     gSaveDirHistory := GetAttr(Root, 'History/DirHistory/Save', gSaveDirHistory);
     gSaveCmdLineHistory := GetAttr(Root, 'History/CmdLineHistory/Save', gSaveCmdLineHistory);
     gSaveFileMaskHistory := GetAttr(Root, 'History/FileMaskHistory/Save', gSaveFileMaskHistory);
+    gSaveVolumeSizeHistory := GetAttr(Root, 'History/VolumeSizeHistory/Save', gSaveVolumeSizeHistory);
+    gSaveCreateDirectoriesHistory := GetAttr(Root, 'History/CreateDirectoriesHistory/Save', gSaveCreateDirectoriesHistory);
     gSortOrderOfConfigurationOptionsTree := TSortConfigurationOptions(GetAttr(Root, 'Configuration/SortOrder', Integer(scoAlphabeticalButLanguage)));
     gCollapseConfigurationOptionsTree := TConfigurationTreeState(GetAttr(Root, 'Configuration/TreeType', Integer(ctsFullExpand)));
 
@@ -3357,8 +3373,6 @@ begin
     SetAttr(Root, 'DCVersion', dcVersion);
     SetAttr(Root, 'ConfigVersion', ConfigVersion);
 
-    SetValue(Root, 'Configuration/UseConfigInProgramDir', gUseConfigInProgramDirNew);
-
     { Language page }
     SetValue(Root, 'Language/POFileName', gPOFileName);
 
@@ -3651,6 +3665,8 @@ begin
     SetAttr(Root, 'History/DirHistory/Save', gSaveDirHistory);
     SetAttr(Root, 'History/CmdLineHistory/Save', gSaveCmdLineHistory);
     SetAttr(Root, 'History/FileMaskHistory/Save', gSaveFileMaskHistory);
+    SetAttr(Root, 'History/VolumeSizeHistory/Save', gSaveVolumeSizeHistory);
+    SetAttr(Root, 'History/CreateDirectoriesHistory/Save', gSaveCreateDirectoriesHistory);
     SetAttr(Root, 'Configuration/SortOrder', Integer(gSortOrderOfConfigurationOptionsTree));
     SetAttr(Root, 'Configuration/TreeType', Integer(gCollapseConfigurationOptionsTree));
 

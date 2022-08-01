@@ -934,7 +934,7 @@ uses
   uFileSourceOperationOptionsUI, uDebug, uHotkeyManager, uFileSourceUtil, uTempFileSystemFileSource,
   Laz2_XMLRead, DCOSUtils, DCStrUtils, fOptions, fOptionsFrame, fOptionsToolbar, uClassesEx,
   uHotDir, uFileSorting, DCBasicTypes, foptionsDirectoryHotlist, uConnectionManager,
-  fOptionsToolbarBase, fOptionsToolbarMiddle, fEditor, uColumns
+  fOptionsToolbarBase, fOptionsToolbarMiddle, fEditor, uColumns, StrUtils, uSysFolders
   {$IFDEF COLUMNSFILEVIEW_VTV}
   , uColumnsFileViewVtv
   {$ELSE}
@@ -1056,20 +1056,29 @@ procedure TfrmMain.FormCreate(Sender: TObject);
     Result.OnDragOver:= @NotebookDragOver;
     Result.OnDragDrop:= @NotebookDragDrop;
   end;
-  function GenerateTitle():String;
-  var 
-    ServernameString: String;
-  begin
-    ServernameString := '';
-    if Length(UniqueInstance.ServernameByUser) > 0 then
-      ServernameString := ' [' + UniqueInstance.ServernameByUser + ']';
 
-    Result := Format('%s%s %s build %s; %s',
+  function GenerateTitle(): String;
+  var
+    R: Integer;
+    ARevision, AServerName: String;
+  begin
+    if Length(UniqueInstance.ServernameByUser) > 0 then
+      AServerName := ' [' + UniqueInstance.ServernameByUser + ']'
+    else begin
+      AServerName := EmptyStr;
+    end;
+
+    if TryStrToInt(dcRevision, R) then
+      ARevision:= '~' + dcRevision
+    else begin
+      ARevision:= EmptyStr;
+    end;
+
+    Result := Format('%s%s %s%s',
         ['Double Commander',
-        ServernameString,
-        dcVersion,
-        dcRevision,
-        dcBuildDate]
+        AServerName,
+        Copy2Space(dcVersion),
+        ARevision]
     );
   end;
 
@@ -1084,10 +1093,18 @@ begin
   Application.OnEndSession := @AppEndSession;
   Application.OnQueryEndSession := @AppQueryEndSession;
 
+  {$IF DEFINED(DARWIN)}
+  // in LCL's DARWIN implements, there is no way but to Use LCL's method of dropping files
+  // from external applications
+  frmMain.OnDropFiles := @FormDropFiles;
+  AllowDropFiles := true; // DARWIN support external DragDragSource only, not DragDragTarget
+  {$ELSE}
   // Use LCL's method of dropping files from external
   // applications if we don't support it ourselves.
   if not IsExternalDraggingSupported then
     frmMain.OnDropFiles := @FormDropFiles;
+  AllowDropFiles := not uDragDropEx.IsExternalDraggingSupported;
+  {$ENDIF}
 
   {$IF DEFINED(DARWIN)}
   // MainForm receives in Mac OS closing events on system shortcut Command-Q
@@ -1150,8 +1167,6 @@ begin
   // Initialize actions.
   actShowSysFiles.Checked := uGlobs.gShowSystemFiles;
   actHorizontalFilePanels.Checked := gHorizontalFilePanels;
-
-  AllowDropFiles := not uDragDropEx.IsExternalDraggingSupported;
 
   MainToolBar.AddToolItemExecutor(TKASCommandItem, @ToolbarExecuteCommand);
   MainToolBar.AddToolItemExecutor(TKASProgramItem, @ToolbarExecuteProgram);
@@ -2513,7 +2528,17 @@ end;
 
 procedure TfrmMain.nbPageMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
+{$IFNDEF LCLCOCOA}
 begin
+{$ELSE}
+var
+  Notebook: TFileViewNotebook;
+  TabNr: Integer;
+begin
+  Notebook := TFileViewNotebook(Sender);
+  TabNr := Notebook.IndexOfPageAt(Point(X, Y));
+  if TabNr <> -1 then Notebook.ActivePageIndex := TabNr;
+{$ENDIF}
   Application.QueueAsyncCall(@nbPageAfterMouseDown, PtrInt(Sender));
 end;
 
