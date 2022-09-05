@@ -94,10 +94,20 @@ type
     procedure edtRenameEnter(Sender: TObject);
     procedure edtRenameExit(Sender: TObject);
     procedure edtRenameButtonClick(Sender: TObject);
+    procedure handleKey(Sender: TObject; var Key: Word; Shift: TShiftState);
+    {$IFDEF LCLCOCOA}
     procedure edtRenameKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure edtRenameKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure edtRenameOnChange(Sender: TObject);
+    {$ENDIF}
     procedure edtRenameMouseDown(Sender: TObject; Button: TMouseButton;Shift: TShiftState; X, Y: Integer);
 
   protected
+    {$IFDEF LCLCOCOA}
+      originalText: String;
+      keyDownText: String;
+    {$ENDIF}
+
     edtRename: TEditButtonEx;
     FRenameFile: TFile;
     FRenFile:TRenameFileEditInfo;
@@ -185,6 +195,7 @@ type
     procedure WorkerStarting(const Worker: TFileViewWorker); override;
     procedure WorkerFinished(const Worker: TFileViewWorker); override;
 
+    procedure ShowRenameFileEditInitSelect(Data: PtrInt);
     procedure ShowRenameFileEdit(var AFile: TFile); virtual;
     procedure UpdateRenameFileEditPosition; virtual;
     procedure RenameSelectPart(AActionType:TRenameFileActionType); virtual;
@@ -305,7 +316,13 @@ begin
   edtRename.Visible := False;
   edtRename.TabStop := False;
   edtRename.AutoSize := False;
+  {$IFDEF LCLCOCOA}
   edtRename.OnKeyDown := @edtRenameKeyDown;
+  edtRename.OnKeyUp := @edtRenameKeyUp;
+  edtRename.OnChange := @edtRenameOnChange;
+  {$ELSE}
+  edtRename.OnKeyDown := @handleKey;
+  {$ENDIF}
   edtRename.OnMouseDown:=@edtRenameMouseDown;
   edtRename.OnEnter := @edtRenameEnter;
   edtRename.OnExit := @edtRenameExit;
@@ -1427,6 +1444,9 @@ end;
 
 procedure TFileViewWithMainCtrl.edtRenameEnter(Sender: TObject);
 begin
+  {$IFDEF LCLCOCOA}
+  originalText:= edtRename.Text;
+  {$ENDIF}
   FWindowProc:= MainControl.WindowProc;
   MainControl.WindowProc:= @MainControlWindowProc;
 end;
@@ -1446,10 +1466,45 @@ procedure TFileViewWithMainCtrl.edtRenameButtonClick(Sender: TObject);
 var
   Key: Word = VK_RETURN;
 begin
-  edtRenameKeyDown(Sender, Key, []);
+  handleKey(Sender, Key, []);
 end;
 
+{$IFDEF LCLCOCOA}
 procedure TFileViewWithMainCtrl.edtRenameKeyDown(Sender: TObject;
+  var Key: Word; Shift: TShiftState);
+begin
+  if key=VK_RETURN then
+    keyDownText:= originalText
+  else if key=VK_ESCAPE then
+    keyDownText:= edtRename.Text;
+end;
+
+procedure TFileViewWithMainCtrl.edtRenameOnChange(Sender: TObject);
+begin
+  originalText:= edtRename.Text;
+end;
+
+procedure TFileViewWithMainCtrl.edtRenameKeyUp(Sender: TObject;
+  var Key: Word; Shift: TShiftState);
+var
+  currentText: String;
+begin
+  currentText:= edtRename.Text;
+  if (Key=VK_RETURN) or (key=VK_ESCAPE) then
+  begin
+      if currentText<>keyDownText then
+      begin
+        // From the text has been changed,
+        // the EditButton is in the IME state, just return
+        Key:= 0;
+        exit;
+      end;
+  end;
+  handleKey( Sender, Key, Shift );
+end;
+{$ENDIF}
+
+procedure TFileViewWithMainCtrl.handleKey(Sender: TObject;
   var Key: Word; Shift: TShiftState);
 var
   NewFileName: String;
@@ -1549,6 +1604,14 @@ begin
   if not (csDestroying in ComponentState) then UpdateInfoPanel;
 end;
 
+procedure TFileViewWithMainCtrl.ShowRenameFileEditInitSelect(Data: PtrInt);
+begin
+  if gRenameSelOnlyName and not (FRenameFile.IsDirectory or FRenameFile.IsLinkToDirectory) then
+     RenameSelectPart(rfatName)
+  else
+     RenameSelectPart(rfatFull);
+end;
+
 procedure TFileViewWithMainCtrl.ShowRenameFileEdit(var AFile: TFile);
 var
   S: String;
@@ -1610,11 +1673,8 @@ begin
     FRenFile.CylceFinished:= False; // cycle of selection Name-FullName-Ext of FullName-Name-Ext, after finish this cycle will be part selection mechanism
     if FRenFile.LenExt = 0 then FRenFile.CylceFinished:= True;  // don't need cycle if no extension
 
-    if gRenameSelOnlyName and not (AFile.IsDirectory or AFile.IsLinkToDirectory) then
-       RenameSelectPart(rfatName)
-    else begin
-       RenameSelectPart(rfatFull);
-    end;
+    Application.QueueAsyncCall(@ShowRenameFileEditInitSelect, 0);
+
     aFile:= nil;
   end;
 end;
