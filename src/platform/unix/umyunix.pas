@@ -3,7 +3,7 @@
     -------------------------------------------------------------------------
     This unit contains specific UNIX functions.
 
-    Copyright (C) 2008-2021 Alexander Koblov (alexx2000@mail.ru)
+    Copyright (C) 2008-2022 Alexander Koblov (alexx2000@mail.ru)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -62,6 +62,7 @@ const
     'LXQt'
   );
 
+{$IF DEFINED(LINUX)}
 type
   PIOFILE = Pointer;
   PFILE = PIOFILE;
@@ -77,7 +78,6 @@ type
   TMountEntry = mntent;
   PMountEntry = ^TMountEntry;
 
-{$IFDEF LINUX}
 {en
    Opens the file system description file
    @param(filename File system description file)
@@ -172,11 +172,11 @@ uses
 {$IF (NOT DEFINED(FPC_USE_LIBC)) or (DEFINED(BSD) AND NOT DEFINED(DARWIN))}
   , SysCall
 {$ENDIF}
-{$IF NOT DEFINED(DARWIN)}
+{$IF NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
   , uMimeActions, uMimeType, uGVolume
 {$ENDIF}
 {$IFDEF LINUX}
-  , uUDisks, uUDisks2
+  , uUDisks2
 {$ENDIF}
   ;
 
@@ -373,7 +373,7 @@ begin
 end;
 
 function GetDefaultAppCmd(const FileName: String): String;
-{$IF NOT DEFINED(DARWIN)}
+{$IF NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
 var
   Filenames: TStringList;
 begin
@@ -384,6 +384,10 @@ begin
   Result:= 'xdg-open ' + QuoteStr(FileName);
   FreeAndNil(Filenames);
 end;
+{$ELSEIF DEFINED(HAIKU)}
+begin
+  Result:= '/bin/open ' + QuoteStr(FileName);
+end;
 {$ELSE}
 begin
   Result:= 'xdg-open ' + QuoteStr(FileName);
@@ -391,7 +395,7 @@ end;
 {$ENDIF}
 
 function GetFileMimeType(const FileName: String): String;
-{$IF NOT DEFINED(DARWIN)}
+{$IF NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
 begin
   Result:= uMimeType.GetFileMimeType(FileName);
 end;
@@ -506,24 +510,9 @@ begin
         WriteLn(Drive^.DeviceId, ' -> ', MountPath);
       end
     end;
-    if not Result and uUDisks.Initialize then
-    begin
-      try
-        Result := uUDisks.Mount(DeviceFileToUDisksObjectPath(Drive^.DeviceId), EmptyStr, nil, MountPath);
-      except
-        on E: Exception do
-        begin
-          Result := False;
-          WriteLn(E.Message);
-        end;
-      end;
-      if Result then
-        Drive^.Path := MountPath;
-      uUDisks.Finalize;
-    end;
     if not Result and HavePMount and Drive^.IsMediaRemovable then
       Result := fpSystemStatus('pmount ' + Drive^.DeviceId) = 0;
-{$ELSE IF DEFINED(DARWIN)}
+{$ELSEIF DEFINED(DARWIN)}
     if not Result then
       Result := fpSystemStatus('diskutil mount ' + Drive^.DeviceId) = 0;
 {$ENDIF}
@@ -536,7 +525,7 @@ function UnmountDrive(Drive: PDrive): Boolean;
 begin
   if Drive^.IsMounted then
   begin
-{$IF NOT DEFINED(DARWIN)}
+{$IF NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
     if Drive^.DriveType = dtSpecial then
     begin
       Exit(uGVolume.Unmount(Drive^.Path));
@@ -546,16 +535,11 @@ begin
     Result := False;
     if HasUDisks2 then
       Result := uUDisks2.Unmount(Drive^.DeviceId);
-    if not Result and uUDisks.Initialize then
-    begin
-      Result := uUDisks.Unmount(DeviceFileToUDisksObjectPath(Drive^.DeviceId), nil);
-      uUDisks.Finalize;
-    end;
     if not Result and HavePMount and Drive^.IsMediaRemovable then
       Result := fpSystemStatus('pumount ' + Drive^.DeviceId) = 0;
     if not Result then
-{$ELSE IF DEFINED(DARWIN)}
-    Result := fpSystemStatus('diskutil unmount ' + Drive^.DeviceId) = 0;
+{$ELSEIF DEFINED(DARWIN)}
+    Result := fpSystemStatus('diskutil unmount ' + Drive^.Path) = 0;
     if not Result then
 {$ENDIF}
     Result := fpSystemStatus('umount ' + Drive^.Path) = 0;
@@ -566,7 +550,17 @@ end;
 
 function EjectDrive(Drive: PDrive): Boolean;
 begin
-{$IF DEFINED(DARWIN)}
+{$IF NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
+  Result:= uGVolume.Eject(Drive^.Path);
+  if not Result then
+{$ENDIF}
+
+{$IF DEFINED(LINUX)}
+  Result := False;
+  if HasUDisks2 then
+    Result := uUDisks2.Eject(Drive^.DeviceId);
+  if not Result then
+{$ELSEIF DEFINED(DARWIN)}
   Result := fpSystemStatus('diskutil eject ' + Drive^.DeviceId) = 0;
   if not Result then
 {$ENDIF}
@@ -646,7 +640,7 @@ begin
   Result := (pid > 0);
 end;
 
-{$IF NOT DEFINED(DARWIN)}
+{$IF NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
 initialization
   DesktopEnv := GetDesktopEnvironment;
   {$IFDEF LINUX}

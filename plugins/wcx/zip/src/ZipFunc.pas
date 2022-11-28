@@ -71,6 +71,7 @@ procedure SetProcessDataProcW(hArcData : TArcHandle; pProcessDataProc : TProcess
 function PackFilesW(PackedFile: PWideChar;  SubPath: PWideChar;  SrcPath: PWideChar;  AddList: PWideChar;  Flags: Integer): Integer;dcpcall;
 function DeleteFilesW(PackedFile, DeleteList : PWideChar) : Integer;dcpcall;
 function GetPackerCaps : Integer;dcpcall;
+function GetBackgroundFlags: Integer; dcpcall;
 procedure ConfigurePacker (Parent: HWND;  DllInstance: THandle);dcpcall;
 function CanYouHandleThisFileW(FileName: PWideChar): Boolean; dcpcall;
 {Extension API}
@@ -246,9 +247,7 @@ begin
         // Show progress and ask if aborting.
         if Assigned(Arc.FProcessDataProcW) then
         begin
-          if Arc.FProcessDataProcW(PWideChar(CeUtf8ToUtf16(Arc.Items[Arc.Tag].FileName)),
-                                   Arc.Items[Arc.Tag].UncompressedSize) = 0
-          then
+          if Arc.FProcessDataProcW(PWideChar(CeUtf8ToUtf16(Arc.Items[Arc.Tag].FileName)), -1100) = 0 then
             Arc.FOperationResult := E_EABORTED;
         end;
       end;
@@ -268,9 +267,7 @@ begin
         // Show progress and ask if aborting.
         if Assigned(Arc.FProcessDataProcW) then
         begin
-          if Arc.FProcessDataProcW(PWideChar(CeUtf8ToUtf16(Arc.Items[Arc.Tag].FileName)),
-                                   Arc.Items[Arc.Tag].UncompressedSize) = 0
-          then
+          if Arc.FProcessDataProcW(PWideChar(CeUtf8ToUtf16(Arc.Items[Arc.Tag].FileName)), -1100) = 0 then
             Arc.FOperationResult := E_EABORTED;
         end;
       end;
@@ -459,6 +456,11 @@ begin
   Result := PK_CAPS_NEW      or PK_CAPS_DELETE  or PK_CAPS_MODIFY
          or PK_CAPS_MULTIPLE or PK_CAPS_OPTIONS or PK_CAPS_BY_CONTENT
          or PK_CAPS_ENCRYPT;
+end;
+
+function GetBackgroundFlags: Integer; dcpcall;
+begin
+  Result:= BACKGROUND_UNPACK or BACKGROUND_PACK;
 end;
 
 procedure ConfigurePacker(Parent: HWND; DllInstance: THandle);dcpcall;

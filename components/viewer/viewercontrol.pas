@@ -250,6 +250,7 @@ type
     FOnFileOpen:         TFileOpenEvent;
     FCaretVisible:       Boolean;
     FShowCaret:          Boolean;
+    FAutoCopy:           Boolean;
     FLastError:          String;
     FText:               String;
 
@@ -278,7 +279,7 @@ type
     {en
        Returns how many lines (given current FTextHeight) will fit into the window.
     }
-    function GetClientHeightInLines: Integer; inline;
+    function GetClientHeightInLines(Whole: Boolean = True): Integer; inline;
 
     {en
        Calculates how many lines can be displayed from given position.
@@ -516,6 +517,7 @@ type
     property TabSpaces: Integer read FTabSpaces write SetTabSpaces;
     property LeftMargin: Integer read FLeftMargin write FLeftMargin;
     property ExtraLineSpacing: Integer read FExtraLineSpacing write FExtraLineSpacing;
+    property AutoCopy: Boolean read FAutoCopy write FAutoCopy;
     property OnGuessEncoding: TGuessEncodingEvent Read FOnGuessEncoding Write FOnGuessEncoding;
     property OnFileOpen: TFileOpenEvent read FOnFileOpen write FOnFileOpen;
 
@@ -547,7 +549,7 @@ procedure Register;
 implementation
 
 uses
-  LCLType, Graphics, Forms, LCLProc, Clipbrd, LConvEncoding,
+  Math, LCLType, Graphics, Forms, LCLProc, Clipbrd, LConvEncoding,
   DCUnicodeUtils, LCLIntf, LazUTF8, DCOSUtils , DCConvertEncoding
   {$IF DEFINED(UNIX)}
   , BaseUnix, Unix, DCUnix
@@ -618,6 +620,7 @@ begin
   FTabSpaces := 8;
   FLeftMargin := 4;
   FMaxTextWidth := 1024;
+  FAutoCopy := True;
 
   FLineList := TPtrIntList.Create;
 
@@ -1704,7 +1707,7 @@ begin
 
   for xIndex := 0 to FColCount-1 do
   begin
-    for yIndex := 0 to GetClientHeightInLines - 1 do
+    for yIndex := 0 to GetClientHeightInLines(False) - 1 do
     begin
       if iPos >= FHighLimit then
         Break;
@@ -1744,7 +1747,7 @@ var
   s: string;
 begin
   iPos := FPosition;
-  for yIndex := 0 to GetClientHeightInLines - 1 do
+  for yIndex := 0 to GetClientHeightInLines(False) - 1 do
   begin
     if iPos >= FHighLimit then
       Break;
@@ -1764,7 +1767,7 @@ var
   s: string;
 begin
   iPos := FPosition;
-  for yIndex := 0 to GetClientHeightInLines - 1 do
+  for yIndex := 0 to GetClientHeightInLines(False) - 1 do
   begin
     if iPos >= FHighLimit then
       Break;
@@ -1920,10 +1923,15 @@ begin
     end;
 end;
 
-function TViewerControl.GetClientHeightInLines: Integer;
+function TViewerControl.GetClientHeightInLines(Whole: Boolean): Integer;
 begin
   if FTextHeight > 0 then
-    Result := GetViewerRect.Height div FTextHeight
+  begin
+    if Whole then
+      Result := GetViewerRect.Height div FTextHeight
+    else
+      Result := Ceil(GetViewerRect.Height / FTextHeight);
+  end
   else
     Result := 0;
 end;
@@ -2460,7 +2468,8 @@ begin
           if FBlockBeg > FBlockEnd then
             FBlockEnd := FBlockBeg;
 
-          CopyToClipboard;
+          if FAutoCopy then
+            CopyToClipboard;
           Invalidate;
         end;
       end; // mbLeft
@@ -2571,7 +2580,8 @@ begin
 
   if FSelecting and (Button = mbLeft) and (Shift * [ssDouble, ssTriple] = []) then
   begin
-    CopyToClipboard;
+    if FAutoCopy then
+      CopyToClipboard;
     FSelecting := False;
   end;
 end;

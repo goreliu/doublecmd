@@ -22,12 +22,19 @@
 unit KASPathEdit;
 
 {$mode delphi}
+{$IF DEFINED(LCLCOCOA)}
+{$modeswitch objectivec1}
+{$ENDIF}
 
 interface
 
 uses
   Classes, SysUtils, LResources, Forms, Controls, Graphics, Dialogs, StdCtrls,
-  ShellCtrls, LCLType, LCLVersion;
+  ShellCtrls, LCLType, LCLVersion
+{$IF DEFINED(LCLCOCOA)}
+  , CocoaAll, CocoaWindows
+{$ENDIF}
+  ;
 
 type
 
@@ -43,13 +50,22 @@ type
     FStringList: TStringList;
     FObjectTypes: TObjectTypes;
     FFileSortType: TFileSortType;
+{$IF DEFINED(LCLCOCOA)}
+    originalText: String;
+    keyDownText: String;
+{$ENDIF}
   private
+    procedure setTextAndSelect( newText:String );
+    procedure handleSpecialKeys( var Key: Word );
+    procedure handleUpKey;
+    procedure handleDownKey;
     procedure AutoComplete(const Path: String);
     procedure SetObjectTypes(const AValue: TObjectTypes);
     procedure FormChangeBoundsEvent(Sender: TObject);
     procedure ListBoxClick(Sender: TObject);
     procedure ListBoxMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
   private
+    function isShowingListBox(): Boolean; inline;
     procedure ShowListBox;
     procedure HideListBox;
   protected
@@ -60,7 +76,15 @@ type
     procedure VisibleChanged; override;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure KeyUpAfterInterface(var Key: Word; Shift: TShiftState); override;
+{$IF DEFINED(LCLCOCOA)}
+    procedure DoEnter; override;
+    procedure TextChanged; override;
+    procedure KeyUp(var Key: word; Shift: TShiftState); override;
+    procedure KeyDownAction(var Key: Word; Shift: TShiftState);
+{$ENDIF}
   public
+    onKeyESCAPE: TNotifyEvent;
+    onKeyRETURN: TNotifyEvent;
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
   published
@@ -185,6 +209,11 @@ end;
 
 { TKASPathEdit }
 
+function TKASPathEdit.isShowingListBox(): Boolean;
+begin
+  Result:= FPanel<>nil;
+end;
+
 procedure TKASPathEdit.AutoComplete(const Path: String);
 {$IF LCL_FULLVERSION >= 2020000}
 const
@@ -229,6 +258,7 @@ begin
       finally
         FListBox.Items.EndUpdate;
       end;
+      if FListBox.Items.Count = 0 then HideListBox;
       if FListBox.Items.Count > 0 then
       begin
         ShowListBox;
@@ -237,10 +267,14 @@ begin
         I:= Bottom - Top; // TListBox.ItemHeight sometimes don't work under GTK2
         with FListBox do
         begin
+{$IF NOT DEFINED(LCLCOCOA)}
           if Items.Count = 1 then
             FPanel.ClientHeight:= Self.Height
           else
             FPanel.ClientHeight:= I * IfThen(Items.Count > 10, 11, Items.Count + 1);
+{$ELSE}
+          FPanel.ClientHeight:= I * IfThen(Items.Count > 10, 11, Items.Count + 1) + trunc(i/2);
+{$ENDIF}
         end;
       end;
     end;
@@ -267,8 +301,7 @@ procedure TKASPathEdit.ListBoxClick(Sender: TObject);
 begin
   if FListBox.ItemIndex >= 0 then
   begin
-    Text:= FListBox.Items[FListBox.ItemIndex];
-    SelStart:= UTF8Length(Text);
+    setTextAndSelect( FListBox.Items[FListBox.ItemIndex] );
     HideListBox;
     SetFocus;
   end;
@@ -279,11 +312,24 @@ begin
   FListBox.ItemIndex:= FListBox.ItemAtPos(Classes.Point(X, Y), True);
 end;
 
+{$IF DEFINED(LCLCOCOA)}
+procedure cocoaNeedMouseEvent( hintWindow: THintWindow );
+var
+  cnt: TCocoaWindowContent;
+begin
+  cnt:= TCocoaWindowContent( hintWindow.Handle );
+  cnt.window.setIgnoresMouseEvents( false );
+end;
+{$ENDIF}
+
 procedure TKASPathEdit.ShowListBox;
 begin
-  if (FPanel = nil) then
+  if not isShowingListBox() then
   begin
     FPanel:= THintWindow.Create(Self);
+{$IF DEFINED(LCLCOCOA)}
+    cocoaNeedMouseEvent(FPanel);
+{$ENDIF}
     FPanel.Color:= clDefault;
     FListBox.Parent:= FPanel;
 
@@ -303,7 +349,7 @@ end;
 
 procedure TKASPathEdit.HideListBox;
 begin
-  if (FPanel <> nil) then
+  if isShowingListBox() then
   begin
     FPanel.Visible:= False;
     FListBox.Parent:= nil;
@@ -323,6 +369,19 @@ end;
 
 {$ENDIF}
 
+procedure TKASPathEdit.setTextAndSelect( newText:String );
+var
+  start: Integer;
+begin
+  if Pos(Text,newText) > 0 then
+    start:= UTF8Length(Text)
+  else
+    start:= UTF8Length(ExtractFilePath(Text));
+  Text:= newText;
+  SelStart:= start;
+  SelLength:= UTF8Length(Text)-SelStart;
+end;
+
 procedure TKASPathEdit.DoExit;
 begin
   HideListBox;
@@ -335,51 +394,124 @@ begin
   inherited VisibleChanged;
 end;
 
-procedure TKASPathEdit.KeyDown(var Key: Word; Shift: TShiftState);
+{$IFDEF LCLCOCOA}
+procedure TKASPathEdit.DoEnter;
 begin
-  FKeyDown:= Key;
+  inherited DoEnter;
+  self.originalText:= self.Text;
+end;
+
+procedure TKASPathEdit.TextChanged;
+begin
+  inherited TextChanged;
+  self.originalText:= self.Text;
+end;
+
+procedure TKASPathEdit.KeyDown( var Key: Word; Shift: TShiftState );
+begin
+  case Key of
+    VK_ESCAPE:
+      self.keyDownText:= self.Text;
+    VK_RETURN,
+    VK_SELECT:
+      self.keyDownText:= self.originalText
+  end;
+  KeyDownAction( Key, Shift );
+end;
+
+procedure TKASPathEdit.KeyUp( var Key: Word; Shift: TShiftState );
+begin
   case Key of
     VK_ESCAPE,
     VK_RETURN,
     VK_SELECT:
-      begin
-        HideListBox;
-      end;
-    VK_UP:
-      if Assigned(FPanel) then
-      begin
+      if self.text=self.keyDownText then begin
+        // from the text has not been changed,
+        // the TKASPathEdit is not in the IME state
+        handleSpecialKeys( Key )
+      end else begin
+        // in the IME state
+        AutoComplete(self.text);
         Key:= 0;
-        if FListBox.ItemIndex = -1 then
-          FListBox.ItemIndex:= FListBox.Items.Count - 1
-        else if FListBox.ItemIndex - 1 < 0 then
-          FListBox.ItemIndex:= - 1
-        else
-          FListBox.ItemIndex:= FListBox.ItemIndex - 1;
-
-        if FListBox.ItemIndex >= 0 then
-          Text:= FListBox.Items[FListBox.ItemIndex]
-        else
-          Text:= ExtractFilePath(Text);
-        SelStart:= UTF8Length(Text);
-      end;
-    VK_DOWN:
-      if Assigned(FPanel) then
-      begin
-        Key:= 0;
-        if FListBox.ItemIndex + 1 >= FListBox.Items.Count then
-          FListBox.ItemIndex:= -1
-        else if FListBox.ItemIndex = -1 then
-          FListBox.ItemIndex:= IfThen(FListBox.Items.Count > 0, 0, -1)
-        else
-          FListBox.ItemIndex:= FListBox.ItemIndex + 1;
-
-        if FListBox.ItemIndex >= 0 then
-          Text:= FListBox.Items[FListBox.ItemIndex]
-        else
-          Text:= ExtractFilePath(Text);
-        SelStart:= UTF8Length(Text);
       end;
   end;
+  inherited KeyUp( Key, Shift );
+end;
+{$ENDIF}
+
+procedure TKASPathEdit.handleSpecialKeys( var Key: Word );
+begin
+  if isShowingListBox() then begin
+    HideListBox;
+    Key:= 0;
+  end else begin
+    if Key=VK_ESCAPE then begin
+      if Assigned(onKeyESCAPE) then onKeyESCAPE( self );
+    end else begin
+      if Assigned(onKeyRETURN) then onKeyRETURN( self );
+    end;
+  end;
+end;
+
+procedure TKASPathEdit.handleUpKey;
+begin
+    if FListBox.ItemIndex = -1 then
+      FListBox.ItemIndex:= FListBox.Items.Count - 1
+    else if FListBox.ItemIndex - 1 < 0 then
+      FListBox.ItemIndex:= - 1
+    else
+      FListBox.ItemIndex:= FListBox.ItemIndex - 1;
+
+    if FListBox.ItemIndex >= 0 then
+      setTextAndSelect( FListBox.Items[FListBox.ItemIndex] )
+    else
+      setTextAndSelect( ExtractFilePath(Text) );
+end;
+
+procedure TKASPathEdit.handleDownKey;
+begin
+    if FListBox.ItemIndex + 1 >= FListBox.Items.Count then
+      FListBox.ItemIndex:= -1
+    else if FListBox.ItemIndex = -1 then
+      FListBox.ItemIndex:= IfThen(FListBox.Items.Count > 0, 0, -1)
+    else
+      FListBox.ItemIndex:= FListBox.ItemIndex + 1;
+
+    if FListBox.ItemIndex >= 0 then
+      setTextAndSelect( FListBox.Items[FListBox.ItemIndex] )
+    else
+      setTextAndSelect( ExtractFilePath(Text) );
+end;
+
+{$IF DEFINED(LCLCOCOA)}
+procedure TKASPathEdit.KeyDownAction(var Key: Word; Shift: TShiftState);
+{$ELSE}
+procedure TKASPathEdit.KeyDown(var Key: Word; Shift: TShiftState);
+{$ENDIF}
+begin
+  FKeyDown:= Key;
+  case Key of
+    // handle in KeyUp on LCLCOCOA
+    {$IF NOT DEFINED(LCLCOCOA)}
+    VK_ESCAPE,
+    VK_RETURN,
+    VK_SELECT:
+      handleSpecialKeys( Key );
+    {$ENDIF}
+    VK_UP:
+      if isShowingListBox() then
+      begin
+        Key:= 0;
+        handleUpKey();
+      end;
+    VK_DOWN:
+      if isShowingListBox() then
+      begin
+        Key:= 0;
+        handleDownKey();
+      end;
+  end;
+
   inherited KeyDown(Key, Shift);
 {$IFDEF LCLGTK2}
   // Workaround for GTK2 - up and down arrows moving through controls.

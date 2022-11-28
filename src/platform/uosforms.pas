@@ -108,7 +108,7 @@ procedure ShowTrashContextMenu(Parent: TWinControl; X, Y : Integer;
 }
 function ShowOpenIconDialog(Owner: TCustomControl; var sFileName : String) : Boolean;
 
-{$IF DEFINED(UNIX) AND NOT DEFINED(DARWIN)}
+{$IF DEFINED(UNIX) AND NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
 {en
    Show open with dialog
    @param(FileList List of files to open with)
@@ -139,21 +139,21 @@ uses
   {$ENDIF}
   {$IFDEF UNIX}
   , BaseUnix, Errors, fFileProperties, uJpegThumb, uOpenDocThumb
-    {$IF NOT DEFINED(DARWIN)}
+    {$IF DEFINED(DARWIN)}
+    , MacOSAll, uQuickLook, uMyDarwin
+    {$ELSEIF NOT DEFINED(HAIKU)}
     , uDCReadSVG, uMagickWand, uGio, uGioFileSource, uVfsModule, uVideoThumb
     , uDCReadWebP, uFolderThumb, uAudioThumb, uDefaultTerminal, uDCReadHEIF
-    , uTrashFileSource
-    {$ELSE}
-    , MacOSAll, uQuickLook, uMyDarwin
-    {$ENDIF}
-    {$IF NOT DEFINED(DARWIN)}
-    , fOpenWith
+    , uTrashFileSource, fOpenWith
     {$ENDIF}
     {$IF DEFINED(LCLQT) and not DEFINED(DARWIN)}
     , qt4, qtwidgets
     {$ENDIF}
     {$IF DEFINED(LCLQT5) and not DEFINED(DARWIN)}
     , qt5, qtwidgets
+    {$ENDIF}
+    {$IF DEFINED(LCLQT6) and not DEFINED(DARWIN)}
+    , qt6, qtwidgets
     {$ENDIF}
     {$IF DEFINED(LCLGTK2)}
     , gtk2
@@ -511,7 +511,7 @@ begin
 end;
 {$ENDIF}
 
-{$IF DEFINED(LCLGTK2) or ((DEFINED(LCLQT) or DEFINED(LCLQT5)) and not (DEFINED(DARWIN) or DEFINED(MSWINDOWS)))}
+{$IF DEFINED(LCLGTK2) or ((DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)) and not (DEFINED(DARWIN) or DEFINED(MSWINDOWS)))}
 
 procedure ScreenFormEvent(Self, Sender: TObject; Form: TCustomForm);
 {$IF DEFINED(LCLGTK2)}
@@ -521,7 +521,7 @@ begin
   ClassName:= Form.ClassName;
   gtk_window_set_role(PGtkWindow(Form.Handle), PAnsiChar(ClassName));
 end;
-{$ELSEIF DEFINED(LCLQT) or DEFINED(LCLQT5)}
+{$ELSEIF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
 var
   ClassName: WideString;
 begin
@@ -623,7 +623,7 @@ begin
   end;
 end;
 {$ELSE}
-{$IF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLGTK2) or DEFINED(DARWIN)}
+{$IF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6) or DEFINED(LCLGTK2) or DEFINED(DARWIN)}
 var
   Handler: TMethod;
 {$ENDIF}
@@ -636,7 +636,7 @@ begin
     with TfrmMain(MainForm) do
       StaticTitle:= StaticTitle + ' - ROOT PRIVILEGES';
   end;
-  {$IF NOT DEFINED(DARWIN)}
+  {$IF NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
   if HasGio then
   begin
     if TGioFileSource.IsSupportedPath('trash://') then
@@ -650,7 +650,7 @@ begin
   Handler.Data:= MainForm;
   Handler.Code:= @ActiveFormChangedHandler;
   Screen.AddHandlerActiveFormChanged(TScreenFormEvent(Handler), True);
-  {$ELSEIF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5)}
+  {$ELSEIF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
   Handler.Data:= MainForm;
   Handler.Code:= @ScreenFormEvent;
   ScreenFormEvent(MainForm, MainForm, MainForm);
@@ -941,7 +941,7 @@ begin
 end;
 {$ENDIF}
 
-{$IF DEFINED(UNIX) AND NOT DEFINED(DARWIN)}
+{$IF DEFINED(UNIX) AND NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
 procedure ShowOpenWithDialog(TheOwner: TComponent; const FileList: TStringList);
 begin
   fOpenWith.ShowOpenWithDlg(TheOwner, FileList);

@@ -92,6 +92,13 @@ type
     FFileExistsOption: TFileSourceOperationOptionFileExists;
     FDirExistsOption: TFileSourceOperationOptionDirectoryExists;
 
+{$IF DEFINED(LINUX)}
+    FCache: record
+      Device: QWord;
+      DirtyLimit: Int64
+    end;
+{$ENDIF}
+
     FCurrentFile: TFile;
     FCurrentTargetFilePath: String;
 
@@ -171,7 +178,7 @@ uses
   DCBasicTypes, uFileSource, uFileSystemFileSource, uFileProperty, uAdministrator,
   StrUtils, DCDateTimeUtils, uShowMsg, Forms, LazUTF8, uHash, uFileCopyEx, SysConst
 {$IFDEF UNIX}
-  , BaseUnix, DCUnix
+  , BaseUnix, Unix, DCUnix
 {$ENDIF}
   ;
 
@@ -503,6 +510,10 @@ var
   Options: UInt32;
   Context: THashContext;
   bDeleteFile: Boolean = False;
+{$IFDEF LINUX}
+  Sbfs: TStatFS;
+  Info: BaseUnix.Stat;
+{$ENDIF}
 
   procedure OpenSourceFile;
   var
@@ -748,6 +759,25 @@ begin
       if not Assigned(TargetFileStream) then
         Exit;
 
+{$IF DEFINED(LINUX)}
+      if not FVerify and (fpFStatFS(TargetFileStream.Handle, @Sbfs) = 0) then
+      begin
+        case UInt32(Sbfs.fstype) of
+          NFS_SUPER_MAGIC:
+          begin
+            TargetFileStream.AutoSync:= True;
+            if (fpFStat(TargetFileStream.Handle, Info) = 0) then
+            begin
+              if FCache.Device = QWord(Info.st_dev) then
+                TargetFileStream.DirtyLimit:= FCache.DirtyLimit
+              else
+                FCache.Device:= QWord(Info.st_dev);
+            end;
+          end;
+        end;
+      end;
+{$ENDIF}
+
       while TotalBytesToRead > 0 do
       begin
         // Without the following line the reading is very slow
@@ -886,6 +916,10 @@ begin
     if FVerify then Context.Free;
     if Assigned(TargetFileStream) then
     begin
+{$IF DEFINED(LINUX)}
+      if TargetFileStream.AutoSync then
+        FCache.DirtyLimit:= TargetFileStream.DirtyLimit;
+{$ENDIF}
       FreeAndNil(TargetFileStream);
       if TotalBytesToRead > 0 then
       begin

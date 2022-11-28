@@ -51,6 +51,8 @@ uses
   , Qt4, QtWidgets
   {$ELSEIF DEFINED(LCLQT5)}
   , Qt5, QtWidgets
+  {$ELSEIF DEFINED(LCLQT6)}
+  , Qt6, QtWidgets
   {$ELSEIF DEFINED(LCLGTK2)}
   , Glib2, Gtk2
   {$ELSEIF DEFINED(DARWIN)}
@@ -689,7 +691,7 @@ type
     procedure OnUniqueInstanceMessage(Sender: TObject; Params: TCommandLineParams);
     procedure tbPasteClick(Sender: TObject);
     procedure AllProgressOnUpdateTimer(Sender: TObject);
-{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5)) and not DEFINED(MSWINDOWS)}
+{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)) and not DEFINED(MSWINDOWS)}
   private
     QEventHook: QObject_hookH;
     function QObjectEventFilter(Sender: QObjectH; Event: QEventH): Boolean; cdecl;
@@ -942,12 +944,8 @@ uses
   uFileSourceOperationOptionsUI, uDebug, uHotkeyManager, uFileSourceUtil, uTempFileSystemFileSource,
   Laz2_XMLRead, DCOSUtils, DCStrUtils, fOptions, fOptionsFrame, fOptionsToolbar, uClassesEx,
   uHotDir, uFileSorting, DCBasicTypes, foptionsDirectoryHotlist, uConnectionManager,
-  fOptionsToolbarBase, fOptionsToolbarMiddle, fEditor, uColumns, StrUtils, uSysFolders
-  {$IFDEF COLUMNSFILEVIEW_VTV}
-  , uColumnsFileViewVtv
-  {$ELSE}
-  , uColumnsFileView
-  {$ENDIF}
+  fOptionsToolbarBase, fOptionsToolbarMiddle, fEditor, uColumns, StrUtils, uSysFolders,
+  uColumnsFileView
 {$IFDEF MSWINDOWS}
   , uNetworkThread
 {$ENDIF}
@@ -959,12 +957,12 @@ const
   TCToolbarClipboardHeader  = 'TOTALCMD#BAR#DATA';
   DCToolbarClipboardHeader  = 'DOUBLECMD#BAR#DATA';
 
-{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5)}
+{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
 var
   LastActiveWindow: TCustomForm = nil;
 {$ENDIF}
 
-{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5)) and not DEFINED(MSWINDOWS)}
+{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)) and not DEFINED(MSWINDOWS)}
 var
   CloseQueryResult: Boolean = False;
 {$ENDIF}
@@ -1204,7 +1202,7 @@ begin
   TDriveWatcher.Initialize(GetWindowHandle(Application.MainForm));
   TDriveWatcher.AddObserver(@OnDriveWatcherEvent);
 
-{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5)) and not DEFINED(MSWINDOWS)}
+{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)) and not DEFINED(MSWINDOWS)}
   // Fixes bug - [0000033] "DC cancels shutdown in KDE"
   // http://doublecmd.sourceforge.net/mantisbt/view.php?id=33
   QEventHook:= QObject_hook_create(TQtWidget(Self.Handle).Widget);
@@ -1750,7 +1748,7 @@ begin
 
   FreeAndNil(DrivesList);
 
-{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5)) and not DEFINED(MSWINDOWS)}
+{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)) and not DEFINED(MSWINDOWS)}
   QObject_hook_destroy(QEventHook);
 {$ENDIF}
 
@@ -1791,7 +1789,7 @@ begin
     end;
   end;
 
-{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5)) and not DEFINED(MSWINDOWS)}
+{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)) and not DEFINED(MSWINDOWS)}
   CloseQueryResult:= CanClose;
 {$ENDIF}
 end;
@@ -6485,7 +6483,7 @@ begin
 end;
 
 procedure TfrmMain.HideToTray;
-{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5)}
+{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
 var
   ActiveWindow: HWND;
   LCLObject: TObject;
@@ -6503,7 +6501,7 @@ begin
   window has capture) thus preventing the user from restoring the main window.
   So when the main form is hidden the modal window is hidden too.
 }
-{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5)}
+{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
   LastActiveWindow := nil;
   if not Self.Active then    // If there is another window active
   begin
@@ -6521,7 +6519,7 @@ begin
         // We only want to hide it.
         LastActiveWindow.Visible := False;
 {$ENDIF}
-{$IF DEFINED(LCLQT) or DEFINED(LCLQT5)}
+{$IF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
         // Have to use QT directly to hide the window for this to work.
         TQtWidget(LastActiveWindow.Handle).setVisible(False);
 {$ENDIF}
@@ -6544,10 +6542,10 @@ begin
     ShowTrayIcon(False);
 
   // After the main form is shown, restore the last active modal form if there was any.
-{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5)}
+{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
    if Assigned(LastActiveWindow) then
    begin
-{$IF DEFINED(LCLQT) or DEFINED(LCLQT5)}
+{$IF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
      TQtWidget(LastActiveWindow.Handle).setVisible(true);
 {$ENDIF}
 {$IFDEF LCLGTK2}
@@ -6927,20 +6925,24 @@ begin
     Exit;
   { update restored bounds }
   if WindowState = wsNormal then
+  begin
+    if FDelayedWMMove then
     begin
-      if FDelayedWMMove then
-        begin
-          FRestoredLeft := Left;
-          FRestoredTop := Top;
-        end;
-      if FDelayedWMSize then
-        begin
-          FRestoredWidth := Width;
-          FRestoredHeight := Height;
-        end;
+      FRestoredLeft := Left;
+      FRestoredTop := Top;
     end;
+    if FDelayedWMSize then
+    begin
+      FRestoredWidth := Width;
+      FRestoredHeight := Height;
+    end;
+  end;
   FDelayedWMMove := False;
   FDelayedWMSize := False;
+
+  // Sync position and size with real main form
+  with BoundsRect do
+    Application.MainForm.SetBounds(Left, Top, Width, Height);
 end;
 
 procedure TfrmMain.AppActivate(Sender: TObject);
@@ -6975,7 +6977,7 @@ begin
   Cancel := not CanClose;
 end;
 
-{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5)) and not DEFINED(MSWINDOWS)}
+{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)) and not DEFINED(MSWINDOWS)}
 function TfrmMain.QObjectEventFilter(Sender: QObjectH; Event: QEventH): Boolean; cdecl;
 begin
   Result:= False;

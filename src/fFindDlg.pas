@@ -34,7 +34,7 @@ uses
   ActnList, uOSForms, uShellContextMenu, uExceptions, uFileSystemFileSource,
   uFormCommands, uHotkeyManager, LCLVersion, uWcxModule, uFileSource;
 
-{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5)}
+{$IF DEFINED(LCLGTK2) or DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
   {$DEFINE FIX_DEFAULT}
 {$ENDIF}
 
@@ -649,7 +649,6 @@ var
   HMFindFiles: THMForm;
 begin
   if not gShowMenuBarInFindFiles then FreeAndNil(mmMainMenu);
-  Height := pnlFindFile.Height + 22;
   DsxPlugins := TDSXModuleList.Create;
   FoundedStringCopy := TStringListTemp.Create;
   FoundedStringCopy.OwnsObjects := True;
@@ -732,7 +731,7 @@ procedure TfrmFindDlg.cbUsePluginChange(Sender: TObject);
 begin
   EnableControl(cmbPlugin, cbUsePlugin.Checked);
 
-  if not FUpdating and cmbPlugin.Enabled and cmbPlugin.CanFocus and (Sender = cbUsePlugin) then
+  if not FUpdating and cmbPlugin.Enabled and cmbPlugin.CanSetFocus and (Sender = cbUsePlugin) then
   begin
     cmbPlugin.SetFocus;
     cmbPlugin.SelectAll;
@@ -828,7 +827,7 @@ begin
   cbReplaceText.Checked := False;
   cmbEncodingSelect(nil);
 
-  if not FUpdating and cmbFindText.Enabled and cmbFindText.CanFocus and (Sender = cbFindText) then
+  if not FUpdating and cmbFindText.Enabled and cmbFindText.CanSetFocus and (Sender = cbFindText) then
   begin
     cmbFindText.SetFocus;
     cmbFindText.SelectAll;
@@ -1359,11 +1358,10 @@ begin
     begin                          // if user don't press anything - focus on results
       if (pgcSearch.ActivePage = tsResults) and (lsFoundedFiles.Count > 0) then
       begin
+        btnGoToPath.SetFocus;
         lsFoundedFiles.SetFocus;
-        if (lsFoundedFiles.ItemIndex <> -1) then
-        begin
-          lsFoundedFiles.Selected[lsFoundedFiles.ItemIndex] := True;
-        end;
+        if lsFoundedFiles.ItemIndex<0 then lsFoundedFiles.ItemIndex:=0;
+        lsFoundedFiles.Selected[lsFoundedFiles.ItemIndex] := True;
       end
       else
       begin
@@ -1448,7 +1446,7 @@ begin
         lsFoundedFiles.ScrollWidth := iTemp + 32;
     end;
     lsFoundedFiles.Items.AddObject(sText, Sender);
-{$IF DEFINED(LCLQT) or DEFINED(LCLQT5)}
+{$IF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
     Application.ProcessMessages;
 {$ENDIF}
   end;
@@ -1484,7 +1482,7 @@ begin
 
   cmbEncodingSelect(cmbEncoding);
 
-  if not FUpdating and cmbReplaceText.Enabled and cmbReplaceText.CanFocus then
+  if not FUpdating and cmbReplaceText.Enabled and cmbReplaceText.CanSetFocus then
   begin
     cmbReplaceText.SetFocus;
     cmbReplaceText.SelectAll;
@@ -1626,7 +1624,7 @@ begin
   // Show search results page
   pgcSearch.ActivePage := tsResults;
 
-  if lsFoundedFiles.CanFocus then
+  if lsFoundedFiles.CanSetFocus then
     lsFoundedFiles.SetFocus;
 
   ClearResults;
@@ -1769,8 +1767,6 @@ begin
   lblFound.Caption := EmptyStr;
   SetWindowCaption(wcs_NewSearch);
   if pgcSearch.ActivePage = tsStandard then cmbFindFileMask.SetFocus;
-
-  btnStart.Default := True;
 end;
 
 { TfrmFindDlg.cm_LastSearch }
@@ -2210,6 +2206,7 @@ end;
 { TfrmFindDlg.FormShow }
 procedure TfrmFindDlg.frmFindDlgShow(Sender: TObject);
 begin
+  AutoSize:=false;
   pgcSearch.PageIndex := 0;
 
   if cmbFindFileMask.Visible then
@@ -2218,7 +2215,7 @@ begin
   lsFoundedFiles.Canvas.Font := lsFoundedFiles.Font;
 
   if pgcSearch.ActivePage = tsStandard then
-    if cmbFindFileMask.CanFocus then
+    if cmbFindFileMask.CanSetFocus then
       cmbFindFileMask.SetFocus;
 
   cbSelectedFiles.Checked := FSelectedFiles.Count > 0;
@@ -2357,13 +2354,16 @@ begin
     //1. If we're using at least plug in, switch to it.
     //2. If not but we're using at least something from the "Advanced" tab, switch to it.
     //3. If nothing above, at least switch to "Standard" tab.
+    pgcSearch.Options:= pgcSearch.Options + [nboDoChangeOnSetIndex];
     if (cbUsePlugin.Checked OR frmContentPlugins.chkUsePlugins.Checked) then
       pgcSearch.ActivePage := tsPlugins
     else
       if (cbNotOlderThan.Checked OR cbFileSizeFrom.Checked OR cbFileSizeTo.Checked OR cbDateFrom.Checked OR cbDateTo.Checked OR cbTimeFrom.Checked OR cbTimeTo.Checked OR (edtAttrib.Text<>'')) then
         pgcSearch.ActivePage := tsAdvanced
-      else
+      else begin
         pgcSearch.ActivePage := tsStandard;
+      end;
+    pgcSearch.Options:= pgcSearch.Options - [nboDoChangeOnSetIndex];
   end;
 end;
 
@@ -2757,13 +2757,13 @@ procedure TfrmFindDlg.pgcSearchChange(Sender: TObject);
 begin
   if pgcSearch.ActivePage = tsStandard then
   begin
-    if (not cmbFindFileMask.Focused) and (cmbFindFileMask.CanFocus) then
+    if (not cmbFindFileMask.Focused) and (cmbFindFileMask.CanSetFocus) then
       cmbFindFileMask.SetFocus;
   end
   else
   if pgcSearch.ActivePage = tsResults then
   begin
-    if (not lsFoundedFiles.Focused) and (lsFoundedFiles.CanFocus) then
+    if (not lsFoundedFiles.Focused) and (lsFoundedFiles.CanSetFocus) then
       lsFoundedFiles.SetFocus;
   end;
 end;

@@ -64,6 +64,9 @@ uses
   {$IFDEF LCLQT5}
   , qt5
   {$ENDIF}
+  {$IFDEF LCLQT6}
+  , qt6
+  {$ENDIF}
   {$IFDEF LCLGTK2}
   , gtk2
   {$ENDIF}
@@ -464,6 +467,8 @@ begin
     OSVersion := 'FreeBSD';
     {$ELSEIF DEFINED(BSD)}
     OSVersion := 'BSD';
+    {$ELSEIF DEFINED(HAIKU)}
+    OSVersion := 'Haiku';
     {$ELSE}
     OSVersion := 'Unix';
     {$ENDIF}
@@ -471,7 +476,7 @@ begin
   end;
   {$ENDIF}
 
-  {$IF DEFINED(LCLQT) or DEFINED(LCLQT5)}
+  {$IF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
   WSVersion := 'Qt ' + QtVersion + ', libQt' + QtVersion[0] + 'Pas ';
 
   WSVersion := WSVersion + IntToStr((QT_VERSION shr 16) and 255) + '.' +

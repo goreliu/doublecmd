@@ -209,7 +209,8 @@ const
   // 11  - During the last 2-3 years the default font for search result was set in file, not loaded and different visually than was was stored.
   // 12  - Split Behaviours/HeaderFooterSizeFormat to Behaviours/HeaderSizeFormat and Behaviours/FooterSizeFormat
   //       Loading a config prior of version 11 should ignore that setting and keep default.
-  ConfigVersion = 12;
+  // 13 -  Replace Configuration/UseConfigInProgramDir by doublecmd.inf
+  ConfigVersion = 13;
 
   // Configuration related filenames
   sMULTIARC_FILENAME = 'multiarc.ini';
@@ -324,6 +325,7 @@ var
 
   gAutoFillColumns: Boolean;
   gAutoSizeColumn: Integer;
+  gColumnsLongInStatus : Boolean;
   gColumnsAutoSaveWidth: Boolean;
   gColumnsTitleStyle: TTitleStyle;
   gCustomColumnsChangeAllColumns: Boolean;
@@ -636,15 +638,19 @@ var
   gViewerWrapText: Boolean;
   gViewerLeftMargin: Integer;
   gViewerLineSpacing: Integer;
+  gViewerAutoCopy: Boolean;
 
   { Editor }
   gEditWaitTime: Integer;
   gEditorSynEditOptions: TSynEditorOptions;
   gEditorSynEditTabWidth,
-  gEditorSynEditRightEdge: Integer;
+  gEditorSynEditRightEdge,
+  gEditorSynEditBlockIndent: Integer;
+  gEditorFindWordAtCursor: Boolean;
 
   { Differ }
   gDifferIgnoreCase,
+  gDifferAutoCompare,
   gDifferKeepScrolling,
   gDifferLineDifferences,
   gDifferPaintBackground,
@@ -746,10 +752,11 @@ var
 implementation
 
 uses
-   LCLProc, LCLType, Dialogs, Laz2_XMLRead, LazUTF8, uExifWdx, uSynDiffControls,
+   LCLProc, LCLType, Dialogs, Laz2_XMLRead, LazUTF8, LConvEncoding, uExifWdx,
    uGlobsPaths, uLng, uShowMsg, uFileProcs, uOSUtils, uFindFiles, uEarlyConfig,
    uDCUtils, fMultiRename, uFile, uDCVersion, uDebug, uFileFunctions,
-   uDefaultPlugins, Lua, uKeyboard, DCOSUtils, DCStrUtils, uPixMapManager
+   uDefaultPlugins, Lua, uKeyboard, DCOSUtils, DCStrUtils, uPixMapManager,
+   uSynDiffControls
    {$IF DEFINED(MSWINDOWS)}
     , ShlObj
    {$ENDIF}
@@ -1653,6 +1660,7 @@ begin
   gWheelScrollLines:= Mouse.WheelScrollLines;
   gAutoFillColumns := False;
   gAutoSizeColumn := 1;
+  gColumnsLongInStatus := False;
   gColumnsAutoSaveWidth := True;
   gColumnsTitleStyle := tsNative;
   gCustomColumnsChangeAllColumns := False;
@@ -2054,15 +2062,19 @@ begin
   gViewerLeftMargin := 4;
   gViewerLineSpacing := 0;
   gPrintMargins:= Classes.Rect(200, 200, 200, 200);
+  gViewerAutoCopy := True;
 
   { Editor }
   gEditWaitTime := 2000;
   gEditorSynEditOptions := SYNEDIT_DEFAULT_OPTIONS;
   gEditorSynEditTabWidth := 8;
   gEditorSynEditRightEdge := 80;
+  gEditorSynEditBlockIndent := 2;
+  gEditorFindWordAtCursor := True;
 
   { Differ }
   gDifferIgnoreCase := False;
+  gDifferAutoCompare := True;
   gDifferKeepScrolling := True;
   gDifferPaintBackground := True;
   gDifferLineDifferences := False;
@@ -2227,6 +2239,11 @@ begin
           if gConfig.TryGetValue(gConfig.RootNode, 'Configuration/UseConfigInProgramDir', gUseConfigInProgramDir) then
           begin
             gConfig.DeleteNode(gConfig.RootNode, 'Configuration/UseConfigInProgramDir');
+            if not gUseConfigInProgramDir then
+            begin
+              gConfig.Save;
+              mbDeleteFile(gpGlobalCfgDir + 'doublecmd.inf');
+            end;
           end;
 
           if not gUseConfigInProgramDir then
@@ -2429,18 +2446,6 @@ begin
           mbDeleteFile(gpGlobalCfgDir + 'doublecmd.inf')
       end;
 
-      { Remove location of configuration files from XML}
-      if mbFileAccess(gpGlobalCfgDir + 'doublecmd.xml', fmOpenWrite or fmShareDenyWrite) then
-      begin
-        TmpConfig := TXmlConfig.Create(gpGlobalCfgDir + 'doublecmd.xml', True);
-        try
-          TmpConfig.DeleteNode(TmpConfig.RootNode, 'Configuration/UseConfigInProgramDir');
-          TmpConfig.Save;
-        finally
-          TmpConfig.Free;
-        end;
-      end;
-
       gConfig.FileName := gpCfgDir + 'doublecmd.xml';
     end;
 
@@ -2530,6 +2535,11 @@ begin
     { Double Commander Version }
     gPreviousVersion:= GetAttr(Root, 'DCVersion', EmptyStr);
     LoadedConfigVersion := GetAttr(Root, 'ConfigVersion', ConfigVersion);
+
+    if (LoadedConfigVersion < 13) then
+    begin
+      DeleteNode(Root, 'Configuration/UseConfigInProgramDir');
+    end;
 
     { Language page }
     gPOFileName := GetValue(Root, 'Language/POFileName', gPOFileName);
@@ -2846,6 +2856,7 @@ begin
       SubNode := FindNode(Node, 'ColumnsView');
       if Assigned(SubNode) then
       begin
+        gColumnsLongInStatus := GetValue(SubNode, 'LongInStatus', gColumnsLongInStatus);
         gColumnsAutoSaveWidth := GetValue(SubNode, 'AutoSaveWidth', gColumnsAutoSaveWidth);
         gColumnsTitleStyle := TTitleStyle(GetValue(SubNode, 'TitleStyle', Integer(gColumnsTitleStyle)));
       end;
@@ -3050,7 +3061,7 @@ begin
       gHotDirFilenameStyle := TConfigFilenameStyle(GetValue(Node, 'FilenameStyle', ord(gHotDirFilenameStyle)));
       gHotDirPathToBeRelativeTo := gConfig.GetValue(Node, 'PathToBeRelativeTo', gHotDirPathToBeRelativeTo);
       gHotDirPathModifierElements := tHotDirPathModifierElements(GetValue(Node, 'PathModifierElements', Integer(gHotDirPathModifierElements)));
-      gDefaultTextEncoding := GetValue(Node, 'DefaultTextEncoding', gDefaultTextEncoding);
+      gDefaultTextEncoding := NormalizeEncoding(GetValue(Node, 'DefaultTextEncoding', gDefaultTextEncoding));
     end;
 
     { Thumbnails }
@@ -3150,6 +3161,7 @@ begin
       gBookBackgroundColor := GetValue(Node, 'BackgroundColor', gBookBackgroundColor);
       gBookFontColor := GetValue(Node, 'FontColor', gBookFontColor);
       gTextPosition := GetValue(Node, 'TextPosition',  gTextPosition);
+      gViewerAutoCopy := GetValue(Node, 'AutoCopy',  gViewerAutoCopy);
       if LoadedConfigVersion < 7 then
       begin
         gThumbSave := GetValue(Node, 'SaveThumbnails', gThumbSave);
@@ -3164,6 +3176,8 @@ begin
       gEditorSynEditOptions := TSynEditorOptions(GetValue(Node, 'SynEditOptions', Integer(gEditorSynEditOptions)));
       gEditorSynEditTabWidth := GetValue(Node, 'SynEditTabWidth', gEditorSynEditTabWidth);
       gEditorSynEditRightEdge := GetValue(Node, 'SynEditRightEdge', gEditorSynEditRightEdge);
+      gEditorSynEditBlockIndent := GetValue(Node, 'SynEditBlockIndent', gEditorSynEditBlockIndent);
+      gEditorFindWordAtCursor := GetValue(Node, 'FindWordAtCursor', gEditorFindWordAtCursor);
     end;
 
     { Differ }
@@ -3171,6 +3185,7 @@ begin
     if Assigned(Node) then
     begin
       gDifferIgnoreCase := GetValue(Node, 'IgnoreCase', gDifferIgnoreCase);
+      gDifferAutoCompare := GetValue(Node, 'AutoCompare', gDifferAutoCompare);
       gDifferKeepScrolling := GetValue(Node, 'KeepScrolling', gDifferKeepScrolling);
       gDifferPaintBackground := GetValue(Node, 'PaintBackground', gDifferPaintBackground);
       gDifferLineDifferences := GetValue(Node, 'LineDifferences', gDifferLineDifferences);
@@ -3559,6 +3574,7 @@ begin
     SetValue(SubNode, 'NewFilesPosition', Integer(gNewFilesPosition));
     SetValue(SubNode, 'UpdatedFilesPosition', Integer(gUpdatedFilesPosition));
     SubNode := FindNode(Node, 'ColumnsView', True);
+    SetValue(SubNode, 'LongInStatus', gColumnsLongInStatus);
     SetValue(SubNode, 'AutoSaveWidth', gColumnsAutoSaveWidth);
     SetValue(SubNode, 'TitleStyle', Integer(gColumnsTitleStyle));
     SubNode := FindNode(Node, 'BriefView', True);
@@ -3778,6 +3794,7 @@ begin
     SetValue(Node, 'BackgroundColor', gBookBackgroundColor);
     SetValue(Node, 'FontColor', gBookFontColor);
     SetValue(Node, 'TextPosition', gTextPosition);
+    SetValue(Node, 'AutoCopy', gViewerAutoCopy);
 
     { Editor }
     Node := FindNode(Root, 'Editor',True);
@@ -3785,10 +3802,13 @@ begin
     SetValue(Node, 'SynEditOptions', Integer(gEditorSynEditOptions));
     SetValue(Node, 'SynEditTabWidth', gEditorSynEditTabWidth);
     SetValue(Node, 'SynEditRightEdge', gEditorSynEditRightEdge);
+    SetValue(Node, 'SynEditBlockIndent', gEditorSynEditBlockIndent);
+    SetValue(Node, 'FindWordAtCursor', gEditorFindWordAtCursor);
 
     { Differ }
     Node := FindNode(Root, 'Differ',True);
     SetValue(Node, 'IgnoreCase', gDifferIgnoreCase);
+    SetValue(Node, 'AutoCompare', gDifferAutoCompare);
     SetValue(Node, 'KeepScrolling', gDifferKeepScrolling);
     SetValue(Node, 'PaintBackground', gDifferPaintBackground);
     SetValue(Node, 'LineDifferences', gDifferLineDifferences);

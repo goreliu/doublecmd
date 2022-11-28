@@ -148,7 +148,8 @@ end;
 
 procedure TdmHighl.dmHighlCreate(Sender: TObject);
 var
-  I: Integer;
+  AName: String;
+  I, Index: Integer;
   AList: TStringList;
   AFileName: String = '';
   ACache: TStringListUtf8;
@@ -176,7 +177,23 @@ begin
       HighLighter:= TSynUniSyn.Create(Self);
       try
         TSynUniSyn(HighLighter).LoadFromFile(AList[I]);
-        SynHighlighterList.AddObject(TSynUniSyn(HighLighter).Info.General.Name, Highlighter);
+        AName:= TSynUniSyn(HighLighter).Info.General.Name;
+        Index:= SynHighlighterList.IndexOf(AName);
+        if (Index < 0) then
+          SynHighlighterList.AddObject(AName, Highlighter)
+        else begin
+          // Add duplicate external highlighter
+          if SynHighlighterList.Objects[Index] is TSynUniSyn then
+          begin
+            AName:= AName + ' #' + IntToStr(I);
+            SynHighlighterList.AddObject(AName, Highlighter);
+          end
+          // Replace built-in highlighter
+          else begin
+            SynHighlighterList.Objects[Index].Free;
+            SynHighlighterList.Objects[Index]:= Highlighter;
+          end;
+        end;
         ACache.Add(AFileName);
       except
         FreeAndNil(HighLighter);
@@ -372,8 +389,8 @@ end;
 
 constructor TdmHighl.Create(AOwner: TComponent; ATemp: Boolean);
 begin
-  inherited Create(AOwner);
   FTemp:= ATemp;
+  inherited Create(AOwner);
 end;
 
 procedure TdmHighl.Assign(Source: TPersistent);

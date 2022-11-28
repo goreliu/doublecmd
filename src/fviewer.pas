@@ -645,6 +645,7 @@ begin
   actWrapText.Checked := gViewerWrapText;
   ViewerControl.ShowCaret := gShowCaret;
   ViewerControl.TabSpaces := gTabSpaces;
+  ViewerControl.AutoCopy := gViewerAutoCopy;
   ViewerControl.MaxTextWidth := gMaxTextWidth;
   ViewerControl.LeftMargin := gViewerLeftMargin;
   ViewerControl.ExtraLineSpacing := gViewerLineSpacing;
@@ -683,7 +684,7 @@ var
   dwFileAttributes: TFileAttrs;
 begin
   FLastSearchPos := -1;
-  Caption := aFileName;
+  Caption := ReplaceHome(aFileName);
   ViewerControl.FileName := EmptyStr;
 
   // Clear text on status bar.
@@ -695,6 +696,7 @@ begin
   if dwFileAttributes = faInvalidAttributes then
   begin
     ActivatePanel(pnlFolder);
+    ExitPluginMode;
     memFolder.Font.Color:= clRed;
     memFolder.Lines.Text:= rsMsgErrNoFiles;
     Exit;
@@ -751,7 +753,7 @@ begin
       begin
         Status.Panels[sbpFileNr].Text:= Format('%d/%d', [Index + 1, FileList.Count]);
         Status.Panels[sbpFileName].Text:= FileList[Index];
-        Caption:= FileList[Index];
+        Caption:= ReplaceHome(FileList[Index]);
         iActiveFile := Index;
         Exit;
       end;

@@ -410,12 +410,8 @@ uses fOptionsPluginsBase, fOptionsPluginsDSX, fOptionsPluginsWCX,
      DCOSUtils, DCStrUtils, DCBasicTypes, uFileSourceCopyOperation, fSyncDirsDlg,
      uHotDir, DCXmlConfig, dmCommonData, fOptionsFrame, foptionsDirectoryHotlist,
      fMainCommandsDlg, uConnectionManager, fOptionsFavoriteTabs, fTreeViewMenu,
-     uArchiveFileSource, fOptionsHotKeys, fBenchmark, uAdministrator, uWcxArchiveFileSource
-     {$IFDEF COLUMNSFILEVIEW_VTV}
-     , uColumnsFileViewVtv
-     {$ELSE}
-     , uColumnsFileView
-     {$ENDIF}
+     uArchiveFileSource, fOptionsHotKeys, fBenchmark, uAdministrator, uWcxArchiveFileSource,
+     uColumnsFileView
      ;
 
 resourcestring
@@ -2380,7 +2376,7 @@ begin
 
     if bMakeViaCopy then
     begin
-      Directory := GetTempName(GetTempFolderDeletableAtTheEnd);
+      Directory := GetTempName(GetTempFolderDeletableAtTheEnd, EmptyStr);
       if not mbForceDirectory(IncludeTrailingBackslash(Directory) + sPath) then
       begin
         MessageDlg(mbSysErrorMessage(GetLastOSError), mtError, [mbOK], 0);
@@ -5117,7 +5113,11 @@ begin
   begin
     // Get script file name
     FileName:= PrepareParameter(Params[0]);
-    if not mbFileExists(FileName) then Exit;
+    if not mbFileExists(FileName) then
+    begin
+      msgError(Format(rsMsgFileNotFound, [Filename]));
+      Exit;
+    end;
 
     // Get script arguments
     Count:= Length(Params) - 1;

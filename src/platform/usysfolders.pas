@@ -60,6 +60,8 @@ uses
   , BaseUnix, Unix, DCUnix
   {$IF DEFINED(DARWIN)}
   , CocoaAll, uMyDarwin
+  {$ELSEIF DEFINED(HAIKU)}
+  , DCHaiku
   {$ELSE}
   , uXdg
   {$ENDIF}
@@ -73,6 +75,11 @@ begin
 end;
 {$ELSE}
 begin
+  {$IF DEFINED(HAIKU)}
+  if mbFindDirectory(B_USER_DIRECTORY, -1, True, Result) then
+    Result:= ExcludeBackPathDelimiter(Result)
+  else
+  {$ENDIF}
   Result:= ExcludeBackPathDelimiter(SysToUTF8(GetEnvironmentVariable('HOME')));
 end;
 {$ENDIF}
@@ -110,6 +117,14 @@ end;
 begin
   Result:= GetHomeDir + '/Library/Preferences/' + ApplicationName;
 end;
+{$ELSEIF DEFINED(HAIKU)}
+begin
+  if mbFindDirectory(B_USER_SETTINGS_DIRECTORY, -1, True, Result) then
+    Result:= IncludeTrailingBackslash(Result) + ApplicationName
+  else begin
+    Result:= GetHomeDir + '/config/settings/' + ApplicationName;
+  end;
+end;
 {$ELSE}
 var
   uinfo: PPasswordRecord;
@@ -136,6 +151,14 @@ end;
 begin
   Result:= NSGetFolderPath(NSCachesDirectory);
 end;
+{$ELSEIF DEFINED(HAIKU)}
+begin
+  if mbFindDirectory(B_USER_CACHE_DIRECTORY, -1, True, Result) then
+    Result:= IncludeTrailingBackslash(Result) + ApplicationName
+  else begin
+    Result:= GetHomeDir + '/config/cache/' + ApplicationName;
+  end;
+end;
 {$ELSE}
 var
   uinfo: PPasswordRecord;
@@ -156,6 +179,14 @@ end;
 {$ELSEIF DEFINED(DARWIN)}
 begin
   Result:= NSGetFolderPath(NSApplicationSupportDirectory);
+end;
+{$ELSEIF DEFINED(HAIKU)}
+begin
+  if mbFindDirectory(B_USER_DATA_DIRECTORY, -1, True, Result) then
+    Result:= IncludeTrailingBackslash(Result) + ApplicationName
+  else begin
+    Result:= GetHomeDir + '/config/data/' + ApplicationName;
+  end;
 end;
 {$ELSE}
 begin
