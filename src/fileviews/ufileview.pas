@@ -156,6 +156,12 @@ type
     FOnFileListChanged : TOnFileListChanged;
     FLoadingFileListLongTimer: TTimer;
 
+    // when not in FlatView Mode, FileName only used as Key for FHashedNames
+    // to save resource;
+    // otherwise, subPath+FileName should be used as Key
+    // to identify files with the same name in different subdirectories
+    function calcFileHashKey(const FileName, APath: String): String;
+
     procedure AddFile(const FileName, APath: String; NewFilesPosition: TNewFilesPosition; UpdatedFilesPosition: TUpdatedFilesPosition);
     procedure AddEventToPendingFilesChanges(const EventData: TFSWatcherEventData);
     function ApplyFilter(ADisplayFile: TDisplayFile; NewFilesPosition: TNewFilesPosition): TFileViewApplyFilterResult;
@@ -188,7 +194,7 @@ type
     procedure HashFileList;
     procedure InsertFile(ADisplayFile: TDisplayFile; AFileList: TDisplayFiles; NewFilesPosition: TNewFilesPosition);
     procedure RemoveFile(ADisplayFile: TDisplayFile);
-    procedure RemoveFile(const FileName: String);
+    procedure RemoveFile(const FileName, APath: String);
     procedure RenameFile(const NewFileName, OldFileName, APath: String; NewFilesPosition: TNewFilesPosition; UpdatedFilesPosition: TUpdatedFilesPosition);
     procedure ResortFile(ADisplayFile: TDisplayFile; AFileList: TDisplayFiles);
     procedure SetActive(bActive: Boolean); inline; overload;
@@ -379,6 +385,7 @@ type
     function Clone({%H-}NewParent: TWinControl): TFileView; virtual;
     procedure CloneTo(AFileView: TFileView); virtual;
 
+    function AddHistory(aFileSource: IFileSource; aPath: String): Boolean;
     function AddFileSource(aFileSource: IFileSource; aPath: String): Boolean; virtual;
     function RemoveCurrentFileSource: Boolean; virtual;
     procedure RemoveAllFileSources; virtual;
@@ -439,6 +446,8 @@ type
     procedure SaveConfiguration(AConfig: TXmlConfig; ANode: TXmlNode; ASaveHistory:boolean); virtual;
 
     procedure UpdateView;
+
+    procedure UpdateColor; virtual; abstract;
 
     {en
        Moves the selection focus to the file specified by aFilePath.
@@ -784,6 +793,15 @@ begin
   end;
 end;
 
+function TFileView.AddHistory(aFileSource: IFileSource; aPath: String): Boolean;
+begin
+  if FileSource.Equals(aFileSource) then
+    FHistory.AddPath(aPath)
+  else begin
+    FHistory.Add(aFileSource, aPath);
+  end;
+end;
+
 procedure TFileView.AddEventToPendingFilesChanges(const EventData: TFSWatcherEventData);
   function CheckLast(const sFileName: String; const EventType: TFSWatcherEventTypes; bDelete: Boolean): Boolean;
   var
@@ -1036,13 +1054,28 @@ begin
     Result := nil;
 end;
 
+function TFileView.calcFileHashKey(const FileName, APath: String): String;
+var
+  subPath: String;
+begin
+  if not FFlatView then begin
+    Result := FileName;
+  end else begin
+    subPath := APath.Substring( currentPath.Length );
+    if subPath<>EmptyStr then subPath := IncludeTrailingPathDelimiter(subPath);
+    Result := subPath + FileName;
+  end;
+end;
+
 procedure TFileView.AddFile(const FileName, APath: String; NewFilesPosition: TNewFilesPosition; UpdatedFilesPosition: TUpdatedFilesPosition);
 var
   ADisplayFile: TDisplayFile;
   AFile: TFile;
   I: Integer;
+  AFileKey: String;
 begin
-  I := FHashedNames.Find(FileName);
+  AFileKey := calcFileHashKey(FileName, APath);
+  I := FHashedNames.Find(AFileKey);
   if I < 0 then
   begin
     AFile := TFile.Create(APath);
@@ -1059,7 +1092,7 @@ begin
     end;
     ADisplayFile := TDisplayFile.Create(AFile);
     FHashedFiles.Add(ADisplayFile, nil);
-    FHashedNames.Add(FileName, ADisplayFile);
+    FHashedNames.Add(AFileKey, ADisplayFile);
     InsertFile(ADisplayFile, FAllDisplayFiles, NewFilesPosition);
     if not TFileListBuilder.MatchesFilter(ADisplayFile.FSFile, FileFilter, FFilterOptions) then
     begin
@@ -1074,18 +1107,18 @@ begin
     UpdateFile(FileName, APath, NewFilesPosition, UpdatedFilesPosition);
 end;
 
-procedure TFileView.RemoveFile(const FileName: String);
+procedure TFileView.RemoveFile(const FileName, APath: String);
 var
   I: Integer;
 begin
-  I := FHashedNames.Find(FileName);
+  I := FHashedNames.Find( calcFileHashKey(FileName,APath) );
   if I >= 0 then
     RemoveFile(TDisplayFile(FHashedNames.List[I]^.Data));
 end;
 
 procedure TFileView.RemoveFile(ADisplayFile: TDisplayFile);
 begin
-  FHashedNames.Remove(ADisplayFile.FSFile.Name);
+  FHashedNames.Remove( calcFileHashKey(ADisplayFile.FSFile.Name, ADisplayFile.FSFile.Path) );
   FHashedFiles.Remove(ADisplayFile);
   FFiles.Remove(ADisplayFile);
   FAllDisplayFiles.Remove(ADisplayFile);
@@ -1099,17 +1132,20 @@ var
   ADisplayFile: TDisplayFile;
   OldIndex, NewIndex: Integer;
   ANotifications: TFileViewNotifications;
+  OldFileKey, NewFileKey : String;
 begin
-  OldIndex := FHashedNames.Find(OldFileName);
-  NewIndex := FHashedNames.Find(NewFileName);
+  OldFileKey := calcFileHashKey(OldFileName,APath);
+  NewFileKey := calcFileHashKey(NewFileName,APath);
+  OldIndex := FHashedNames.Find( OldFileKey );
+  NewIndex := FHashedNames.Find( NewFileKey );
   if OldIndex >= 0 then
   begin
     ADisplayFile := TDisplayFile(FHashedNames.List[OldIndex]^.Data);
     if NewIndex < 0 then
     begin
       ADisplayFile.FSFile.Name := NewFileName;
-      FHashedNames.Remove(OldFileName);
-      FHashedNames.Add(NewFileName, ADisplayFile);
+      FHashedNames.Remove(OldFileKey);
+      FHashedNames.Add(NewFileKey, ADisplayFile);
       ADisplayFile.Busy:= False;
       ADisplayFile.IconID := -1;
       ADisplayFile.Selected := False;
@@ -1194,6 +1230,8 @@ procedure TFileView.UpdateFile(const FileName, APath: String; NewFilesPosition: 
 var
   AFile: TFile;
   ADisplayFile: TDisplayFile;
+  OldFile: TFile;
+  propertiesChanged: TFilePropertiesTypes;  // which property changed
   I: Integer;
   ANotifications: TFileViewNotifications;
 
@@ -1224,18 +1262,31 @@ var
       else
         raise Exception.Create('Unsupported UpdatedFilesPosition setting.');
     end;
+
+    // there are two cases of file update
+    // 1. modified: VisualizeFileUpdate() should be called
+    // 2. no modified: need not Visual Blink
+    if TFileSystemWatcher.CanWatch(FWatchPath) and
+       ((propertiesChanged+[fpLastAccessTime,fpChangeTime])=[fpLastAccessTime,fpChangeTime]) then
+         exit;
     VisualizeFileUpdate(ADisplayFile);
   end;
 
 begin
-  I := FHashedNames.Find(FileName);
+  I := FHashedNames.Find( calcFileHashKey(FileName,APath) );
   if I >= 0 then
   begin
     ADisplayFile := TDisplayFile(FHashedNames.List[I]^.Data);
     AFile := ADisplayFile.FSFile;
+    OldFile := AFile.Clone;
     AFile.ClearProperties;
     try
-      FileSource.RetrieveProperties(AFile, FilePropertiesNeeded, GetVariantFileProperties);
+      try
+        FileSource.RetrieveProperties(AFile, FilePropertiesNeeded, GetVariantFileProperties);
+        propertiesChanged:= AFile.Compare(OldFile);
+      finally
+        FreeAndNil(OldFile);
+      end;
     except
       on EFileNotFound do
         begin
@@ -2257,6 +2308,7 @@ end;
 procedure TFileView.HashFileList;
 var
   i: Integer;
+  AFile: TFile;
 begin
   // Cannot use FHashedFiles.Clear because it also destroys the buckets.
   FHashedFiles.Free;
@@ -2267,8 +2319,9 @@ begin
   begin
     for i := 0 to FAllDisplayFiles.Count - 1 do
     begin
+      AFile := FAllDisplayFiles[i].FSFile;
       FHashedFiles.Add(FAllDisplayFiles[i], nil);
-      FHashedNames.Add(FAllDisplayFiles[i].FSFile.Name, FAllDisplayFiles[i]);
+      FHashedNames.Add( calcFileHashKey(AFile.Name,AFile.Path) , FAllDisplayFiles[i] );
     end;
   end;
 end;
@@ -3263,7 +3316,7 @@ begin
       if WatchFilter <> [] then
       begin
         FWatchPath := CurrentPath;
-        if TFileSystemWatcher.AddWatch(FWatchPath, WatchFilter, @WatcherEvent) = False then
+        if TFileSystemWatcher.AddWatch(FWatchPath, WatchFilter, @WatcherEvent, self) = False then
           FWatchPath := EmptyStr;
       end;
     end;
@@ -3301,13 +3354,13 @@ begin
     fswFileChanged:
       Self.UpdateFile(EventData.FileName, EventData.Path, NewFilesPosition, UpdatedFilesPosition);
     fswFileDeleted:
-      Self.RemoveFile(EventData.FileName);
+      Self.RemoveFile(EventData.FileName, EventData.Path);
     fswFileRenamed:
       Self.RenameFile(EventData.NewFileName, EventData.FileName, EventData.Path, NewFilesPosition, UpdatedFilesPosition);
     fswSelfDeleted:
       CurrentPath:= GetDeepestExistingPath(CurrentPath);
     else
-      Reload(EventData.Path);
+      Reload();
   end;
 end;
 
@@ -3347,7 +3400,7 @@ var
 begin
   if not (csDestroying in ComponentState) and
      not FReloadNeeded and
-     (IncludeTrailingPathDelimiter(EventData.Path) = CurrentPath) then
+     String(IncludeTrailingPathDelimiter(EventData.Path)).StartsWith(CurrentPath) then
   begin
     if GetCurrentWorkType = fvwtCreate then
     begin
@@ -3355,7 +3408,7 @@ begin
       if EventData.EventType <> fswUnknownChange then
         AddEventToPendingFilesChanges(EventData)
       else
-        Reload(EventData.Path);
+        Reload();
     end
     else
     begin

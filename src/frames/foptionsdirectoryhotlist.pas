@@ -173,7 +173,6 @@ type
     btnExport: TBitBtn;
     btnImport: TBitBtn;
     btnBackup: TBitBtn;
-    btnHelp: TBitBtn;
     pnlBottom: TPanel;
     rgWhereToAdd: TRadioGroup;
     gbHotlistOtherOptions: TGroupBox;
@@ -216,7 +215,6 @@ type
     procedure miImportFromAnythingClick(Sender: TObject);
     procedure miGotoConfigureTCInfoClick(Sender: TObject);
     procedure btnActionClick(Sender: TObject);
-    procedure btnHelpClick(Sender: TObject);
     procedure cbFullExpandTreeChange(Sender: TObject);
     procedure lbleditHotDirNameChange(Sender: TObject);
     procedure anyRelativeAbsolutePathClick(Sender: TObject);
@@ -1326,12 +1324,6 @@ begin
   end;
 end;
 
-{ TfrmOptionsDirectoryHotlist.btnHelpClick }
-procedure TfrmOptionsDirectoryHotlist.btnHelpClick(Sender: TObject);
-begin
-  ShowHelpOrErrorForKeyword('', '/directoryhotlist.html');
-end;
-
 { TfrmOptionsDirectoryHotlist.cbFullExpandTreeChange }
 procedure TfrmOptionsDirectoryHotlist.cbFullExpandTreeChange(Sender: TObject);
 begin
@@ -1953,7 +1945,6 @@ procedure TfrmOptionsDirectoryHotlist.RefreshExistingProperty(ScanMode: integer)
 var
   Index, LocalThreadCount: longint;
   ListOfAlreadyCheckDrive, ListOfNonExistingDrive: TStringList;
-  RememberCursor: TCursor;
   FreezeTime: dword;
 
   procedure StartThreadToSeeIfThisDriveExists(const sDrive: string);
@@ -2026,11 +2017,10 @@ var
   end;
 
 begin
-  RememberCursor := Screen.Cursor;
   SetNormalIconsInTreeView;
 
   try
-    Screen.Cursor := crHourGlass;
+    Screen.BeginWaitCursor;
 
     ListOfAlreadyCheckDrive := TStringList.Create;
     ListOfAlreadyCheckDrive.Sorted := False;
@@ -2100,7 +2090,7 @@ begin
     end;
 
   finally
-    Screen.Cursor := RememberCursor;
+    Screen.EndWaitCursor;
   end;
 
   tvDirectoryHotlist.Refresh;

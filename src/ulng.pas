@@ -239,6 +239,7 @@ resourcestring
   rsMsgForTextFormatToImport = 'Select the text format to import';
   rsMsgUserDidNotSetExtension = '<NO EXT>';
   rsMsgUserDidNotSetName = '<NO NAME>';
+  rsMsgCommandNotFound = 'Command not found! (%s)';
   rsMsgProblemExecutingCommand = 'Problem executing command (%s)';
   rsMsgCopyBackward = 'The file %s has changed. Do you want to copy it backward?';
   rsMsgCouldNotCopyBackward = 'Could not copy backward - do you want to keep the changed file?';
@@ -571,6 +572,7 @@ resourcestring
   rsPropsSymLink = 'Symbolic link';
   rsPropsSocket = 'Socket';
   rsPropsUnknownType = 'Unknown type';
+  rsPropsMultipleTypes = 'Multiple types';
   rsPropsContains = 'Files: %d, folders: %d';
   rsPropsErrChMod = 'Can not change access rights for "%s"';
   rsPropsErrChOwn = 'Can not change owner for "%s"';
@@ -803,7 +805,10 @@ resourcestring
   rsOptConfigTreeState = 'Full expand;Full collapse';
   rsOptDifferFramePosition = 'Active frame panel on left, inactive on right (legacy);Left frame panel on left, right on right';
   //-------------------------------
-
+  rsDarkMode = 'Dark mode';
+  rsDarkModeOptions = 'Auto;Enabled;Disabled';
+  //-------------------------------
+  rsDriveFreeSpaceIndicator = 'Drive Free Space Indicator';
   //-------------------------------
   rsOptEnterExt = 'Enter extension';
   rsOptAssocPluginWith = 'Associate plugin "%s" with:';
@@ -1169,32 +1174,38 @@ begin
   end;
 end;
 
-procedure lngLoadLng(const sFileName:String);
+procedure lngLoadLng(const sFileName: String);
+const
+  DEFAULT_PO = 'doublecmd.pot';
 var
   Lang: String = '';
   FallbackLang: String = '';
 begin
   // Default english interface
-  if StrBegins(sFileName, 'doublecmd.po') then Exit;
-
+  if StrBegins(sFileName, 'doublecmd.po') then
+  begin
+    gPOFileName := DEFAULT_PO;
+    Exit;
+  end;
   gPOFileName := sFileName;
   if not mbFileExists(gpLngDir + gPOFileName) then
-    begin
-      gPOFileName := 'doublecmd.%s.po';
-      GetLanguageIDs(Lang, FallbackLang);
-      gPOFileName := Format(gPOFileName,[FallbackLang]);
-    end;
+  begin
+    gPOFileName := 'doublecmd.%s.po';
+    GetLanguageIDs(Lang, FallbackLang);
+    gPOFileName := Format(gPOFileName,[FallbackLang]);
+  end;
   if not mbFileExists(gpLngDir + gPOFileName) then
-    begin
-      gPOFileName := Format(gPOFileName,[Lang]);
-    end;
-  if mbFileExists(gpLngDir + gPOFileName) then
-    begin
-      DCDebug('Loading lng file: ' + gpLngDir + gPOFileName);
-      LRSTranslator := TTranslator.Create(gpLngDir + gPOFileName);
-      Translations.TranslateResourceStrings(gpLngDir + gPOFileName);
-      TranslateLCL(gPOFileName);
-    end;
+  begin
+    gPOFileName := Format(gPOFileName,[Lang]);
+  end;
+  if not mbFileExists(gpLngDir + gPOFileName) then
+    gPOFileName := DEFAULT_PO
+  else begin
+    DCDebug('Loading lng file: ' + gpLngDir + gPOFileName);
+    LRSTranslator := TTranslator.Create(gpLngDir + gPOFileName);
+    Translations.TranslateResourceStrings(TTranslator(LRSTranslator).POFile);
+    TranslateLCL(gPOFileName);
+  end;
 end;
 
 procedure DoLoadLng;
@@ -1203,7 +1214,6 @@ begin
 end;
 
 finalization
-  if Assigned(LRSTranslator) then
-    FreeAndNil(LRSTranslator);
+  FreeAndNil(LRSTranslator);
 
 end.

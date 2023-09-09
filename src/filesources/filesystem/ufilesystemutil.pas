@@ -174,7 +174,7 @@ type
 implementation
 
 uses
-  uDebug, uOSUtils, DCStrUtils, FileUtil, uFindEx, DCClassesUtf8, uFileProcs, uLng,
+  uDebug, uDCUtils, uOSUtils, DCStrUtils, FileUtil, uFindEx, DCClassesUtf8, uFileProcs, uLng,
   DCBasicTypes, uFileSource, uFileSystemFileSource, uFileProperty, uAdministrator,
   StrUtils, DCDateTimeUtils, uShowMsg, Forms, LazUTF8, uHash, uFileCopyEx, SysConst
 {$IFDEF UNIX}
@@ -287,11 +287,11 @@ begin
   Result:= rsMsgFileExistsOverwrite + LineEnding + WrapTextSimple(TargetName, 100) + LineEnding;
   if FileGetAttrUAC(TargetName, TargetInfo) then
   begin
-    Result:= Result + Format(rsMsgFileExistsFileInfo, [Numb2USA(IntToStr(TargetInfo.Size)),
+    Result:= Result + Format(rsMsgFileExistsFileInfo, [IntToStrTS(TargetInfo.Size),
                              DateTimeToStr(FileTimeToDateTime(TargetInfo.LastWriteTime))]) + LineEnding;
   end;
   Result:= Result + LineEnding + rsMsgFileExistsWithFile + LineEnding + WrapTextSimple(SourceName, 100) + LineEnding +
-           Format(rsMsgFileExistsFileInfo, [Numb2USA(IntToStr(SourceSize)), DateTimeToStr(SourceTime)]);
+           Format(rsMsgFileExistsFileInfo, [IntToStrTS(SourceSize), DateTimeToStr(SourceTime)]);
 end;
 
 function FileCopyProgress(TotalBytes, DoneBytes: Int64; UserData: Pointer): LongBool;
@@ -331,7 +331,7 @@ var
   AddedIndex: Integer;
 begin
   LinkedFilePath := mbReadAllLinks(aFile.FullPath);
-  if (LinkedFilePath <> '') and (LinkedFilePath <> PathDelim) then
+  if (LinkedFilePath <> '') and not (aFile.IsLinkToDirectory and IsInPath(LinkedFilePath, aFile.FullPath, True, True)) then
   begin
     try
       LinkedFile := TFileSystemFileSource.CreateFileFromFile(LinkedFilePath);
@@ -1403,8 +1403,19 @@ begin
       end
     else
       case TargetExists(aNode, AbsoluteTargetFileName) of
+
         fsoterSkip:
-          Result := False;
+        begin
+          with FStatistics do
+          begin
+            Inc(DoneFiles);
+            Dec(TotalBytes, aNode.TheFile.Size);
+            if FVerify and (FMode = fsohmCopy) then
+              Dec(TotalBytes, aNode.TheFile.Size);
+            UpdateStatistics(FStatistics);
+          end;
+          Exit(False);
+        end;
 
         fsoterDeleted, fsoterNotExists:
           Result := MoveOrCopy(aNode.TheFile, AbsoluteTargetFileName, fsohcmDefault);
@@ -1654,14 +1665,16 @@ function TFileSystemOperationHelper.FileExists(aFile: TFile;
   ): TFileSourceOperationOptionFileExists;
 const
   Responses: array[0..13] of TFileSourceOperationUIResponse
-    = (fsourOverwrite, fsourSkip, fsourRenameSource, fsourOverwriteAll,
-       fsourSkipAll, fsourResume, fsourOverwriteOlder, fsourCancel,
-       fsouaCompare, fsourAppend, fsourOverwriteSmaller, fsourOverwriteLarger,
+    = (fsourOverwrite, fsourSkip, fsourRenameSource,
+       fsourOverwriteAll, fsourSkipAll, fsourResume,
+       fsourOverwriteOlder, fsourCancel, fsouaCompare,
+       fsourAppend, fsourOverwriteSmaller, fsourOverwriteLarger,
        fsourAutoRenameSource, fsourAutoRenameTarget);
   ResponsesNoAppend: array[0..11] of TFileSourceOperationUIResponse
-    = (fsourOverwrite, fsourSkip, fsourRenameSource,  fsourOverwriteAll,
-       fsourSkipAll, fsourOverwriteSmaller, fsourOverwriteOlder, fsourCancel,
-       fsouaCompare, fsourOverwriteLarger, fsourAutoRenameSource, fsourAutoRenameTarget);
+    = (fsourOverwrite, fsourSkip, fsourRenameSource,
+       fsourOverwriteAll, fsourSkipAll, fsouaCompare,
+       fsourOverwriteOlder, fsourCancel, fsourOverwriteSmaller,
+       fsourOverwriteLarger, fsourAutoRenameSource, fsourAutoRenameTarget);
 var
   Answer: Boolean;
   Message: String;

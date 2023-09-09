@@ -50,8 +50,6 @@ type
     procedure lblHomePageAddressMouseEnter(Sender: TObject);
     procedure lblHomePageAddressMouseLeave(Sender: TObject);
     procedure OKButtonClick(Sender: TObject);
-    procedure FormKeyDown(Sender: TObject; var Key: Word;
-      Shift: TShiftState);
     procedure frmAboutShow(Sender: TObject);
   private
     { Private declarations }
@@ -75,8 +73,9 @@ const
     'This program is free software under GNU GPL 2 license, see COPYING.txt file.' + LineEnding + LineEnding +
     'Active developers: '+ cIndention +
     'Alexander Koblov (alexx2000@mail.ru) - author, core developer' + cIndention +
-    'Denis Bisson (denis.bisson@denisbisson.org) - developer' + LineEnding + LineEnding +
+    'Rich Chang (rich2014.git@outlook.com) - developer' + LineEnding + LineEnding +
     'Former developers: ' + cIndention +
+    'Denis Bisson (denis.bisson@denisbisson.org) - developer' + cIndention +
     'Przemysław Nagay (cobines@gmail.com) - core developer' + cIndention +
     'Dmitry Kolomiets (B4rr4cuda@rambler.ru) - developer' + cIndention +
     'Radek Cervinka (radek.cervinka@centrum.cz) - author of Seksi Commander' + LineEnding + LineEnding +
@@ -167,13 +166,6 @@ begin
   if WSVersion <> EmptyStr then
     StrInfo := StrInfo + LineEnding + 'Widgetset library: ' + WSVersion;
   ClipboardSetText(StrInfo);
-end;
-
-procedure TfrmAbout.FormKeyDown(Sender: TObject; var Key: Word;
-  Shift: TShiftState);
-begin
-  if (Key = VK_Escape) then
-   Close;
 end;
 
 procedure TfrmAbout.frmAboutShow(Sender: TObject);

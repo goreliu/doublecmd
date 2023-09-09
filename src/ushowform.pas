@@ -1,16 +1,23 @@
 {
-   Seksi Commander
-   ----------------------------
-   Licence  : GNU GPL v 2.0
-   Author   : radek.cervinka@centrum.cz
+    Double Commander
+    -------------------------------------------------------------------------
+    Execute internal or external viewer, editor or differ
 
-   showing editor or viewer by configuration dialog
+    Copyright (C) 2006-2023 Alexander Koblov (alexx2000@mail.ru)
 
-   contributors:
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   Copyright (C) 2006-2019 Alexander Koblov (alexx2000@mail.ru)
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see <http://www.gnu.org/licenses/>.
 }
-
 
 unit uShowForm;
 
@@ -70,6 +77,17 @@ type
   protected
     procedure OnCopyInStateChanged(Operation: TFileSourceOperation;
                                    State: TFileSourceOperationState);
+  end;
+
+  { TViewerModeData }
+
+  TViewerModeData = class
+  private
+    FMode: Integer;
+  public
+    constructor Create(AMode: Integer);
+    procedure OnCopyOutStateChanged(Operation: TFileSourceOperation;
+                                    State: TFileSourceOperationState);
   end;
 
   TToolDataPreparedProc = procedure(const FileList: TStringList; WaitData: TWaitData; Modal: Boolean = False);
@@ -310,7 +328,6 @@ var
 begin
   if gExternalTools[etViewer].Enabled then
   begin
-    DCDebug('ShowViewerByGlobList - Use ExtView');
     if aFileSource.IsClass(TTempFileSystemFileSource) then
       begin
         WaitThread := TViewerWaitThread.Create(FilesToView, aFileSource);
@@ -565,6 +582,41 @@ begin
   Result := TStringList.Create;
   for I := 0 to Files.Count - 1 do
     Result.Add(Files[I].FullPath);
+end;
+
+{ TViewerModeData }
+
+constructor TViewerModeData.Create(AMode: Integer);
+begin
+  FMode:= AMode;
+end;
+
+procedure TViewerModeData.OnCopyOutStateChanged(
+  Operation: TFileSourceOperation; State: TFileSourceOperationState);
+var
+  aFileList: TStringList;
+  aFileSource: ITempFileSystemFileSource;
+  aCopyOutOperation: TFileSourceCopyOperation;
+begin
+  try
+    if (State = fsosStopped) and (Operation.Result = fsorFinished) then
+    begin
+      aFileList := TStringList.Create;
+      try
+        aCopyOutOperation := Operation as TFileSourceCopyOperation;
+        aFileSource := aCopyOutOperation.TargetFileSource as ITempFileSystemFileSource;
+        ChangeFileListRoot(aFileSource.FileSystemRoot, aCopyOutOperation.SourceFiles);
+
+        aFileList.Add(aCopyOutOperation.SourceFiles[0].FullPath);
+
+        ShowViewer(aFileList, FMode, TViewerWaitData.Create(aFileSource));
+      finally
+        aFileList.Free;
+      end;
+    end;
+  finally
+    Free;
+  end;
 end;
 
 { TExtToolWaitThread }

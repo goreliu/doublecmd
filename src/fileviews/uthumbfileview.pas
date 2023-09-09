@@ -509,6 +509,7 @@ var
     // @Mine@
     // 修改缩略图视图中每个缩略图边框的颜色
     // -- Canvas.Pen.Color:= InvertColor(ColorToRGB(gBackColor));
+    // -- Canvas.Pen.Color:= InvertColor(ColorToRGB(gColors.FilePanel^.BackColor));
     Canvas.Pen.Color:= TColor($CCCCCC);
     // @@
     Canvas.Pen.Width := 1;
@@ -539,7 +540,7 @@ begin
   else
     begin
       // Draw background.
-      Canvas.Brush.Color := FThumbView.DimColor(gBackColor);
+      Canvas.Brush.Color := FThumbView.DimColor(gColors.FilePanel^.BackColor);
       Canvas.FillRect(aRect);
     end;
 
@@ -569,7 +570,7 @@ begin
 
   tmMouseScroll.Interval := 200;
   FBitmapList:= TBitmapList.Create(True);
-  FThumbnailManager:= TThumbnailManager.Create(gBackColor);
+  FThumbnailManager:= TThumbnailManager.Create(gColors.FilePanel^.BackColor);
 end;
 
 procedure TThumbFileView.AfterChangePath;

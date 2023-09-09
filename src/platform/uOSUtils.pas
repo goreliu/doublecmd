@@ -3,7 +3,7 @@
     -------------------------------------------------------------------------
     This unit contains platform depended functions.
 
-    Copyright (C) 2006-2022 Alexander Koblov (alexx2000@mail.ru)
+    Copyright (C) 2006-2023 Alexander Koblov (alexx2000@mail.ru)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ const
   RunInTermStayOpenParams: String = '-e sh -c ''{command}; echo -n Press ENTER to exit... ; read a''';
   RunInTermCloseCmd: String = 'xterm'; // default run in terminal command AND Close after command
   RunInTermCloseParams: String = '-e sh -c {command}';
-  MonoSpaceFont = 'Monospace';
+  MonoSpaceFont: String = 'Monospace';
   {$ENDIF}
   fmtCommandPath = '[%s]$:';
   {$ENDIF}
@@ -165,11 +165,6 @@ function mbFileNameToSysEnc(const LongPath: String): String;
    Converts file name to native representation
 }
 function mbFileNameToNative(const FileName: String): NativeString; inline;
-{en
-   Extract the root directory part of a file name.
-   @returns(Drive letter under Windows and mount point under Unix)
-}
-function ExtractRootDir(const FileName: String): String;
 
 procedure FixFormIcon(Handle: LCLType.HWND);
 procedure HideConsoleWindow;
@@ -203,6 +198,9 @@ uses
   , CocoaAll, uMyDarwin
     {$ELSEIF NOT DEFINED(HAIKU)}
   , uGio, uClipboard, uXdg, uKde
+    {$ENDIF}
+    {$IF DEFINED(LINUX)}
+  , DCUnix, uMyLinux
     {$ENDIF}
   {$ENDIF}
   ;
@@ -413,7 +411,6 @@ var
   sCmdLine: String;
 begin
   Result:= False;
-  sCmdLine:= EmptyStr;
 
   if FileIsUnixExecutable(URL) then
   begin
@@ -423,6 +420,7 @@ begin
       sCmdLine:= IncludeTrailingPathDelimiter(mbGetCurrentDir);
       sCmdLine:= GetAbsoluteFileName(sCmdLine, URL)
     end;
+    Result:= ExecuteCommand(sCmdLine, [], mbGetCurrentDir);
   end
   else begin
   {$IF NOT DEFINED(HAIKU)}
@@ -440,11 +438,10 @@ begin
         sCmdLine:= GetAbsoluteFileName(sCmdLine, URL)
       end;
       sCmdLine:= GetDefaultAppCmd(sCmdLine);
+      if Length(sCmdLine) > 0 then begin
+        Result:= ExecCmdFork(sCmdLine);
+      end;
     end;
-  end;
-
-  if Length(sCmdLine) > 0 then begin
-    Result:= ExecCmdFork(sCmdLine);
   end;
 end;
 {$ENDIF}
@@ -458,6 +455,12 @@ var
 begin
   Result:= (fpStatFS(PAnsiChar(CeUtf8ToSys(Path)), @sbfs) = 0);
   if not Result then Exit;
+{$IFDEF LINUX}
+  if (sbfs.fstype = RAMFS_MAGIC) then
+  begin
+    Exit(GetFreeMem(FreeSize, TotalSize));
+  end;
+{$ENDIF}
   FreeSize := (Int64(sbfs.bavail) * sbfs.bsize);
   TotalSize := (Int64(sbfs.blocks) * sbfs.bsize);
 end;
@@ -720,17 +723,6 @@ end;
 {$ELSE}
 begin
   Result:= CeUtf8ToSys(LongPath);
-end;
-{$ENDIF}
-
-function ExtractRootDir(const FileName: String): String;
-{$IFDEF UNIX}
-begin
-  Result:= ExcludeTrailingPathDelimiter(FindMountPointPath(ExcludeTrailingPathDelimiter(FileName)));
-end;
-{$ELSE}
-begin
-  Result:= ExtractFileDrive(FileName);
 end;
 {$ENDIF}
 

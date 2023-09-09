@@ -30,7 +30,7 @@ unit uWFXmodule;
 interface
 
 uses
-  SysUtils, Classes, WfxPlugin, uWFXprototypes, LazUTF8Classes,
+  SysUtils, Classes, WfxPlugin, uWFXprototypes,
   dynlibs, DCClassesUtf8, Extension, DCBasicTypes, DCXmlConfig,
   uWdxPrototypes, uWdxModule, uFileSource;
 
@@ -62,7 +62,6 @@ type
 
   TWFXModule = class(TPluginWDX)
   private
-    FModuleFileName: String;
     FBackgroundFlags: Integer;
   public
   { Mandatory }
@@ -159,7 +158,7 @@ type
 
   TWFXModuleList = class(TStringList)
   private
-    FModuleList: TStringListUTF8;
+    FModuleList: TStringListEx;
   private
     function GetAEnabled(Index: Integer): Boolean;
     function GetAFileName(Index: Integer): String;
@@ -193,7 +192,7 @@ uses
 
   //DC
   uDCUtils, uLng, uGlobsPaths, uOSUtils, uWfxPluginUtil, fDialogBox, DCOSUtils,
-  DCStrUtils, DCConvertEncoding, uComponentsSignature, uOSForms;
+  DCStrUtils, DCConvertEncoding, uComponentsSignature, uOSForms, uExtension;
 
 const
   WfxIniFileName = 'wfx.ini';
@@ -640,11 +639,11 @@ begin
   EnterCriticalSection(FMutex);
   try
     if FModuleHandle <> NilHandle then Exit(True);
-    AHandle := mbLoadLibrary(mbExpandFileName(sName));
+    FModulePath:= mbExpandFileName(sName);
+    AHandle := mbLoadLibrary(FModulePath);
     Result := AHandle <> NilHandle;
     if not Result then Exit;
 
-    FModuleFileName:= sName;
   { Mandatory }
     FsInit := TFsInit(GetProcAddress(AHandle,'FsInit'));
     FsFindFirst := TFsFindFirst(GetProcAddress(AHandle,'FsFindFirst'));
@@ -843,24 +842,11 @@ begin
 
   // Extension API
   if Assigned(ExtensionInitialize) then
-    begin
-      FillByte(StartupInfo, SizeOf(TExtensionStartupInfo), 0);
+  begin
+    InitializeExtension(@StartupInfo);
 
-      with StartupInfo do
-      begin
-        StructSize:= SizeOf(TExtensionStartupInfo);
-        PluginDir:= ExtractFilePath(mbExpandFileName(FModuleFileName));
-        PluginConfDir:= gpCfgDir;
-        InputBox:= @fDialogBox.InputBox;
-        MessageBox:= @fDialogBox.MessageBox;
-        DialogBoxLFM:= @fDialogBox.DialogBoxLFM;
-        DialogBoxLRS:= @fDialogBox.DialogBoxLRS;
-        DialogBoxLFMFile:= @fDialogBox.DialogBoxLFMFile;
-        SendDlgMsg:= @fDialogBox.SendDlgMsg;
-      end;
-
-      ExtensionInitialize(@StartupInfo);
-    end;
+    ExtensionInitialize(@StartupInfo);
+  end;
 
   CallContentSetDefaultParams;
   CallContentGetSupportedField;
@@ -945,7 +931,7 @@ end;
 
 constructor TWFXModuleList.Create;
 begin
-  FModuleList:= TStringListUTF8.Create;
+  FModuleList:= TStringListEx.Create;
   FModuleList.Sorted:= True;
 end;
 

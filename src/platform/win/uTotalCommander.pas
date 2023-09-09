@@ -3,7 +3,7 @@
     -------------------------------------------------------------------------
     Total Commander integration functions
 
-    Copyright (C) 2009-2019 Alexander Koblov (alexx2000@mail.ru)
+    Copyright (C) 2009-2023 Alexander Koblov (alexx2000@mail.ru)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -62,6 +62,7 @@ function ConvertStringToTCString(sString: string): ansistring;
 function ReplaceDCEnvVars(const sText: string): string;
 function ReplaceTCEnvVars(const sText: string): string;
 function areWeInSituationToPlayWithTCFiles: boolean;
+function GetActualTCIni(NormalizedTCIniFilename, SectionName: String): String;
 function GetTCEquivalentCommandToDCCommand(DCCommand: string; var TCIndexOfCommand: integer): string;
 function GetTCIconFromDCIconAndCreateIfNecessary(const DCIcon: string): string;
 function GetTCEquivalentCommandIconToDCCommandIcon(DCIcon: string; TCIndexOfCommand: integer): string;
@@ -732,9 +733,15 @@ var
   ClassName: PChar;
 begin
   ClassName := Stralloc(100);
-  GetClassName(Wnd, ClassName, 99);
-  if ClassName = 'TTOTAL_CMD' then
-    Inc(TCNumberOfInstance);
+  if GetClassName(Wnd, ClassName, 99) > 0 then
+  begin
+    if ClassName = 'TTOTAL_CMD' then
+    begin
+      // Skip Double Commander main window class
+      if GetPropW(Wnd, 'WinControlDC') = 0 then
+        Inc(TCNumberOfInstance);
+    end;
+  end;
   Result := True;
   strDispose(ClassName);
 end;
@@ -750,7 +757,7 @@ begin
   finally
   end;
 
-  Result := (TCNumberOfInstance > 1);
+  Result := (TCNumberOfInstance > 0);
 end;
 
 { areTCRelatedPathsAndFilesDetected }
@@ -1244,6 +1251,22 @@ begin
   finally
     TCToolbarFilenameList.Free;
   end;
+end;
+
+{ GetActualTCIni }
+// Returns actual ini filename when using 'RedirectSection' key
+function GetActualTCIni(NormalizedTCIniFilename, SectionName: String): String;
+var
+  ConfigFile: TIniFileEx;
+begin
+  ConfigFile := TIniFileEx.Create(NormalizedTCIniFilename);
+  Result := ConvertTCStringToString(ConfigFile.ReadString(SectionName, 'RedirectSection', ''));
+  ConfigFile.Free;
+
+  if Result <> '' then
+     Result := GetActualTCIni(ReplaceTCEnvVars(ReplaceEnvVars(Result)), SectionName)
+  else
+     Result := NormalizedTCIniFilename;
 end;
 
 end.

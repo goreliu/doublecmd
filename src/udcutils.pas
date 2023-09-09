@@ -58,7 +58,7 @@ const
   EnvVarTodaysDate    = VARDELIMITER + 'DC_TODAYSDATE' + VARDELIMITER_END;
 
 type
-  TUsageOfSizeConversion = (uoscFile, uoscHeader, uoscFooter, uoscOperation, uoscNoUnit);
+  TUsageOfSizeConversion = (uoscFile, uoscHeader, uoscFooter, uoscOperation);
 
 function GetCmdDirFromEnvVar(const sPath : String) : String;
 function SetCmdDirAsEnvVar(const sPath : String) : String;
@@ -82,6 +82,12 @@ function ReplaceTilde(const Path: String): String;
 }
 function mbExpandFileName(const sFileName: String): String;
 {en
+  Convert Int64 to string with Thousand separators. We can't use FloatToStrF with ffNumber because of integer rounding to thousands
+  @param(AValue Integer value)
+  @returns(String represenation)
+}
+function IntToStrTS(const APositiveValue: Int64): String;
+{en
    Convert file size to string representation in floating format (Kb, Mb, Gb)
    @param(iSize File size)
    @param(ShortFormat If @true than short format is used,
@@ -89,18 +95,20 @@ function mbExpandFileName(const sFileName: String): String;
    @param(Number Number of digits after decimal)
    @returns(File size in string representation)
 }
-function cnvFormatFileSize(iSize: Int64; FSF: TFileSizeFormat; Number: Integer): String;
-function cnvFormatFileSize(iSize: Int64; UsageOfSizeConversion: TUsageOfSizeConversion): String;
-function cnvFormatFileSize(iSize: Int64): String; inline;
+function cnvFormatFileSize(const iSize: Int64; FSF: TFileSizeFormat; const Number: Integer): String;
+function cnvFormatFileSize(const iSize: Int64; const UsageOfSizeConversion: TUsageOfSizeConversion): String;
+function cnvFormatFileSize(const iSize: Int64): String; inline;
 {en
-   Minimize file path
+   Minimize file path replacing the folder name
+     before the last PathDelim with '..'
+     (if path ending with PathDelim it replaces the last folder name!!!)
    @param(PathToMince File path)
    @param(Canvas Output canvas)
-   @param(MaxLen Max length of path in pixels)
+   @param(MaxWidth Max width of the path in pixels)
    @returns(Minimized file path)
 }
 function MinimizeFilePath(const PathToMince: String; Canvas: TCanvas;
-                          MaxLen: Integer): String;
+                          MaxWidth: Integer): String;
 {en
   Checks if a filename matches any filename in the filelist or
   if it could be in any directory of the file list or any of their subdirectories.
@@ -360,7 +368,37 @@ begin
   end;
 end;
 
-function cnvFormatFileSize(iSize: int64; FSF: TFileSizeFormat; Number: integer): string;
+function IntToStrTS(const APositiveValue: Int64): String;
+var i, vSrcLen, vSrcI, vSrcNumberNo, vResLen: byte;
+begin
+  if APositiveValue < 0 then
+    Exit(IntToStr(APositiveValue));
+  Str(APositiveValue, Result);
+  vSrcLen := Result.Length;
+
+  vResLen := vSrcLen + ((vSrcLen - 1) div 3);
+  if vSrcLen = vResLen then
+    Exit;
+
+  SetLength(Result, vResLen);
+
+  vSrcI := vResLen;
+  vSrcNumberNo := 1;
+
+  for i:= vSrcLen downto 1 do
+    begin
+      Result[vSrcI] := Result[i];
+      Dec(vSrcI);
+      if(vSrcNumberNo <> vSrcLen) and (vSrcNumberNo mod 3 = 0) then
+        begin
+          Result[vSrcI] := FormatSettings.ThousandSeparator;
+          Dec(vSrcI);
+        end;
+      Inc(vSrcNumberNo);
+    end;
+end;
+
+function cnvFormatFileSize(const iSize: int64; FSF: TFileSizeFormat; const Number: integer): string;
 const
   DIVISORS: array[LOW(TFileSizeFormat) .. HIGH(TFileSizeFormat)] of uint64 = (1, 1, 1024, (1024*1024), (1024*1024*1024), (1024*1024*1024*1024), 1, 1, 1024, (1024*1024), (1024*1024*1024), (1024*1024*1024*1024));
 var
@@ -391,7 +429,7 @@ begin
   end;
 end;
 
-function cnvFormatFileSize(iSize: Int64; UsageOfSizeConversion: TUsageOfSizeConversion): String;
+function cnvFormatFileSize(const iSize: Int64; const UsageOfSizeConversion: TUsageOfSizeConversion): String;
 begin
   case UsageOfSizeConversion of
     uoscOperation: //By legacy, it was simply adding a "B" to single size letter so we will do the samefor legacy mode.
@@ -406,11 +444,10 @@ begin
     uoscFile: Result := cnvFormatFileSize(iSize, gFileSizeFormat, gFileSizeDigits);
     uoscHeader: Result := cnvFormatFileSize(iSize, gHeaderSizeFormat, gHeaderDigits);
     uoscFooter: Result := cnvFormatFileSize(iSize, gFooterSizeFormat, gFooterDigits);
-    uoscNoUnit: Result := IntToStr(iSize);
   end;
 end;
 
-function cnvFormatFileSize(iSize: Int64): String;
+function cnvFormatFileSize(const iSize: Int64): String;
 begin
   Result := cnvFormatFileSize(iSize, gFileSizeFormat, gFileSizeDigits);
 end;
@@ -421,7 +458,7 @@ end;
    
 {=========================================================}
 function MinimizeFilePath(const PathToMince: String; Canvas: TCanvas;
-                                                      MaxLen: Integer): String;
+                                                      MaxWidth: Integer): String;
 {=========================================================}
 // "C:\Program Files\Delphi\DDropTargetDemo\main.pas"
 // "C:\Program Files\..\main.pas"
@@ -430,9 +467,9 @@ Var
   sHelp, sFile,
   sFirst: String;
   iPos: Integer;
-
+  Len: Integer;
 Begin
-  if MaxLen <= 0 then Exit;
+  if MaxWidth <= 0 then Exit;
 
   sHelp := PathToMince;
   iPos := Pos(PathDelim, sHelp);
@@ -459,10 +496,10 @@ Begin
     sFile := sl[sl.Count - 1];
     sl.Delete(sl.Count - 1);
     Result := '';
-    MaxLen := MaxLen - Canvas.TextWidth('XXX');
-    if (sl.Count <> 0) and (Canvas.TextWidth(Result + sl[0] + PathDelim + sFile) < MaxLen) then
+    MaxWidth := MaxWidth - Canvas.TextWidth('XXX');
+    if (sl.Count <> 0) and (Canvas.TextWidth(Result + sl[0] + PathDelim + sFile) < MaxWidth) then
       begin
-        While (sl.Count <> 0) and (Canvas.TextWidth(Result + sl[0] + PathDelim + sFile) < MaxLen) Do
+        While (sl.Count <> 0) and (Canvas.TextWidth(Result + sl[0] + PathDelim + sFile) < MaxWidth) Do
           Begin
             Result := Result + sl[0] + PathDelim;
             sl.Delete(0);
@@ -487,14 +524,16 @@ Begin
           End;
     sl.Free;
   End;
-  if Canvas.TextWidth(Result) > MaxLen + Canvas.TextWidth('XXX') then
-       begin
-         while (Length(Result) > 0) and (Canvas.TextWidth(Result) > MaxLen) do
-           begin
-             Delete(Result, Length(Result), 1);
-           end;
-         Result := Copy(Result, 1, Length(Result) - 3) + '...';
-       end;
+  if Canvas.TextWidth(Result) > MaxWidth + Canvas.TextWidth('XXX') then
+  begin
+    Len:= UTF8Length(Result);
+    while (Len >= 3) and (Canvas.TextWidth(Result) > MaxWidth) do
+    begin
+      UTF8Delete(Result, Len, 1);
+      Dec(Len);
+    end;
+    Result := UTF8Copy(Result, 1, Len - 3) + '...';
+  end;
 End;
 
 
@@ -1080,6 +1119,9 @@ begin
 
     NextChunkInit(Chunk1);
     NextChunkInit(Chunk2);
+
+    if (Chunk1.Category = cNone) and (Chunk2.Category = cNone) then
+      Exit;
 
     if Chunk1.Category <> Chunk2.Category then
       if Chunk1.Category < Chunk2.Category then

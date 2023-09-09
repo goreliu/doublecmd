@@ -41,7 +41,7 @@
 
    contributors:
 
-   Copyright (C) 2006-2022 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2006-2023 Alexander Koblov (alexx2000@mail.ru)
 
 
    TODO:
@@ -152,7 +152,9 @@ type
                      veCp950,
                      veIso88591,
                      veIso88592,
-                     veKoi8,
+                     veKoi8r,
+                     veKoi8u,
+                     veKoi8ru,
                      veUcs2le,
                      veUcs2be,
                      veUtf16le,
@@ -189,7 +191,9 @@ const
                     'CP950',
                     'ISO-8859-1',
                     'ISO-8859-2',
-                    'KOI-8',
+                    'KOI8-R',
+                    'KOI8-U',
+                    'KOI8-RU',
                     'UCS-2LE',
                     'UCS-2BE',
                     'UTF-16LE',
@@ -883,9 +887,11 @@ procedure TViewerControl.FontChanged(Sender: TObject);
 begin
   inherited FontChanged(Sender);
 
-  Canvas.Font := Self.Font;
-  FTextHeight := Canvas.TextHeight('Wg') + FExtraLineSpacing;
-  if FShowCaret then LCLIntf.CreateCaret(Handle, 0, 2, FTextHeight);
+  if HandleAllocated then
+  begin
+    FTextHeight := Canvas.TextHeight('Wg') + FExtraLineSpacing;
+    if FShowCaret then LCLIntf.CreateCaret(Handle, 0, 2, FTextHeight);
+  end;
 end;
 
 function TViewerControl.CalcTextLineLength(var iStartPos: PtrInt; const aLimit: Int64; out DataLength: PtrInt): Integer;
@@ -1112,6 +1118,7 @@ function TViewerControl.GetStartOfLine(aPosition: PtrInt): PtrInt;
     tmpPos, LineStartPos: PtrInt;
     DataLength: PtrInt;
     prevChar: Cardinal;
+    MaxLineLength: Boolean;
     CharLenInBytes: Integer;
   begin
     prevChar := GetPrevCharAsAscii(aPosition, CharLenInBytes);
@@ -1141,6 +1148,7 @@ function TViewerControl.GetStartOfLine(aPosition: PtrInt): PtrInt;
     if tmpPos <= FLowLimit then
       Exit(FLowLimit);
 
+    DataLength:= 0;
     // Search for real start of line.
     while (not (prevChar in [10, 13])) and (tmpPos > FLowLimit) do
     begin
@@ -1148,6 +1156,19 @@ function TViewerControl.GetStartOfLine(aPosition: PtrInt): PtrInt;
       if CharLenInBytes = 0 then
         Break;
       Dec(tmpPos, CharLenInBytes);
+
+      case prevChar of
+      9:
+        Inc(DataLength, FTabSpaces - DataLength mod FTabSpaces);
+      else
+        Inc(DataLength, 1);
+      end;
+
+      case FViewerControlMode of
+      vcmText:   MaxLineLength := DataLength < FMaxTextWidth;
+      vcmWrap:   MaxLineLength := DataLength < FTextWidth;
+      end;
+      if not MaxLineLength then Exit(tmpPos);
     end;
 
     // Previous end of line not found and there are no more data to check.
@@ -1251,6 +1272,7 @@ function TViewerControl.GetStartOfPrevLine(aPosition: PtrInt): PtrInt;
     tmpPos, LineStartPos: PtrInt;
     DataLength: PtrInt;
     prevChar: Cardinal;
+    MaxLineLength: Boolean;
     CharLenInBytes: Integer;
   begin
     prevChar := GetPrevCharAsAscii(aPosition, CharLenInBytes);
@@ -1294,6 +1316,7 @@ function TViewerControl.GetStartOfPrevLine(aPosition: PtrInt): PtrInt;
     if tmpPos <= FLowLimit then
       Exit(FLowLimit);
 
+    DataLength:= 0;
     // Search for real start of line.
     while (not (prevChar in [10, 13])) and (tmpPos > FLowLimit) do
     begin
@@ -1301,6 +1324,19 @@ function TViewerControl.GetStartOfPrevLine(aPosition: PtrInt): PtrInt;
       if CharLenInBytes = 0 then
         Break;
       Dec(tmpPos, CharLenInBytes);
+
+      case prevChar of
+      9:
+        Inc(DataLength, FTabSpaces - DataLength mod FTabSpaces);
+      else
+        Inc(DataLength, 1);
+      end;
+
+      case FViewerControlMode of
+      vcmText:   MaxLineLength := DataLength < FMaxTextWidth;
+      vcmWrap:   MaxLineLength := DataLength < FTextWidth;
+      end;
+      if not MaxLineLength then Exit(tmpPos);
     end;
 
     // Move forward to first non-line ending character.
@@ -1529,6 +1565,8 @@ begin
           FEncoding := DetectEncoding;
 
         ReReadFile;
+
+        CaretPos := FLowLimit;
       end;
     end;
   end
@@ -2981,7 +3019,9 @@ begin
     veCp1250..veCp950,
     veIso88591,
     veIso88592,
-    veKoi8:
+    veKoi8r,
+    veKoi8u,
+    veKoi8ru:
       if iPosition < FHighLimit then
       begin
         Result := PByte(GetDataAdr)[iPosition];
@@ -3103,7 +3143,9 @@ begin
     veCp1250..veCp950,
     veIso88591,
     veIso88592,
-    veKoi8:
+    veKoi8r,
+    veKoi8u,
+    veKoi8ru:
       if iPosition > FLowLimit then
       begin
         Result := PByte(GetDataAdr + iPosition)[-1];
@@ -3211,7 +3253,9 @@ begin
     veCp1250..veCp950,
     veIso88591,
     veIso88592,
-    veKoi8:
+    veKoi8r,
+    veKoi8u,
+    veKoi8ru:
       CharLenInBytes := 1;
     veUcs2be, veUcs2le:
       CharLenInBytes := 2;
@@ -3617,7 +3661,9 @@ procedure TViewerControl.UpdateSelection;
       veCp1250..veCp950,
       veIso88591,
       veIso88592,
-      veKoi8:
+      veKoi8r,
+      veKoi8u,
+      veKoi8ru:
         ; // any position allowed
 
       veUcs2be, veUcs2le:

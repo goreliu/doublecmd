@@ -1,6 +1,7 @@
 inherited frmOptionsCustomColumns: TfrmOptionsCustomColumns
   Height = 596
   Width = 1070
+  HelpKeyword = '/configuration.html#ConfigColumns'
   ChildSizing.LeftRightSpacing = 4
   ChildSizing.TopBottomSpacing = 4
   ClientHeight = 596
@@ -365,7 +366,7 @@ inherited frmOptionsCustomColumns: TfrmOptionsCustomColumns
         7
         0
         0
-        'Delete'
+        'Column'
         1
         0
         'Caption'
@@ -383,7 +384,7 @@ inherited frmOptionsCustomColumns: TfrmOptionsCustomColumns
         'Move'
         6
         0
-        'Config'
+        'Delete'
       )
     end
     object spGridArea: TSplitter

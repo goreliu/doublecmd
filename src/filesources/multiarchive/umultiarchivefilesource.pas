@@ -280,25 +280,40 @@ begin
 
   with Result do
   begin
-  {
-      Comment,
-  }
     SizeProperty := TFileSizeProperty.Create(ArchiveItem.UnpSize);
+    SizeProperty.IsValid := (ArchiveItem.UnpSize >= 0);
+
     CompressedSizeProperty := TFileCompressedSizeProperty.Create(ArchiveItem.PackSize);
+    CompressedSizeProperty.IsValid := (ArchiveItem.PackSize >= 0);
 
     if (FormMode and MAF_UNIX_ATTR) <> 0 then
       AttributesProperty := TUnixFileAttributesProperty.Create(ArchiveItem.Attributes)
     else if (FormMode and MAF_WIN_ATTR) <> 0 then
       AttributesProperty := TNtfsFileAttributesProperty.Create(ArchiveItem.Attributes)
-    else
+    else begin
       AttributesProperty := TFileAttributesProperty.CreateOSAttributes(ArchiveItem.Attributes);
+    end;
+
+    if AttributesProperty.IsDirectory then
+    begin
+      if not SizeProperty.IsValid then
+      begin
+        SizeProperty.IsValid := True;
+        SizeProperty.Value := FOLDER_SIZE_UNKN;
+      end;
+      if not CompressedSizeProperty.IsValid then
+      begin
+        CompressedSizeProperty.IsValid := True;
+        CompressedSizeProperty.Value := FOLDER_SIZE_UNKN;
+      end;
+    end;
 
     ModificationTimeProperty := TFileModificationDateTimeProperty.Create(0);
     try
       with ArchiveItem do
         ModificationTime := EncodeDate(Year, Month, Day) + EncodeTime(Hour, Minute, Second, 0);
     except
-      on EConvertError do;
+      on EConvertError do ModificationTimeProperty.IsValid:= False;
     end;
 
     if AttributesProperty.IsLink and (Length(ArchiveItem.FileLink) > 0) then

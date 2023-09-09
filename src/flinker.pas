@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    Take selected files and put them together to form one single file.
 
-   Copyright (C) 2018 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2018-2023 Alexander Koblov (alexx2000@mail.ru)
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -82,13 +82,15 @@ uses
   LCLProc, Controls,
   //DC
   DCStrUtils, uLng, uFileProcs, uOperationsManager, uFileSourceCombineOperation,
-  uGlobs;
+  DCOSUtils, uShowMsg, uGlobs;
 
 { ShowLinkerFilesForm:
   "TMainCommands.cm_FileLinker" function from "uMainCommands.pas" is calling this routine.}
 function ShowLinkerFilesForm(aFileSource: IFileSource; aFiles: TFiles; TargetPath: String): Boolean;
 var
   I: Integer;
+  AFileName: String;
+  ADirectory: String;
   xFiles: TFiles = nil;
   Operation: TFileSourceCombineOperation = nil;
 begin
@@ -110,7 +112,28 @@ begin
 
       if Result then
       begin
-        if mbForceDirectory(ExtractFileDir(edSave.Text)) then
+        ADirectory:= ExtractFileDir(edSave.Text);
+
+        if Length(ADirectory) > 0 then
+        begin
+          AFileName:= edSave.Text
+        end
+        else begin
+          AFileName:= aFiles.Path + edSave.Text;
+          ADirectory:= ExcludeTrailingBackslash(aFiles.Path);
+        end;
+
+        for I:= 0 to lstFile.Count - 1 do
+        begin
+          with lstFile.Items do
+          if mbCompareFileNames(TFile(Objects[I]).FullPath, AFileName) then
+          begin
+            msgError(Format(rsMsgCanNotCopyMoveItSelf, [AFileName]));
+            Exit;
+          end;
+        end;
+
+        if mbForceDirectory(ADirectory) then
         try
           // Fill file list with new file order
           xFiles:= TFiles.Create(aFiles.Path);
@@ -119,10 +142,10 @@ begin
           begin
             xFiles.Add(TFile(Objects[I]).Clone);
           end;
-          Operation:= aFileSource.CreateCombineOperation(xFiles, edSave.Text) as TFileSourceCombineOperation;
+          Operation:= aFileSource.CreateCombineOperation(xFiles, AFileName) as TFileSourceCombineOperation;
           OperationsManager.AddOperation(Operation, QueueIdentifier, False);
         finally
-          FreeThenNil(xFiles);
+          FreeAndNil(xFiles);
         end;
       end;
     finally
@@ -146,7 +169,7 @@ begin
     Operation.RequireDynamicMode:=TRUE;
     OperationsManager.AddOperation(Operation);
   finally
-    FreeThenNil(xFiles);
+    FreeAndNil(xFiles);
   end;
 end;
 

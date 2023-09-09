@@ -12,10 +12,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Native-Language: Türk\n"
 
-#: foptionscolors.rsdarkmodeoptions
-msgid "Auto;Enabled;Disabled"
-msgstr ""
-
 #: fsyncdirsdlg.rscomparingpercent
 #, object-pascal-format
 msgid "Comparing... %d%% (ESC to cancel)"
@@ -403,6 +399,12 @@ msgctxt "TFRMCHECKSUMVERIFY.CAPTION"
 msgid "Verify checksum..."
 msgstr "Sağlama toplamı doğrula..."
 
+#: tfrmchooseencoding.caption
+#, fuzzy
+msgctxt "tfrmchooseencoding.caption"
+msgid "Encoding"
+msgstr "Kodlama"
+
 #: tfrmconnectionmanager.btnadd.caption
 #, fuzzy
 #| msgid "Add"
@@ -549,6 +551,7 @@ msgid "Auto Compare"
 msgstr "Otomatik karşılaştır"
 
 #: tfrmdiffer.actbinarycompare.caption
+msgctxt "tfrmdiffer.actbinarycompare.caption"
 msgid "Binary Mode"
 msgstr "İkili mod"
 
@@ -1359,25 +1362,6 @@ msgstr "Tarafından:"
 msgid "To:"
 msgstr "Sonra:"
 
-#: tfrmfileproperties.btnclose.caption
-#, fuzzy
-#| msgid "Close"
-msgctxt "TFRMFILEPROPERTIES.BTNCLOSE.CAPTION"
-msgid "&Close"
-msgstr "Kapat"
-
-#: tfrmfileproperties.btnsetproperties.caption
-msgid "&Set properties"
-msgstr ""
-
-#: tfrmfileproperties.btnsetpropertiestoallfiles.caption
-msgid "Set to &all selected files"
-msgstr ""
-
-#: tfrmfileproperties.btnskipfile.caption
-msgid "Ski&p this file"
-msgstr ""
-
 #: tfrmfileproperties.caption
 msgctxt "tfrmfileproperties.caption"
 msgid "Properties"
@@ -1402,8 +1386,12 @@ msgstr "SUID (Kullanıcı Kimliği ayarlayın) bir dosyaya verilen dosya izinler
 msgid "Allow &executing file as program"
 msgstr ""
 
-#: tfrmfileproperties.gbowner.caption
-msgctxt "TFRMFILEPROPERTIES.GBOWNER.CAPTION"
+#: tfrmfileproperties.chkrecursive.caption
+msgid "&Recursive"
+msgstr ""
+
+#: tfrmfileproperties.dividerbevel3.caption
+msgctxt "TFRMFILEPROPERTIES.DIVIDERBEVEL3.CAPTION"
 msgid "Owner"
 msgstr "Sahibi"
 
@@ -1440,6 +1428,12 @@ msgstr "Metin"
 #: tfrmfileproperties.lblcontainsstr.caption
 msgid "Contains:"
 msgstr ""
+
+#: tfrmfileproperties.lblcreatedstr.caption
+#, fuzzy
+msgctxt "tfrmfileproperties.lblcreatedstr.caption"
+msgid "Created:"
+msgstr "Oluşturulan:"
 
 #: tfrmfileproperties.lblexec.caption
 msgctxt "TFRMFILEPROPERTIES.LBLEXEC.CAPTION"
@@ -1478,16 +1472,26 @@ msgid "&Group"
 msgstr "Grup"
 
 #: tfrmfileproperties.lbllastaccessstr.caption
-msgid "Last access:"
+msgctxt "tfrmfileproperties.lbllastaccessstr.caption"
+msgid "Accessed:"
 msgstr "Son erişim"
 
 #: tfrmfileproperties.lbllastmodifstr.caption
-msgid "Last modification:"
+msgctxt "tfrmfileproperties.lbllastmodifstr.caption"
+msgid "Modified:"
 msgstr "Son değişiklik:"
 
 #: tfrmfileproperties.lbllaststchangestr.caption
-msgid "Last status change:"
+msgid "Status changed:"
 msgstr "Son durum değişikliği:"
+
+#: tfrmfileproperties.lbllinksstr.caption
+msgid "Links:"
+msgstr ""
+
+#: tfrmfileproperties.lblmediatypestr.caption
+msgid "Media type:"
+msgstr ""
 
 #: tfrmfileproperties.lbloctal.caption
 msgctxt "TFRMFILEPROPERTIES.LBLOCTAL.CAPTION"
@@ -1505,6 +1509,10 @@ msgstr "Sahibi"
 msgctxt "TFRMFILEPROPERTIES.LBLREAD.CAPTION"
 msgid "Read"
 msgstr "Okuma"
+
+#: tfrmfileproperties.lblsizeondiskstr.caption
+msgid "Size on disk:"
+msgstr ""
 
 #: tfrmfileproperties.lblsizestr.caption
 msgctxt "TFRMFILEPROPERTIES.LBLSIZESTR.CAPTION"
@@ -1524,15 +1532,15 @@ msgctxt "TFRMFILEPROPERTIES.LBLWRITE.CAPTION"
 msgid "Write"
 msgstr "Yaz"
 
-#: tfrmfileproperties.sgimage.columns[0].title.caption
+#: tfrmfileproperties.sgplugins.columns[0].title.caption
 #, fuzzy
-msgctxt "tfrmfileproperties.sgimage.columns[0].title.caption"
+msgctxt "tfrmfileproperties.sgplugins.columns[0].title.caption"
 msgid "Name"
 msgstr "Adı"
 
-#: tfrmfileproperties.sgimage.columns[1].title.caption
+#: tfrmfileproperties.sgplugins.columns[1].title.caption
 #, fuzzy
-msgctxt "tfrmfileproperties.sgimage.columns[1].title.caption"
+msgctxt "tfrmfileproperties.sgplugins.columns[1].title.caption"
 msgid "Value"
 msgstr "Değer"
 
@@ -2907,6 +2915,10 @@ msgstr "Komut istemi penceresini aç"
 msgid "Save current tabs to a New Favorite Tabs"
 msgstr ""
 
+#: tfrmmain.actsavefiledetailstofile.caption
+msgid "Save all shown columns to file"
+msgstr ""
+
 #: tfrmmain.actsaveselection.caption
 msgid "Sa&ve Selection"
 msgstr "Seçimi &Kaydet"
@@ -3629,34 +3641,10 @@ msgstr "JPG sıkıştırma kalitesi"
 msgid "Width :"
 msgstr "Genişlik:"
 
-#: tfrmmodview.rbbmp.caption
-msgid "BMP"
-msgstr "BMP"
-
-#: tfrmmodview.rbico.caption
-msgid "ICO"
-msgstr "ICO"
-
-#: tfrmmodview.rbjpg.caption
-msgid "JPG"
-msgstr "JPG"
-
-#: tfrmmodview.rbpng.caption
-msgid "PNG"
-msgstr "PNG"
-
-#: tfrmmodview.rbpnm.caption
-msgid "PNM"
-msgstr "PNM"
-
 #: tfrmmodview.teheight.text
 msgctxt "tfrmmodview.teheight.text"
 msgid "Height"
 msgstr "Yükseklik"
-
-#: tfrmmodview.tequality.text
-msgid "80"
-msgstr "80"
 
 #: tfrmmodview.tewidth.text
 msgctxt "TFRMMODVIEW.TEWIDTH.TEXT"
@@ -4081,6 +4069,11 @@ msgctxt "TFRMOPTIONS.BTNCANCEL.CAPTION"
 msgid "&Cancel"
 msgstr "İptal"
 
+#: tfrmoptions.btnhelp.caption
+msgctxt "tfrmoptions.btnhelp.caption"
+msgid "&Help"
+msgstr "&Yardım"
+
 #: tfrmoptions.btnok.caption
 msgctxt "TFRMOPTIONS.BTNOK.CAPTION"
 msgid "&OK"
@@ -4417,8 +4410,115 @@ msgstr ""
 msgid "Fixed columns width"
 msgstr ""
 
+#: tfrmoptionscolors.cbbusegradientind.caption
+msgid "Use &Gradient Indicator"
+msgstr ""
+
+#: tfrmoptionscolors.dbbinarymode.caption
+#, fuzzy
+msgctxt "tfrmoptionscolors.dbbinarymode.caption"
+msgid "Binary Mode"
+msgstr "İkili mod"
+
+#: tfrmoptionscolors.dbbookmode.caption
+msgid "Book Mode"
+msgstr ""
+
+#: tfrmoptionscolors.dbimagemode.caption
+msgid "Image Mode"
+msgstr ""
+
+#: tfrmoptionscolors.dbtextmode.caption
+msgid "Text Mode"
+msgstr ""
+
+#: tfrmoptionscolors.lbladded.caption
+msgid "Added:"
+msgstr ""
+
+#: tfrmoptionscolors.lblbookbackground.caption
+msgctxt "tfrmoptionscolors.lblbookbackground.caption"
+msgid "Background:"
+msgstr ""
+
+#: tfrmoptionscolors.lblbooktext.caption
+#, fuzzy
+msgctxt "tfrmoptionscolors.lblbooktext.caption"
+msgid "Text:"
+msgstr "Metin"
+
+#: tfrmoptionscolors.lblcategory.caption
+msgid "Category:"
+msgstr ""
+
+#: tfrmoptionscolors.lbldeleted.caption
+msgid "Deleted:"
+msgstr ""
+
+#: tfrmoptionscolors.lblerror.caption
+msgid "Error:"
+msgstr ""
+
+#: tfrmoptionscolors.lblimagebackground1.caption
+msgid "Background 1:"
+msgstr ""
+
+#: tfrmoptionscolors.lblimagebackground2.caption
+msgctxt "tfrmoptionscolors.lblimagebackground2.caption"
+msgid "Background 2:"
+msgstr ""
+
+#: tfrmoptionscolors.lblindbackcolor.caption
+msgid "In&dicator Back Color:"
+msgstr ""
+
+#: tfrmoptionscolors.lblindcolor.caption
+msgid "&Indicator Fore Color:"
+msgstr ""
+
+#: tfrmoptionscolors.lblindthresholdcolor.caption
+msgid "Indicator &Threshold Color:"
+msgstr ""
+
+#: tfrmoptionscolors.lblinformation.caption
+msgid "Information:"
+msgstr ""
+
+#: tfrmoptionscolors.lblleft.caption
+msgid "Left:"
+msgstr ""
+
+#: tfrmoptionscolors.lblmodified.caption
+#, fuzzy
+msgctxt "tfrmoptionscolors.lblmodified.caption"
+msgid "Modified:"
+msgstr "Değişiklik yap"
+
+#: tfrmoptionscolors.lblmodifiedbinary.caption
+#, fuzzy
+msgctxt "tfrmoptionscolors.lblmodifiedbinary.caption"
+msgid "Modified:"
+msgstr "Değişiklik yap"
+
+#: tfrmoptionscolors.lblright.caption
+msgid "Right:"
+msgstr ""
+
+#: tfrmoptionscolors.lblsuccess.caption
+msgctxt "tfrmoptionscolors.lblsuccess.caption"
+msgid "Success:"
+msgstr ""
+
+#: tfrmoptionscolors.lblunknown.caption
+msgid "Unknown:"
+msgstr ""
+
 #: tfrmoptionscolors.rgdarkmode.caption
-msgid "Dark mode"
+msgid "State"
+msgstr ""
+
+#: tfrmoptionscolumnsview.cbcolumnstitlelikevalues.caption
+msgid "Column titles alignment &like values"
 msgstr ""
 
 #: tfrmoptionscolumnsview.cbcuttexttocolwidth.caption
@@ -5234,11 +5334,6 @@ msgstr ""
 msgctxt "tfrmoptionsdirectoryhotlist.btnexport.caption"
 msgid "E&xport..."
 msgstr ""
-
-#: tfrmoptionsdirectoryhotlist.btnhelp.caption
-msgctxt "tfrmoptionsdirectoryhotlist.btnhelp.caption"
-msgid "&Help"
-msgstr "&Yardım"
 
 #: tfrmoptionsdirectoryhotlist.btnimport.caption
 msgctxt "tfrmoptionsdirectoryhotlist.btnimport.caption"
@@ -6184,6 +6279,10 @@ msgstr ""
 msgid "Apply current settings to all current configured filenames and paths"
 msgstr ""
 
+#: tfrmoptionsfileassocextra.cbdefaultcontextactions.caption
+msgid "Default context actions (View/Edit)"
+msgstr ""
+
 #: tfrmoptionsfileassocextra.cbexecuteviashell.caption
 msgctxt "tfrmoptionsfileassocextra.cbexecuteviashell.caption"
 msgid "Execute via shell"
@@ -6337,64 +6436,6 @@ msgstr ""
 msgid "&Number of wipe passes:"
 msgstr ""
 
-#: tfrmoptionsfilepanelscolors.btnbackcolor.caption
-msgctxt "tfrmoptionsfilepanelscolors.btnbackcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btnbackcolor2.caption
-msgctxt "tfrmoptionsfilepanelscolors.btnbackcolor2.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btncursorbordercolor.caption
-#, fuzzy
-msgctxt "tfrmoptionsfilepanelscolors.btncursorbordercolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btncursorcolor.caption
-msgctxt "tfrmoptionsfilepanelscolors.btncursorcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btncursortext.caption
-msgctxt "tfrmoptionsfilepanelscolors.btncursortext.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btnforecolor.caption
-msgctxt "tfrmoptionsfilepanelscolors.btnforecolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btninactivecursorcolor.caption
-#, fuzzy
-msgctxt "tfrmoptionsfilepanelscolors.btninactivecursorcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btninactivemarkcolor.caption
-#, fuzzy
-msgctxt "tfrmoptionsfilepanelscolors.btninactivemarkcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btnindbackcolor.caption
-msgctxt "tfrmoptionsfilepanelscolors.btnindbackcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btnindcolor.caption
-msgctxt "tfrmoptionsfilepanelscolors.btnindcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsfilepanelscolors.btnmarkcolor.caption
-msgctxt "tfrmoptionsfilepanelscolors.btnmarkcolor.caption"
-msgid ">>"
-msgstr ">>"
-
 #: tfrmoptionsfilepanelscolors.btnresettodcdefault.caption
 msgid "Reset to DC default"
 msgstr ""
@@ -6407,10 +6448,6 @@ msgstr "Fazla renge izin ver"
 
 #: tfrmoptionsfilepanelscolors.cbbuseframecursor.caption
 msgid "Use &Frame Cursor"
-msgstr ""
-
-#: tfrmoptionsfilepanelscolors.cbbusegradientind.caption
-msgid "Use &Gradient Indicator"
 msgstr ""
 
 #: tfrmoptionsfilepanelscolors.cbbuseinactiveselcolor.caption
@@ -6427,8 +6464,8 @@ msgctxt "tfrmoptionsfilepanelscolors.cbusecursorborder.caption"
 msgid "Cursor border"
 msgstr "Gösterge sınırı"
 
-#: tfrmoptionsfilepanelscolors.dbfreespaceindicator.caption
-msgid "Drive Free Space Indicator"
+#: tfrmoptionsfilepanelscolors.dbcurrentpath.caption
+msgid "Current Path"
 msgstr ""
 
 #: tfrmoptionsfilepanelscolors.lblbackgroundcolor.caption
@@ -6458,19 +6495,29 @@ msgid "Inactive Mark Color:"
 msgstr ""
 
 #: tfrmoptionsfilepanelscolors.lblinactivepanelbrightness.caption
-msgid "&Brightness level of inactive panel"
-msgstr ""
-
-#: tfrmoptionsfilepanelscolors.lblindbackcolor.caption
-msgid "In&dicator Back Color:"
-msgstr ""
-
-#: tfrmoptionsfilepanelscolors.lblindcolor.caption
-msgid "&Indicator Fore Color:"
+msgid "&Brightness level of inactive panel:"
 msgstr ""
 
 #: tfrmoptionsfilepanelscolors.lblmarkcolor.caption
 msgid "&Mark Color:"
+msgstr ""
+
+#: tfrmoptionsfilepanelscolors.lblpathactiveback.caption
+msgctxt "tfrmoptionsfilepanelscolors.lblpathactiveback.caption"
+msgid "Background:"
+msgstr ""
+
+#: tfrmoptionsfilepanelscolors.lblpathactivetext.caption
+msgctxt "tfrmoptionsfilepanelscolors.lblpathactivetext.caption"
+msgid "Text Color:"
+msgstr ""
+
+#: tfrmoptionsfilepanelscolors.lblpathinactiveback.caption
+msgid "Inactive Background:"
+msgstr ""
+
+#: tfrmoptionsfilepanelscolors.lblpathinactivetext.caption
+msgid "Inactive Text Color:"
 msgstr ""
 
 #: tfrmoptionsfilepanelscolors.lblpreview.caption
@@ -6685,11 +6732,6 @@ msgstr "Ekle"
 msgctxt "tfrmoptionsfiletypescolors.btnapplycategory.caption"
 msgid "A&pply"
 msgstr "Uygula"
-
-#: tfrmoptionsfiletypescolors.btncategorycolor.caption
-msgctxt "tfrmoptionsfiletypescolors.btncategorycolor.caption"
-msgid ">>"
-msgstr ">>"
 
 #: tfrmoptionsfiletypescolors.btndeletecategory.caption
 msgctxt "tfrmoptionsfiletypescolors.btndeletecategory.caption"
@@ -8528,78 +8570,6 @@ msgctxt "tfrmoptionstreeviewmenucolor.btfont.caption"
 msgid "..."
 msgstr "..."
 
-#: tfrmoptionstreeviewmenucolor.btnbackgroundcolor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnbackgroundcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btncursorcolor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btncursorcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnfoundtextcolor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnfoundtextcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnfoundtextundercursor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnfoundtextundercursor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnnormaltextcolor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnnormaltextcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnnormaltextundercursor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnnormaltextundercursor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnsecondarytextcolor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnsecondarytextcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnsecondarytextundercursor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnsecondarytextundercursor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnshortcutcolor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnshortcutcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnshortcutundercursor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnshortcutundercursor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnunselectabletextcolor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnunselectabletextcolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionstreeviewmenucolor.btnunselectableundercursor.caption
-#, fuzzy
-msgctxt "tfrmoptionstreeviewmenucolor.btnunselectableundercursor.caption"
-msgid ">>"
-msgstr ">>"
-
 #: tfrmoptionstreeviewmenucolor.cbkusagekeyboardshortcut.caption
 msgid "Use and display keyboard shortcut for choosing items"
 msgstr ""
@@ -8668,32 +8638,8 @@ msgstr ""
 msgid "Change color on left and you'll see here a preview of what your Tree View Menus will look likes with this sample."
 msgstr ""
 
-#: tfrmoptionsviewer.btnbackviewercolor.caption
-msgctxt "tfrmoptionsviewer.btnbackviewercolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsviewer.btnfontviewercolor.caption
-msgctxt "tfrmoptionsviewer.btnfontviewercolor.caption"
-msgid ">>"
-msgstr ">>"
-
-#: tfrmoptionsviewer.gbviewerbookmode.caption
-msgctxt "tfrmoptionsviewer.gbviewerbookmode.caption"
-msgid "Viewer Book Mode"
-msgstr "Kitap Modu Görünümü"
-
-#: tfrmoptionsviewer.gbviewerexample.caption
-msgctxt "tfrmoptionsviewer.gbviewerexample.caption"
-msgid "Example"
-msgstr "Örnek"
-
-#: tfrmoptionsviewer.lblbackgroundcolorviewerbook.caption
-msgid "&Background color in book viewer"
-msgstr ""
-
-#: tfrmoptionsviewer.lblfontcolorviewerbook.caption
-msgid "&Font color in book viewer"
+#: tfrmoptionsviewer.gbinternalviewer.caption
+msgid "Internal viewer options"
 msgstr ""
 
 #: tfrmoptionsviewer.lblnumbercolumnsviewer.caption
@@ -9144,10 +9090,12 @@ msgid "Hidden"
 msgstr "Gizli"
 
 #: tfrmsetfileproperties.chklastaccesstime.caption
+msgctxt "tfrmsetfileproperties.chklastaccesstime.caption"
 msgid "Accessed:"
 msgstr "Giriş:"
 
 #: tfrmsetfileproperties.chklastwritetime.caption
+msgctxt "tfrmsetfileproperties.chklastwritetime.caption"
 msgid "Modified:"
 msgstr "Değişiklik yap"
 
@@ -9916,6 +9864,16 @@ msgctxt "tfrmviewer.actfullscreen.caption"
 msgid "Full Screen"
 msgstr "Tam Ekran"
 
+#: tfrmviewer.actgotoline.caption
+msgctxt "tfrmviewer.actgotoline.caption"
+msgid "Goto Line..."
+msgstr ""
+
+#: tfrmviewer.actgotoline.hint
+msgctxt "tfrmviewer.actgotoline.hint"
+msgid "Goto Line"
+msgstr ""
+
 #: tfrmviewer.actimagecenter.caption
 msgctxt "tfrmviewer.actimagecenter.caption"
 msgid "Center"
@@ -10089,6 +10047,10 @@ msgstr "Kaydırma metin &olarak göster"
 msgid "Show text c&ursor"
 msgstr ""
 
+#: tfrmviewer.actshowcode.caption
+msgid "Code"
+msgstr ""
+
 #: tfrmviewer.actshowgraphics.caption
 #, fuzzy
 msgctxt "tfrmviewer.actshowgraphics.caption"
@@ -10122,6 +10084,17 @@ msgstr ""
 msgctxt "tfrmviewer.actstretchonlylarge.caption"
 msgid "Stretch only large"
 msgstr ""
+
+#: tfrmviewer.actundo.caption
+#, fuzzy
+msgctxt "tfrmviewer.actundo.caption"
+msgid "Undo"
+msgstr "Geri Al"
+
+#: tfrmviewer.actundo.hint
+msgctxt "TFRMVIEWER.ACTUNDO.HINT"
+msgid "Undo"
+msgstr "Geri al"
 
 #: tfrmviewer.actwraptext.caption
 msgid "&Wrap text"
@@ -10206,11 +10179,6 @@ msgctxt "tfrmviewer.btnslideshow.caption"
 msgid "Slide Show"
 msgstr "Resimleri otomatik olarak sırayla göster(Slayt Gösterisi)"
 
-#: tfrmviewer.btnundo.hint
-msgctxt "TFRMVIEWER.BTNUNDO.HINT"
-msgid "Undo"
-msgstr "Geri al"
-
 #: tfrmviewer.caption
 msgctxt "tfrmviewer.caption"
 msgid "Viewer"
@@ -10267,11 +10235,6 @@ msgstr "Ekran görüntüsü"
 msgctxt "TFRMVIEWER.MIVIEW.CAPTION"
 msgid "&View"
 msgstr "&Göster"
-
-#: tfrmviewer.pmiselectall.caption
-msgctxt "TFRMVIEWER.PMISELECTALL.CAPTION"
-msgid "Select All"
-msgstr "Tümünü Seç"
 
 #: tfrmviewoperations.btnstartpause.caption
 #, fuzzy
@@ -10584,6 +10547,7 @@ msgid "Read error:"
 msgstr ""
 
 #: ulng.rschecksumverifysuccess
+msgctxt "ulng.rschecksumverifysuccess"
 msgid "Success:"
 msgstr ""
 
@@ -10681,6 +10645,14 @@ msgstr ""
 #, object-pascal-format
 msgid "Copy (%d) %s"
 msgstr "Kopyala (%d) %s"
+
+#: ulng.rsdarkmode
+msgid "Dark mode"
+msgstr ""
+
+#: ulng.rsdarkmodeoptions
+msgid "Auto;Enabled;Disabled"
+msgstr ""
 
 #: ulng.rsdefaultimporteddctoolbarhint
 msgid "Imported DC toolbar"
@@ -10949,6 +10921,10 @@ msgstr "Hız %s/s, kalan süre %s"
 
 #: ulng.rsdraganddroptextformat
 msgid "Rich Text Format;HTML Format;Unicode Format;Simple Text Format"
+msgstr ""
+
+#: ulng.rsdrivefreespaceindicator
+msgid "Drive Free Space Indicator"
 msgstr ""
 
 #: ulng.rsdrivenolabel
@@ -11635,6 +11611,11 @@ msgstr "Bu sekme (%s) kilitli! Yine de kapatılsın mı?"
 
 #: ulng.rsmsgcofirmuserparam
 msgid "Confirmation of parameter"
+msgstr ""
+
+#: ulng.rsmsgcommandnotfound
+#, object-pascal-format
+msgid "Command not found! (%s)"
 msgstr ""
 
 #: ulng.rsmsgconfirmquit
@@ -14089,6 +14070,10 @@ msgstr "Dosya"
 msgctxt "ulng.rspropsfolder"
 msgid "Directory"
 msgstr "Dizin"
+
+#: ulng.rspropsmultipletypes
+msgid "Multiple types"
+msgstr ""
 
 #: ulng.rspropsnmdpipe
 msgid "Named pipe"

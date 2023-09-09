@@ -17,6 +17,14 @@
 
    You should have received a copy of the GNU General Public License
    along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+   Notes:
+   1. TFileViewNotebook.DestroyAllPages is the workaround for the bug of Lazarus.
+      TFileViewNotebook.DestroyAllPages and the related codes can be removed,
+      after Double Commander built with Lazarus 2.4 on Linux.
+      see also:
+      https://gitlab.com/freepascal.org/lazarus/lazarus/-/issues/40019
+      https://github.com/doublecmd/doublecmd/pull/703
 }
 
 unit uFileViewNotebook; 
@@ -107,12 +115,12 @@ type
 
   TFileViewNotebook = class(TPageControl)
   private
-    FCanChangePageIndex: Boolean;
     FNotebookSide: TFilePanelSelect;
     FStartDrag: Boolean;
     FDraggedPageIndex: Integer;
     FTabDblClicked: Boolean;
     FHintPageIndex: Integer;
+    FHintPos: TPoint;
     FLastMouseDownTime: TDateTime;
     FLastMouseDownPageIndex: Integer;
 
@@ -120,6 +128,8 @@ type
     function GetActiveView: TFileView;
     function GetFileViewOnPage(Index: Integer): TFileView;
     function GetPage(Index: Integer): TFileViewPage; reintroduce;
+
+    procedure TabShowHint(Sender: TObject; HintInfo: PHintInfo);
 
   protected
     procedure DoChange; override;
@@ -141,7 +151,6 @@ type
     procedure WndProc(var Message: TLMessage); override;
 {$ENDIF}
     function AddPage: TFileViewPage;
-    function CanChangePageIndex: Boolean; override;
     function InsertPage(Index: Integer): TFileViewPage; reintroduce;
     function NewEmptyPage: TFileViewPage;
     function NewPage(CloneFromPage: TFileViewPage): TFileViewPage;
@@ -409,9 +418,10 @@ begin
   ShowHint := True;
 
   FHintPageIndex := -1;
-  FCanChangePageIndex := True;
   FNotebookSide := NotebookSide;
   FStartDrag := False;
+
+  OnShowHint := @TabShowHint;
 
   {$IFDEF MSWINDOWS}
   // The pages contents are removed from drawing background in EraseBackground.
@@ -458,11 +468,6 @@ end;
 function TFileViewNotebook.AddPage: TFileViewPage;
 begin
   Result := InsertPage(PageCount);
-end;
-
-function TFileViewNotebook.CanChangePageIndex: Boolean;
-begin
-  Result:= (inherited CanChangePageIndex) and FCanChangePageIndex;
 end;
 
 function TFileViewNotebook.InsertPage(Index: Integer): TFileViewPage;
@@ -544,10 +549,12 @@ begin
 end;
 
 procedure TFileViewNotebook.DestroyAllPages;
+var
+  i: Integer;
 begin
-  FCanChangePageIndex:= False;
-  Tabs.Clear;
-  FCanChangePageIndex:= True;
+  for i:=PageCount-1 downto 0 do
+    if i<>ActivePageIndex then Tabs.Delete( i );
+  Tabs.Delete( 0 );
 end;
 
 procedure TFileViewNotebook.ActivatePrevTab;
@@ -580,6 +587,37 @@ function TFileViewNotebook.IndexOfPageAt(P: TPoint): Integer;
 begin
   Result:= inherited IndexOfPageAt(P);
   if (Result >= PageCount) then Result:= -1;
+end;
+
+// compared to handling hints in MouseMove(), DoShowHint() is compatible
+// with all WidgetSets.
+// on Windows, when Mouse Move in the blank of the TabControl,
+// MouseMove() will not be called, then the wrong hint is shown.
+procedure TFileViewNotebook.TabShowHint(Sender: TObject; HintInfo: PHintInfo);
+var
+  ATabIndex: Integer;
+begin
+  ATabIndex := IndexOfPageAt( ScreenToClient(Mouse.CursorPos) );
+
+  if ATabIndex >= 0 then begin
+    if (ATabIndex <> PageIndex) and (Length(Page[ATabIndex].LockPath) <> 0) then
+      HintInfo^.HintStr := '* ' + Page[ATabIndex].LockPath
+    else
+      HintInfo^.HintStr := View[ATabIndex].CurrentPath;
+  end else begin
+    HintInfo^.HintStr := '';
+    FHintPos := TPoint.Zero;
+  end;
+
+  if ATabIndex <> FHintPageIndex then begin
+    FHintPageIndex := ATabIndex;
+    FHintPos := HintInfo^.HintPos;
+  end else begin
+    if not FHintPos.IsZero then
+      HintInfo^.HintPos := FHintPos;
+  end;
+
+  HintInfo^.ReshowTimeout := 500;
 end;
 
 procedure TFileViewNotebook.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
@@ -632,25 +670,8 @@ begin
 end;
 
 procedure TFileViewNotebook.MouseMove(Shift: TShiftState; X, Y: Integer);
-var
-  ATabIndex: Integer;
 begin
   inherited;
-
-  if ShowHint then
-  begin
-    ATabIndex := IndexOfPageAt(Classes.Point(X, Y));
-    if (ATabIndex >= 0) and (ATabIndex <> FHintPageIndex) then
-    begin
-      FHintPageIndex := ATabIndex;
-      Application.CancelHint;
-      if (ATabIndex <> PageIndex) and (Length(Page[ATabIndex].LockPath) <> 0) then
-        Hint := Page[ATabIndex].LockPath
-      else
-        Hint := View[ATabIndex].CurrentPath;
-    end;
-  end;
-
   if FStartDrag then
   begin
     FStartDrag := False;
@@ -740,12 +761,7 @@ begin
     begin
       // Move within the same panel.
       if ATabIndex <> -1 then
-      begin
         Tabs.Move(FDraggedPageIndex, ATabIndex);
-        {$IFDEF LCLCOCOA}
-        GetPage(ATabIndex).MakeActive;
-        {$ENDIF}
-      end;
     end
     else if (SourceNotebook.FDraggedPageIndex < SourceNotebook.PageCount) then
     begin

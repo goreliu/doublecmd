@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    WCX plugin for working with *.zip, *.gz, *.tar, *.tgz archives
 
-   Copyright (C) 2007-2022 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2007-2023 Alexander Koblov (alexx2000@mail.ru)
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -40,6 +40,7 @@ type
 
   TAbZipKitEx = class (TAbZipKit)
   private
+    FNeedPassword: Boolean;
     FOperationResult: LongInt;
     FChangeVolProcW: TChangeVolProcW;
     FProcessDataProcW : TProcessDataProcW;
@@ -82,14 +83,16 @@ const
 
 var
   gStartupInfo: TExtensionStartupInfo;
-  gCompressionMethodToUse : TAbZipSupportedMethod;
-  gDeflationOption : TAbZipDeflationOption;
   gTarAutoHandle : Boolean;
   
 implementation
 
 uses
-  SysUtils, LazUTF8, ZipConfDlg, AbBrowse, DCConvertEncoding, DCOSUtils;
+  SysUtils, LazUTF8, ZipConfDlg, AbBrowse, DCConvertEncoding, DCOSUtils, ZipOpt,
+  ZipLng, ZipCache;
+
+var
+  PasswordCache: TPasswordCache;
 
 threadvar
   gProcessDataProcW : TProcessDataProcW;
@@ -171,6 +174,7 @@ begin
 
     Arc.TarAutoHandle := gTarAutoHandle;
     Arc.OpenArchive(UTF16ToUTF8(UnicodeString(ArchiveData.ArcName)));
+    Arc.Password := PasswordCache.GetPassword(Arc.FileName);
     Arc.Tag := 0;
     Result := TArcHandle(Arc);
   except
@@ -244,6 +248,12 @@ begin
       begin
         Arc.TestItemAt(Arc.Tag);
 
+        if (Arc.FNeedPassword) and (Arc.FOperationResult = E_SUCCESS) and Arc.Items[Arc.Tag].IsEncrypted then
+        begin
+          Arc.FNeedPassword:= False;
+          PasswordCache.SetPassword(Arc.FileName, Arc.Password);
+        end;
+
         // Show progress and ask if aborting.
         if Assigned(Arc.FProcessDataProcW) then
         begin
@@ -264,6 +274,13 @@ begin
           Arc.FOperationResult := E_SUCCESS;
           Arc.ExtractAt(Arc.Tag, DestNameUtf8);
         until (Arc.FOperationResult <> maxLongint);
+
+        if (Arc.FNeedPassword) and (Arc.FOperationResult = E_SUCCESS) and Arc.Items[Arc.Tag].IsEncrypted then
+        begin
+          Arc.FNeedPassword:= False;
+          PasswordCache.SetPassword(Arc.FileName, Arc.Password);
+        end;
+
         // Show progress and ask if aborting.
         if Assigned(Arc.FProcessDataProcW) then
         begin
@@ -332,11 +349,13 @@ end;
 
 function PackFilesW(PackedFile: PWideChar;  SubPath: PWideChar;  SrcPath: PWideChar;  AddList: PWideChar;  Flags: Integer): Integer;dcpcall;
 var
-  Arc : TAbZipKitEx;
+  FileExt: String;
   FilePath: String;
+  Arc : TAbZipKitEx;
   FileName: UnicodeString;
   sPassword: AnsiString;
   sPackedFile: String;
+  ArchiveFormat: TArchiveFormat;
 begin
   if (Flags and PK_PACK_MOVE_FILES) <> 0 then begin
     Exit(E_NOT_SUPPORTED);
@@ -346,22 +365,49 @@ begin
   try
     Arc.AutoSave := False;
     Arc.TarAutoHandle:= True;
-    Arc.CompressionMethodToUse:= gCompressionMethodToUse;
-    Arc.DeflationOption:= gDeflationOption;
     Arc.FProcessDataProcW := gProcessDataProcW;
     Arc.OnProcessItemFailure := @Arc.AbProcessItemFailureEvent;
 
     sPackedFile := UTF16ToUTF8(UnicodeString(PackedFile));
 
     try
-      if ((Flags and PK_PACK_ENCRYPT) <> 0) and
-         (LowerCase(ExtractFileExt(sPackedFile)) = '.zip') then // only zip supports encryption
+      FileExt:= LowerCase(ExtractFileExt(sPackedFile));
+
+      if ((Flags and PK_PACK_ENCRYPT) <> 0) then
       begin
-        Arc.AbNeedPasswordEvent(Arc, sPassword);
-        Arc.Password:= sPassword;
+        // Only zip/zipx supports encryption
+        if (FileExt = '.zip') or (FileExt = '.zipx') then
+        begin
+          sPassword:= EmptyStr;
+          Arc.AbNeedPasswordEvent(Arc, sPassword);
+          Arc.Password:= sPassword;
+        end;
       end;
 
       Arc.OpenArchive(sPackedFile);
+
+      ArchiveFormat:= ARCHIVE_FORMAT[Arc.ArchiveType];
+
+      if (ArchiveFormat = afZip) then
+      begin
+         if (FileExt = '.zipx') then
+           ArchiveFormat:= afZipx
+         else begin
+           case PluginConfig[ArchiveFormat].Level of
+             1: Arc.DeflationOption:= doSuperFast;
+             3: Arc.DeflationOption:= doFast;
+             6: Arc.DeflationOption:= doNormal;
+             9: Arc.DeflationOption:= doMaximum;
+           end;
+           case PluginConfig[ArchiveFormat].Method of
+              PtrInt(cmStored): Arc.CompressionMethodToUse:= smStored;
+              PtrInt(cmDeflated): Arc.CompressionMethodToUse:= smDeflated;
+              PtrInt(cmEnhancedDeflated): Arc.CompressionMethodToUse:= smBestMethod;
+           end;
+         end;
+      end;
+      Arc.ZipArchive.CompressionLevel:= PluginConfig[ArchiveFormat].Level;
+      Arc.ZipArchive.CompressionMethod:= PluginConfig[ArchiveFormat].Method;
 
       Arc.OnArchiveItemProgress := @Arc.AbArchiveItemProgressEvent;
       Arc.OnArchiveProgress := @Arc.AbArchiveProgressEvent;
@@ -481,7 +527,10 @@ procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall;
 begin
   gStartupInfo:= StartupInfo^;
   // Load configuration from ini file
-  LoadConfig;
+  LoadConfiguration;
+  TranslateResourceStrings;
+  // Create password cache object
+  PasswordCache:= TPasswordCache.Create;
 end;
 
 { TAbZipKitEx }
@@ -619,8 +668,10 @@ begin
   Result:= gStartupInfo.InputBox('Zip', 'Please enter the password:', True, PAnsiChar(aNewPassword), MAX_PATH);
   if Result then
     NewPassword := aNewPassword
-  else
+  else begin
     raise EAbUserAbort.Create;
+  end;
+  FNeedPassword:= True;
 end;
 
 end.

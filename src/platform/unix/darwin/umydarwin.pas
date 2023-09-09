@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    This unit contains specific DARWIN functions.
 
-   Copyright (C) 2016-2021 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2016-2023 Alexander Koblov (alexx2000@mail.ru)
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,11 @@
    You should have received a copy of the GNU Lesser General Public
    License along with this library; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
+
+   Notes:
+   1. TDarwinAarch64Statfs is the workaround for the bug of FPC.
+      TDarwinAarch64Statfs and the related codes can be removed after FPC 3.3.1
+      see also: https://gitlab.com/freepascal.org/fpc/source/-/issues/39873
 }
 
 unit uMyDarwin;
@@ -28,7 +33,9 @@ unit uMyDarwin;
 interface
 
 uses
-  Classes, SysUtils, UnixType, MacOSAll, CocoaAll, CocoaUtils, CocoaInt, InterfaceBase, Menus, CocoaWSMenus;
+  Classes, SysUtils, UnixType,
+  Cocoa_Extra, MacOSAll, CocoaAll, CocoaUtils, CocoaInt,
+  InterfaceBase, Menus, CocoaWSMenus;
 
 // Darwin Util Function
 function StringToNSString(const S: String): NSString;
@@ -36,12 +43,18 @@ function StringToCFStringRef(const S: String): CFStringRef;
 function NSArrayToList(const theArray:NSArray): TStringList;
 function ListToNSArray(const list:TStrings): NSArray;
 
+procedure setMacOSAppearance( mode:Integer );
+
+function getMacOSDefaultTerminal(): String;
+
 function NSGetTempPath: String;
 
 function NSGetFolderPath(Folder: NSSearchPathDirectory): String;
 
 function GetFileDescription(const FileName: String): String;
 function MountNetworkDrive(const serverAddress: String): Boolean;
+
+function unmountAndEject(const path: String): Boolean;
 
 // Workarounds for FPC RTL Bug
 // copied from ptypes.inc and modified fstypename only
@@ -83,9 +96,9 @@ type TNSServiceMenuIsReady = Function(): Boolean of object;
 type TNSServiceMenuGetFilenames = Function(): TStringList of object;
 
 type TDCCocoaApplication = objcclass(TCocoaApplication)
-private
   function validRequestorForSendType_returnType (sendType: NSString; returnType: NSString): id; override;
   function writeSelectionToPasteboard_types (pboard: NSPasteboard; types: NSArray): ObjCBOOL; message 'writeSelectionToPasteboard:types:';
+  procedure observeValueForKeyPath_ofObject_change_context( keyPath: NSString; object_: id; change: NSDictionary; context: pointer); override;
 public
   serviceMenuIsReady: TNSServiceMenuIsReady;
   serviceMenuGetFilenames: TNSServiceMenuGetFilenames;
@@ -112,15 +125,40 @@ procedure InitNSServiceProvider(
   isReadyFunc: TNSServiceMenuIsReady;
   getFilenamesFunc: TNSServiceMenuGetFilenames );
 
+// MacOS Theme
+type TNSThemeChangedHandler = Procedure() of object;
+
+procedure InitNSThemeChangedObserver( handler: TNSThemeChangedHandler );
+
 var
   HasMountURL: Boolean = False;
   NSServiceProvider: TNSServiceProvider;
   MacosServiceMenuHelper: TMacosServiceMenuHelper;
+  NSThemeChangedHandler: TNSThemeChangedHandler;
 
 implementation
 
 uses
   DynLibs;
+
+procedure setMacOSAppearance( mode:Integer );
+var
+  appearance: NSAppearance;
+begin
+  if not NSApp.respondsToSelector( ObjCSelector('appearance') ) then
+    exit;
+
+  case mode of
+    0,1:
+      appearance:= nil;
+    2:
+      appearance:= NSAppearance.appearanceNamed( NSSTR_DARK_NAME );
+    3:
+      appearance:= NSAppearance.appearanceNamed( NSAppearanceNameAqua );
+  end;
+  NSApp.setAppearance( appearance );
+  NSAppearance.setCurrentAppearance( appearance );
+end;
 
 procedure TMacosServiceMenuHelper.attachServicesMenu( Sender:TObject);
 var
@@ -138,7 +176,7 @@ begin
   begin
     subMenu:= TCocoaMenu.alloc.initWithTitle(NSString.string_);
     TCocoaMenuItem(servicesItem.Handle).setSubmenu( subMenu );
-    TCocoaWidgetSet(WidgetSet).NSApp.setServicesMenu( NSMenu(servicesItem.Handle) );
+    NSApp.setServicesMenu( NSMenu(servicesItem.Handle) );
   end;
 end;
 
@@ -162,7 +200,7 @@ var
   sendTypes: NSArray;
   returnTypes: NSArray;
 begin
-  DCApp:= TDCCocoaApplication( TCocoaWidgetSet(WidgetSet).NSApp );
+  DCApp:= TDCCocoaApplication( NSApp );
 
   // MacOS Service menu incoming setup
   if not Assigned(NSServiceProvider) then
@@ -226,6 +264,29 @@ begin
   FreeAndNil( filenameList );
 end;
 
+procedure TDCCocoaApplication.observeValueForKeyPath_ofObject_change_context(
+  keyPath: NSString; object_: id; change: NSDictionary; context: pointer);
+begin
+  Inherited observeValueForKeyPath_ofObject_change_context( keyPath, object_, change, context );
+  if keyPath.isEqualToString(NSSTR('effectiveAppearance')) then
+  begin
+    NSAppearance.setCurrentAppearance( self.appearance );
+    if Assigned(NSThemeChangedHandler) then NSThemeChangedHandler;
+  end;
+end;
+
+procedure InitNSThemeChangedObserver( handler: TNSThemeChangedHandler );
+begin
+  if Assigned(NSThemeChangedHandler) then exit;
+
+  NSApp.addObserver_forKeyPath_options_context(
+    NSApp, NSSTR('effectiveAppearance'), 0, nil );
+
+  NSThemeChangedHandler:= handler;
+end;
+
+
+
 function NSArrayToList(const theArray:NSArray): TStringList;
 var
   i: Integer;
@@ -255,6 +316,11 @@ end;
 function NSGetTempPath: String;
 begin
   Result:= IncludeTrailingBackslash(NSTemporaryDirectory.UTF8String);
+end;
+
+function getMacOSDefaultTerminal(): String;
+begin
+  Result:= NSStringToString( NSWorkspace.sharedWorkspace.fullPathForApplication( NSStr('terminal') ) );
 end;
 
 function StringToNSString(const S: String): NSString;
@@ -296,6 +362,12 @@ begin
   end;
   CFRelease(FileNameRef);
 end;
+
+function unmountAndEject(const path: String): Boolean;
+begin
+  Result:= NSWorkspace.sharedWorkspace.unmountAndEjectDeviceAtPath( StringToNSString(path) );
+end;
+
 
 var
   NetFS: TLibHandle = NilHandle;
@@ -340,6 +412,7 @@ procedure Finalize;
 begin
   if (NetFS <> NilHandle) then FreeLibrary(NetFS);
   if (CoreServices <> NilHandle) then FreeLibrary(CoreServices);
+  FreeAndNil( MacosServiceMenuHelper );
 end;
 
 initialization

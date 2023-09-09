@@ -1,6 +1,7 @@
 inherited frmOptionsFilesViewsComplement: TfrmOptionsFilesViewsComplement
   Height = 550
   Width = 640
+  HelpKeyword = '/configuration.html#ConfigViewEx'
   ClientHeight = 550
   ClientWidth = 640
   DesignLeft = 200
@@ -170,6 +171,8 @@ inherited frmOptionsFilesViewsComplement: TfrmOptionsFilesViewsComplement
         Height = 27
         Top = 0
         Width = 304
+        HelpType = htKeyword
+        HelpKeyword = '/findfiles.html#attributes'
         Anchors = [akTop, akLeft, akRight]
         TabOrder = 0
       end

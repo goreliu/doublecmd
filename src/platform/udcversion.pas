@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    Version information about DC, building tools and running environment.
 
-   Copyright (C) 2006-2021  Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2006-2023  Alexander Koblov (alexx2000@mail.ru)
    Copyright (C) 2010       Przemyslaw Nagay (cobines@gmail.com)
 
    This program is free software; you can redistribute it and/or modify
@@ -94,7 +94,7 @@ begin
       sl.LoadFromFile(FileName);
       Result := True;
     except
-      on EFilerError do; // Bypass
+      on EStreamError do sl.Free;
     end;
   end;
 end;
@@ -133,14 +133,39 @@ begin
       if Result <> EmptyStr then
         Result := TrimQuotes(Result)
       else
-        Result := sl.Values['DISTRIB_ID'] +
-                  sl.Values['DISTRIB_RELEASE'] +
+        Result := sl.Values['DISTRIB_ID'] + ' ' +
+                  sl.Values['DISTRIB_RELEASE'] + ' ' +
                   sl.Values['DISTRIB_CODENAME'];
     end;
   finally
     sl.Free;
   end;
 end;
+
+function GetOsFromOsRelease: String;
+var
+  sl: TStringListEx;
+begin
+  Result := EmptyStr;
+
+  if GetStringsFromFile('/etc/os-release', sl) then
+  try
+    if sl.Count > 0 then
+    begin
+      Result := sl.Values['PRETTY_NAME'];
+
+      if Result <> EmptyStr then
+        Result := TrimQuotes(Result)
+      else
+        Result := sl.Values['NAME'] + ' ' +
+                  sl.Values['VERSION'] + ' ' +
+                  sl.Values['ID'];
+    end;
+  finally
+    sl.Free;
+  end;
+end;
+
 
 function GetOsFromProcVersion: String;
 var
@@ -297,9 +322,12 @@ begin
                                      FixedInfo.FileVersion[1],
                                      FixedInfo.FileVersion[2]]);
     if (FixedInfo.FileFlags and VS_FF_PRERELEASE <> 0) then
-      DCVersion+= ' alpha'
-    else begin
-      DCVersion+= ' beta';
+    begin
+      if (FixedInfo.FileFlags and VS_FF_PRIVATEBUILD <> 0) then
+        DCVersion+= ' alpha'
+      else begin
+        DCVersion+= ' beta';
+      end;
     end;
     Free;
   end;
@@ -450,11 +478,15 @@ begin
     OSVersion := GetMacOSXVersion;
   {$ENDIF}
 
+  // Try using linux systemd base.
+  if OSVersion = EmptyStr then
+    OSVersion := GetOsFromOsRelease;
+
   // Other methods.
   if OSVersion = EmptyStr then
-    OSVersion := GetOsFromIssue;
-  if OSVersion = EmptyStr then
     OSVersion := GetOsFromProcVersion;
+  if OSVersion = EmptyStr then
+    OSVersion := GetOsFromIssue;
 
   // Set default names.
   if OSVersion = EmptyStr then

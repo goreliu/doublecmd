@@ -14,6 +14,7 @@ object frmMain: TfrmMain
   OnKeyDown = FormKeyDown
   OnKeyPress = FormKeyPress
   OnKeyUp = FormKeyUp
+  OnResize = FormResize
   OnShow = frmMainShow
   OnUTF8KeyPress = FormUTF8KeyPress
   OnWindowStateChange = FormWindowStateChange
@@ -283,6 +284,7 @@ object frmMain: TfrmMain
             BorderSpacing.Right = 2
             ParentColor = False
             OnDblClick = lblDriveInfoDblClick
+            OnResize = lblDriveInfoResize
           end
         end
       end
@@ -432,6 +434,7 @@ object frmMain: TfrmMain
             BorderSpacing.Right = 2
             ParentColor = False
             OnDblClick = lblDriveInfoDblClick
+            OnResize = lblDriveInfoResize
           end
         end
       end
@@ -505,10 +508,11 @@ object frmMain: TfrmMain
       object lblCommandPath: TLabel
         AnchorSideTop.Control = edtCommand
         AnchorSideTop.Side = asrCenter
-        Left = 0
+        Left = 2
         Height = 15
         Top = 6
         Width = 24
+        BorderSpacing.Left = 2
         Caption = 'Path'
         ParentColor = False
         ShowAccelChar = False
@@ -524,7 +528,8 @@ object frmMain: TfrmMain
         Top = 2
         Width = 732
         Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Left = 4
+        BorderSpacing.Left = 2
+        BorderSpacing.Right = 2
         ItemHeight = 15
         OnExit = edtCommandExit
         OnKeyDown = edtCommandKeyDown
@@ -2593,6 +2598,7 @@ object frmMain: TfrmMain
       Tag = 17
       Category = 'Command Line'
       Caption = 'Toggle fullscreen mode console'
+      OnExecute = actExecute
     end
     object actTreeView: TAction
       Tag = 16
@@ -2849,6 +2855,12 @@ object frmMain: TfrmMain
       Category = 'Miscellaneous'
       Caption = 'Load List'
       Hint = 'Load list of files/folders from the specified text file'
+      OnExecute = actExecute
+    end
+    object actSaveFileDetailsToFile: TAction
+      Tag = 10
+      Category = 'Mark'
+      Caption = 'Save all shown columns to file'
       OnExecute = actExecute
     end
   end

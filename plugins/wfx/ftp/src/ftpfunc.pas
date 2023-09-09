@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    Wfx plugin for working with File Transfer Protocol
 
-   Copyright (C) 2009-2020 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2009-2023 Alexander Koblov (alexx2000@mail.ru)
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -623,6 +623,8 @@ begin
   end;
   if Result then
   begin
+    FindData.nFileSizeLow := $FFFFFFFE;
+    FindData.nFileSizeHigh := $FFFFFFFF;
     FindData.ftLastWriteTime.dwLowDateTime := $FFFFFFFE;
     FindData.ftLastWriteTime.dwHighDateTime := $FFFFFFFF;
   end;
@@ -780,24 +782,53 @@ end;
 function FsRenMovFileW(OldName, NewName: PWideChar; Move, OverWrite: BOOL;
   RemoteInfo: pRemoteInfo): Integer; dcpcall;
 var
-  I: Integer;
+  O, N: Integer;
   FtpSend: TFTPSendEx;
   sOldName: AnsiString;
   sNewName: AnsiString;
+  Connection: TConnection;
 begin
   Result := FS_FILE_NOTSUPPORTED;
 
-  if not Move then Exit;
+  if not Move then
+  begin
+    if (ExtractFileDir(OldName) = PathDelim) and (WideChar(OldName[1]) <> '<') and
+       (ExtractFileDir(NewName) = PathDelim) and (WideChar(NewName[1]) <> '<') then
+    begin
+      O:= ConnectionList.IndexOf(OldName + 1);
+      if O < 0 then
+        Result:= FS_FILE_NOTFOUND
+      else begin
+        sNewName:= RepairConnectionName(UTF16ToUTF8(UnicodeString(NewName + 1)));
+        N:= ConnectionList.IndexOf(sNewName);
+        if (N >= 0) then
+        begin
+          if not OverWrite then Exit(FS_FILE_EXISTS);
+          Connection:= TConnection(ConnectionList.Objects[N]);
+        end
+        else begin
+          Connection:= TConnection.Create;
+          ConnectionList.AddObject(sNewName, Connection);
+        end;
+        Connection.Assign(TConnection(ConnectionList.Objects[O]));
+        Connection.ConnectionName:= sNewName;
+
+        WriteConnectionList;
+        Result:= FS_FILE_OK;
+      end;
+    end;
+    Exit;
+  end;
 
   if (ExtractFileDir(OldName) = PathDelim) and (WideChar(OldName[1]) <> '<') then
     begin
-      I:= ConnectionList.IndexOf(OldName + 1);
-      if I < 0 then
+      O:= ConnectionList.IndexOf(OldName + 1);
+      if O < 0 then
         Result:= FS_FILE_NOTFOUND
       else
         begin
-          ConnectionList[I]:= RepairConnectionName(UTF16ToUTF8(UnicodeString(NewName + 1)));
-          TConnection(ConnectionList.Objects[I]).ConnectionName:= ConnectionList[I];
+          ConnectionList[O]:= RepairConnectionName(UTF16ToUTF8(UnicodeString(NewName + 1)));
+          TConnection(ConnectionList.Objects[O]).ConnectionName:= ConnectionList[O];
           WriteConnectionList;
           Result:= FS_FILE_OK;
         end;
@@ -931,22 +962,31 @@ function FsDisconnectW(DisconnectRoot: PWideChar): BOOL; dcpcall;
 var
   Index: Integer;
   asTemp: AnsiString;
-  wsTemp: UnicodeString;
   FtpSend: TFTPSendEx;
+  wsTemp: UnicodeString;
 begin
-  Result := False;
   wsTemp := ExcludeLeadingPathDelimiter(DisconnectRoot);
-  if GetConnectionByPath(wsTemp, FtpSend, asTemp) then
-  begin
-    Result := FtpSend.Logout;
+  asTemp := ExtractConnectionName(UTF16ToUTF8(wsTemp));
 
-    Index:= ConnectionList.IndexOf(ExtractConnectionName(UTF16ToUTF8(wsTemp)));
+  Index := ActiveConnectionList.IndexOf(asTemp);
+  Result := (Index >= 0);
+
+  if Result then
+  begin
+    FtpSend:= TFTPSendEx(ActiveConnectionList.Objects[Index]);
+
+    if not FtpSend.NetworkError then
+    begin
+      FtpSend.Logout;
+    end;
+    ActiveConnectionList.Delete(Index);
+
+    Index:= ConnectionList.IndexOf(asTemp);
     if Index >= 0 then begin
       ZeroPassword(TConnection(ConnectionList.Objects[Index]).CachedPassword);
     end;
-
     LogProc(PluginNumber, MSGTYPE_DISCONNECT, PWideChar('DISCONNECT ' + DisconnectRoot));
-    ActiveConnectionList.Delete(ActiveConnectionList.IndexOfObject(FtpSend));
+
     FreeAndNil(FtpSend);
   end;
 end;

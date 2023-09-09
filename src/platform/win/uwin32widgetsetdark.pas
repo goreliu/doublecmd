@@ -3,7 +3,7 @@
   -------------------------------------------------------------------------
   Windows dark style widgetset implementation
 
-  Copyright (C) 2021-2022 Alexander Koblov (alexx2000@mail.ru)
+  Copyright (C) 2021-2023 Alexander Koblov (alexx2000@mail.ru)
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -70,6 +70,8 @@ type
     published
       class function CreateHandle(const AWinControl: TWinControl;
             const AParams: TCreateParams): HWND; override;
+      class function GetDefaultColor(const AControl: TControl;
+            const ADefaultColorType: TDefaultColorType): TColor; override;
     end;
 
     { TWin32WSCustomMemoDark }
@@ -169,6 +171,15 @@ begin
   AllowDarkModeForWindow(Window, True);
   SetWindowTheme(Window, 'DarkMode_Explorer', nil);
   SendMessageW(Window, WM_THEMECHANGED, 0, 0);
+end;
+
+procedure AllowDarkStyle(var Window: HWND);
+begin
+  if (Window <> 0) then
+  begin
+    AllowDarkModeForWindow(Window, True);
+    Window:= 0;
+  end;
 end;
 
 function HSVToColor(H, S, V: Double): TColor;
@@ -284,6 +295,30 @@ begin
   MenuInfo.fMask:= MIM_BACKGROUND or MIM_APPLYTOSUBMENUS;
   MenuInfo.hbrBack:= CreateSolidBrush(RGBToColor(45, 45, 45));
   SetMenuInfo(Menu, @MenuInfo);
+end;
+
+{
+  Set control colors
+}
+procedure SetControlColors(Control: TControl; Canvas: HDC);
+var
+  Color: TColor;
+begin
+  // Set background color
+  Color:= Control.Color;
+  if Color = clDefault then
+  begin
+    Color:= Control.GetDefaultColor(dctBrush);
+  end;
+  SetBkColor(Canvas, ColorToRGB(Color));
+
+  // Set text color
+  Color:= Control.Font.Color;
+  if Color = clDefault then
+  begin
+    Color:= Control.GetDefaultColor(dctFont);
+  end;
+  SetTextColor(Canvas, ColorToRGB(Color));
 end;
 
 { TWin32WSUpDownControlDark }
@@ -691,8 +726,7 @@ begin
     begin
       ComboBox:= TCustomComboBox(GetWin32WindowInfo(Window)^.WinControl);
       DC:= HDC(wParam);
-      SetBkColor(DC, ComboBox.Color);
-      SetTextColor(DC, ComboBox.Font.Color);
+      SetControlColors(ComboBox, DC);
       Exit(LResult(ComboBox.Brush.Reference.Handle));
     end;
   end;
@@ -716,6 +750,17 @@ begin
   AllowDarkModeForWindow(Result, True);
 
   SetWindowSubclass(Result, @ComboBoxWindowProc, ID_SUB_COMBOBOX, 0);
+end;
+
+class function TWin32WSCustomComboBoxDark.GetDefaultColor(
+  const AControl: TControl; const ADefaultColorType: TDefaultColorType): TColor;
+const
+  DefColors: array[TDefaultColorType] of TColor = (
+  { dctBrush } clBtnFace,
+  { dctFont  } clBtnText
+  );
+begin
+  Result:= DefColors[ADefaultColorType];
 end;
 
 { TWin32WSStatusBarDark }
@@ -784,6 +829,12 @@ begin
   Result:= inherited CreateHandle(AWinControl, AParams);
   SetWindowSubclass(Result, @StatusBarWndProc, ID_SUB_STATUSBAR, 0);
 end;
+
+{
+  Forward declared functions
+}
+function InterceptOpenThemeData(hwnd: hwnd; pszClassList: LPCWSTR): hTheme; stdcall; forward;
+procedure DrawButton(hTheme: HTHEME; hdc: HDC; iPartId, iStateId: Integer; const pRect: TRect; pClipRect: PRECT); forward;
 
 {
   Draws text using the color and font defined by the visual style
@@ -938,39 +989,6 @@ begin
     end;
   end
 
-  else if Element = teButton then
-  begin
-    if iPartId in [BP_PUSHBUTTON] then
-    begin
-      LCanvas := TCanvas.Create;
-      try
-        LCanvas.Handle:= hdc;
-        AColor:= SysColor[COLOR_BTNFACE];
-
-        if iStateId = PBS_HOT then
-          LCanvas.Brush.Color:= Lighter(AColor, 116)
-        else if iStateId = PBS_PRESSED then
-          LCanvas.Brush.Color:= Darker(AColor, 116)
-        else begin
-          LCanvas.Brush.Color:= AColor;
-        end;
-        LCanvas.FillRect(pRect);
-
-        LCanvas.Pen.Color:=  Darker(AColor, 140);
-        LCanvas.RoundRect(pRect, 6, 6);
-
-        LRect:= pRect;
-
-        LCanvas.Pen.Color:=  Lighter(AColor, 140);
-        InflateRect(LRect, -1, -1);
-        LCanvas.RoundRect(LRect, 6, 6);
-      finally
-        LCanvas.Handle:= 0;
-        LCanvas.Free;
-      end;
-    end;
-  end
-
   else if Element = teToolBar then
   begin
     if iPartId in [TP_BUTTON] then
@@ -1013,6 +1031,11 @@ begin
         LCanvas.Free;
       end;
     end;
+  end
+
+  else if Element = teButton then
+  begin
+    DrawButton(hTheme, hdc, iPartId, iStateId, pRect, pClipRect);
   end;
 
   Result:= S_OK;
@@ -1267,6 +1290,8 @@ begin
     Exit;
 
   SubClassUpDown;
+
+  OpenThemeData:= @InterceptOpenThemeData;
 
   DefBtnColors[dctFont]:= SysColor[COLOR_BTNTEXT];
   DefBtnColors[dctBrush]:= SysColor[COLOR_BTNFACE];
@@ -1567,43 +1592,41 @@ function InterceptOpenThemeData(hwnd: hwnd; pszClassList: LPCWSTR): hTheme; stdc
 var
   P: LONG_PTR;
 begin
-  P:= GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-
-  if (P and WS_EX_CONTEXTHELP = 0) or (lstrcmpiW(pszClassList, VSCLASS_MONTHCAL) = 0) then
+  if (hwnd <> 0) then
   begin
-    Result:= TrampolineOpenThemeData(hwnd, pszClassList);
-    Exit;
+    P:= GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+
+    if (P and WS_EX_CONTEXTHELP = 0) or (lstrcmpiW(pszClassList, VSCLASS_MONTHCAL) = 0) then
+    begin
+      Result:= TrampolineOpenThemeData(hwnd, pszClassList);
+      Exit;
+    end;
   end;
 
   if lstrcmpiW(pszClassList, VSCLASS_TAB) = 0 then
   begin
-    AllowDarkModeForWindow(hwnd, True);
+    AllowDarkStyle(hwnd);
     pszClassList:= PWideChar(VSCLASS_DARK_TAB);
-    hwnd:= 0;
   end
   else if lstrcmpiW(pszClassList, VSCLASS_BUTTON) = 0 then
   begin
-    AllowDarkModeForWindow(hwnd, True);
+    AllowDarkStyle(hwnd);
     pszClassList:= PWideChar(VSCLASS_DARK_BUTTON);
-    hwnd:= 0;
   end
   else if lstrcmpiW(pszClassList, VSCLASS_EDIT) = 0 then
   begin
-    AllowDarkModeForWindow(hwnd, True);
+    AllowDarkStyle(hwnd);
     pszClassList:= PWideChar(VSCLASS_DARK_EDIT);
-    hwnd:= 0;
   end
   else if lstrcmpiW(pszClassList, VSCLASS_COMBOBOX) = 0 then
   begin
-    AllowDarkModeForWindow(hwnd, True);
+    AllowDarkStyle(hwnd);
     pszClassList:= PWideChar(VSCLASS_DARK_COMBOBOX);
-    hwnd:= 0;
   end
   else if lstrcmpiW(pszClassList, VSCLASS_SCROLLBAR) = 0 then
   begin
-    AllowDarkModeForWindow(hwnd, True);
+    AllowDarkStyle(hwnd);
     pszClassList:= PWideChar(VSCLASS_DARK_SCROLLBAR);
-    hwnd:= 0;
   end;
 
   Result:= TrampolineOpenThemeData(hwnd, pszClassList);

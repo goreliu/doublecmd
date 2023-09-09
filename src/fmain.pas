@@ -2,7 +2,7 @@
    Double Commander
    -------------------------------------------------------------------------
    Licence  : GNU GPL v 2.0
-   Copyright (C) 2006-2020 Alexander Koblov (Alexx2000@mail.ru)
+   Copyright (C) 2006-2023 Alexander Koblov (Alexx2000@mail.ru)
 
    Main Dialog window
 
@@ -68,6 +68,7 @@ type
 
   TfrmMain = class(TAloneForm, IFormCommands)
     actAddPlugin: TAction;
+    actSaveFileDetailsToFile: TAction;
     actLoadList: TAction;
     actExtractFiles: TAction;
     actAddPathToCmdLine: TAction;
@@ -577,6 +578,8 @@ type
     procedure dskToolButtonMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure FormKeyUp( Sender: TObject; var {%H-}Key: Word; Shift: TShiftState) ;
+    procedure FormResize(Sender: TObject);
+    procedure lblDriveInfoResize(Sender: TObject);
     function MainToolBarToolItemShortcutsHint(Sender: TObject; ToolItem: TKASNormalItem): String;
     procedure mnuAllOperStartClick(Sender: TObject);
     procedure mnuAllOperStopClick(Sender: TObject);
@@ -672,7 +675,8 @@ type
     procedure pnlNotebooksResize(Sender: TObject);
     procedure pnlRightResize(Sender: TObject);
     procedure sboxDrivePaint(Sender: TObject);
-    procedure PaintDriveFreeBar(Sender: TObject; bIndUseGradient:boolean; pIndForeColor,pIndBackColor:TColor);
+    procedure PaintDriveFreeBar(Sender: TObject; const bIndUseGradient: boolean;
+      const pIndForeColor, pIndThresholdForeColor, pIndBackColor: TColor);
     procedure seLogWindowSpecialLineColors(Sender: TObject; Line: integer;
       var Special: boolean; var FG, BG: TColor);
 
@@ -691,6 +695,8 @@ type
     procedure OnUniqueInstanceMessage(Sender: TObject; Params: TCommandLineParams);
     procedure tbPasteClick(Sender: TObject);
     procedure AllProgressOnUpdateTimer(Sender: TObject);
+    procedure OperationManagerNotify(Item: TOperationsManagerItem;
+                                     Event: TOperationManagerEvent);
 {$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)) and not DEFINED(MSWINDOWS)}
   private
     QEventHook: QObject_hookH;
@@ -775,6 +781,7 @@ type
     procedure AppActivate(Sender: TObject);
     procedure AppDeActivate(Sender: TObject);
     procedure AppEndSession(Sender: TObject);
+    procedure AppThemeChange(Sender: TObject);
     procedure AppQueryEndSession(var Cancel: Boolean);
     procedure AppException(Sender: TObject; E: Exception);
     procedure AppShowHint(var HintStr: string; var CanShow: Boolean; var HintInfo: THintInfo);
@@ -793,7 +800,9 @@ type
 
   protected
     procedure CreateWnd; override;
+    {$IFNDEF LCLCOCOA}
     procedure DoFirstShow; override;
+    {$ENDIF}
     procedure DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy;
                             const AXProportion, AYProportion: Double); override;
 
@@ -881,6 +890,7 @@ type
     procedure OnNSServiceOpenWithNewTab( filenames:TStringList );
     function NSServiceMenuIsReady(): boolean;
     function NSServiceMenuGetFilenames(): TStringList;
+    procedure NSThemeChangedHandler();
     {$ENDIF}
     procedure LoadWindowState;
     procedure SaveWindowState;
@@ -934,7 +944,7 @@ implementation
 {$R *.lfm}
 
 uses
-  uFileProcs, uShellContextMenu, fTreeViewMenu, uSearchResultFileSource,
+  Themes, uFileProcs, uShellContextMenu, fTreeViewMenu, uSearchResultFileSource,
   Math, LCLIntf, Dialogs, uGlobs, uLng, uMasks, fCopyMoveDlg, uQuickViewPanel,
   uShowMsg, uDCUtils, uLog, uGlobsPaths, LCLProc, uOSUtils, uPixMapManager, LazUTF8,
   uDragDropEx, uKeyboard, uFileSystemFileSource, fViewOperations, uMultiListFileSource,
@@ -945,9 +955,9 @@ uses
   Laz2_XMLRead, DCOSUtils, DCStrUtils, fOptions, fOptionsFrame, fOptionsToolbar, uClassesEx,
   uHotDir, uFileSorting, DCBasicTypes, foptionsDirectoryHotlist, uConnectionManager,
   fOptionsToolbarBase, fOptionsToolbarMiddle, fEditor, uColumns, StrUtils, uSysFolders,
-  uColumnsFileView
+  uColumnsFileView, dmHigh
 {$IFDEF MSWINDOWS}
-  , uNetworkThread
+  , uShellFileSource, uNetworkThread
 {$ENDIF}
   ;
 
@@ -1196,6 +1206,17 @@ begin
 
   UpdateActionIcons;
 
+  {$IF DEFINED(LCLCOCOA)}
+  // 1. TCustomTabControl.GetControlClassDefaultSize() return 200 for Default Width
+  // 2. on Cocoa, it is likely to cause TCocoaTabControl not wide enough to
+  //    accommodate all tabs loaded in LoadTabsXml() during startup.
+  // 3. when setting PageIndex in LoadTabsXml(), it will cause an extra tab switch.
+  // 4. and it will cause an extra directory to be monitored in FileView.
+  // 5. the issue can be effectively avoided by setting a larger width.
+  nbLeft.Width:= 2048;
+  nbRight.Width:= 2048;
+  {$ENDIF}
+
   LoadTabs;
 
   // Must be after LoadTabs
@@ -1209,6 +1230,9 @@ begin
   QObject_hook_hook_events(QEventHook, @QObjectEventFilter);
 {$ENDIF}
 
+  OperationsManager.AddEventsListener([omevOperationAdded, omevOperationRemoved],
+                                      @OperationManagerNotify);
+
   UpdateWindowView;
   gFavoriteTabsList.AssociatedMainMenuItem := mnuFavoriteTabs;
   gFavoriteTabsList.RefreshAssociatedMainMenu;
@@ -1221,8 +1245,11 @@ begin
   UpdateFreeSpace(fpLeft, True);
   UpdateFreeSpace(fpRight, True);
 
+  ThemeServices.OnThemeChange:= @AppThemeChange;
+
 {$IF DEFINED(DARWIN)}
   InitNSServiceProvider( @OnNSServiceOpenWithNewTab, @NSServiceMenuIsReady, @NSServiceMenuGetFilenames );
+  InitNSThemeChangedObserver( @NSThemeChangedHandler );
 {$ENDIF}
 end;
 
@@ -1738,6 +1765,9 @@ begin
     HotMan.UnRegister(Self);
   end;
 
+  OperationsManager.RemoveEventsListener([omevOperationAdded, omevOperationRemoved],
+                                         @OperationManagerNotify);
+
   TDriveWatcher.RemoveObserver(@OnDriveWatcherEvent);
   TDriveWatcher.Finalize;
   DCDebug('Drive watcher finished');
@@ -1766,8 +1796,14 @@ begin
       rsMsgFileOperationsActiveLong + LineEnding + rsMsgConfirmQuit,
       mtConfirmation, [mbYes, mbNo], 0, mbNo) = mrYes;
   end
-  else
+  else if gConfirmQuit then
+  begin
+    CanClose := MessageDlg('', rsMsgConfirmQuit,
+                           mtConfirmation, [mbYes, mbNo], 0, mbNo) = mrYes;
+  end
+  else begin
     CanClose := True;
+  end;
 
   if CanClose then
   begin
@@ -2574,10 +2610,9 @@ begin
     end;
   end;
 
-  if Assigned(QuickViewPanel) then
-    Commands.cm_QuickView(['Close']);
-
-  UpdatePrompt;
+  QuickViewClose;
+  if Visible then
+     UpdatePrompt;
   UpdateTreeViewPath;
   UpdateMainTitleBar;
 end;
@@ -3501,6 +3536,7 @@ function TfrmMain.CopyFiles(SourceFileSource, TargetFileSource: IFileSource;
                             bShowDialog: Boolean;
                             QueueIdentifier: TOperationsManagerQueueIdentifier): Boolean;
 var
+  BaseDir: String;
   sDestination: String;
   sDstMaskTemp: String;
   FileSource: IFileSource;
@@ -3593,9 +3629,15 @@ begin
 
         sDestination := CopyDialog.edtDst.Text;
 
+        if SourceFileSource.IsClass(TArchiveFileSource) then
+          BaseDir := ExtractFilePath(SourceFileSource.CurrentAddress)
+        else begin
+          BaseDir := SourceFiles.Path;
+        end;
+
         GetDestinationPathAndMask(SourceFiles, SourceFileSource,
                                   TargetFileSource, sDestination,
-                                  SourceFiles.Path, TargetPath, sDstMaskTemp);
+                                  BaseDir, TargetPath, sDstMaskTemp);
 
         if (TargetFileSource = nil) or (Length(TargetPath) = 0) then
         begin
@@ -3978,6 +4020,7 @@ begin
   Application.MainForm.Tag:= Handle;
 end;
 
+{$IFNDEF LCLCOCOA}
 procedure TfrmMain.DoFirstShow;
 var
   ANode: TXmlNode;
@@ -3992,6 +4035,7 @@ begin
 
   lastWindowState := WindowState;
 end;
+{$ENDIF}
 
 procedure TfrmMain.WMMove(var Message: TLMMove);
 begin
@@ -4037,6 +4081,23 @@ procedure TfrmMain.FormKeyUp( Sender: TObject; var Key: Word;
   Shift: TShiftState) ;
 begin
   SetDragCursor(Shift);
+end;
+
+procedure TfrmMain.FormResize(Sender: TObject);
+begin
+  UpdatePrompt;
+end;
+
+procedure TfrmMain.lblDriveInfoResize(Sender: TObject);
+begin
+  with TLabel(Sender) do
+  begin
+    if Canvas.TextWidth(Caption) > Width then
+      Alignment:= taLeftJustify
+    else begin
+      Alignment:= taCenter;
+    end;
+  end;
 end;
 
 procedure TfrmMain.FormKeyDown(Sender: TObject; var Key: Word;
@@ -4281,10 +4342,13 @@ end;
 
 procedure TfrmMain.sboxDrivePaint(Sender: TObject);
 begin
-  PaintDriveFreeBar(Sender, gIndUseGradient, gIndForeColor, gIndBackColor);
+  with gColors.FreeSpaceInd^ do
+    PaintDriveFreeBar(Sender, gIndUseGradient, ForeColor, ThresholdForeColor, BackColor);
 end;
 
-procedure TfrmMain.PaintDriveFreeBar(Sender: TObject; bIndUseGradient:boolean; pIndForeColor,pIndBackColor:TColor);
+procedure TfrmMain.PaintDriveFreeBar(Sender: TObject; const bIndUseGradient: boolean;
+  const pIndForeColor, pIndThresholdForeColor, pIndBackColor: TColor);
+const OccupiedThresholdPercent = 90;
 var
   pbxDrive: TPaintBox absolute Sender;
   FillPercentage: PtrInt;
@@ -4305,7 +4369,10 @@ begin
       begin
         ARect.Left  := 1;
         ARect.Right := 1 + FillPercentage * (pbxDrive.Width - 2) div 100;
-        AColor := pIndForeColor;
+        if FillPercentage <= OccupiedThresholdPercent then
+          AColor := pIndForeColor
+        else
+          AColor := pIndThresholdForeColor;
         pbxDrive.Canvas.GradientFill(ARect, LightColor(AColor, 25), DarkColor(AColor, 25), gdVertical);
         ARect.Left  := ARect.Right + 1;
         ARect.Right := pbxDrive.Width - 2;
@@ -4317,10 +4384,10 @@ begin
         ARect.Right := 1;
         for i := 0 to FillPercentage - 1 do
         begin
-          if i <= 50 then
-            AColor:= RGB(0 + 5 * i, 255, 0)
+          if i <= OccupiedThresholdPercent then
+            AColor:= RGB((i * 255) div OccupiedThresholdPercent, 255, 0)
           else
-            AColor:= RGB(255, 255 - 5 * (i - 50), 0);
+            AColor:= RGB(255, ((100 - i) * 255) div (100 - OccupiedThresholdPercent), 0);
           AColor2:= DarkColor(AColor, 50);
 
           ARect.Left  := ARect.Right;
@@ -4343,15 +4410,18 @@ var
 begin
   LogMsgTypeObject := seLogWindow.Lines.Objects[Line-1];
   Special := True;
-  case LogMsgType of
-  lmtInfo:
-    FG := gLogInfoColor;
-  lmtSuccess:
-    FG := gLogSuccessColor;
-  lmtError:
-    FG := gLogErrorColor
-  else
-    FG := clWindowText;
+  with gColors.Log^ do
+  begin
+    case LogMsgType of
+    lmtInfo:
+      FG := InfoColor;
+    lmtSuccess:
+      FG := SuccessColor;
+    lmtError:
+      FG := ErrorColor
+    else
+      FG := clWindowText;
+    end;
   end;
 end;
 
@@ -4518,6 +4588,7 @@ begin
               begin
                 NewPage := ANotebook.Page[i];
                 PageAlreadyExists := Assigned(NewPage.FileView) and
+                  mbCompareFileNames(NewPage.FileView.CurrentAddress, NewFileSource.CurrentAddress) and
                   mbCompareFileNames(NewPage.FileView.CurrentPath, NewPath);
                 if PageAlreadyExists then
                   Break;
@@ -4740,9 +4811,12 @@ begin
 
   if gSeparateTree then
   begin
-    ShellTreeView.Font.Color := gForeColor;
-    ShellTreeView.BackgroundColor := gBackColor;
-    ShellTreeView.SelectionColor := gCursorColor;
+    with gColors.FilePanel^ do
+    begin
+      ShellTreeView.Font.Color := ForeColor;
+      ShellTreeView.BackgroundColor := BackColor;
+      ShellTreeView.SelectionColor := CursorColor;
+    end;
     FontOptionsToFont(gFonts[dcfMain], ShellTreeView.Font);
   end;
 end;
@@ -4808,6 +4882,10 @@ begin
           Start;
       end;
     end;
+  end;
+  if (Win32MajorVersion > 5) then
+  begin
+    TShellFileSource.ListDrives(DrivesList, gUpperCaseDriveLetter);
   end;
 {$ENDIF}
 
@@ -4921,8 +4999,10 @@ begin
     Result := TBriefFileView.Create(Page, AConfig, ANode, FileViewFlags)
   else if sType = 'thumbnails' then
     Result := TThumbFileView.Create(Page, AConfig, ANode, FileViewFlags)
-  else
-    raise Exception.Create('Invalid file view type');
+  else begin
+    DCDebug(rsMsgLogError + 'Invalid file view type "%s"', [sType]);
+    Result := TColumnsFileView.Create(Page, AConfig, ANode, FileViewFlags);
+  end;
 end;
 
 procedure TfrmMain.AssignEvents(AFileView: TFileView);
@@ -4968,7 +5048,7 @@ begin
        else
          Exit(1);
     end;
-    if Assigned(QuickViewPanel) then QuickViewClose;
+    QuickViewClose;
     ANoteBook.RemovePage(iPageIndex);
 
     if UserAnswer=mmrAll then Result:=3 else Result:= 0;
@@ -5054,7 +5134,6 @@ begin
       TabNode := TabNode.NextSibling;
     end;
   end;
-
   // Create at least one tab.
   if ANoteBook.PageCount = 0 then
   begin
@@ -5065,6 +5144,7 @@ begin
     else
       AFileViewFlags := [];
     AFileView := TColumnsFileView.Create(Page, aFileSource, gpExePath, AFileViewFlags);
+    Commands.DoSortByFunctions(AFileView, ColSet.GetColumnSet('Default').GetColumnFunctions(0));
     AssignEvents(AFileView);
   end
   else if Assigned(RootNode) then
@@ -5122,6 +5202,8 @@ var
 begin
   if Destination<>tclNone then
   begin
+    QuickViewClose;
+
     // 1. Normalize our destination side and destination to keep in case params specified active/inactive
     if ((Destination=tclActive) and (ActiveFrame=FrameLeft)) OR ((Destination=tclInactive) and (NotActiveFrame=FrameLeft)) then Destination:=tclLeft;
     if ((Destination=tclActive) and (ActiveFrame=FrameRight)) OR ((Destination=tclInactive) and (NotActiveFrame=FrameRight)) then Destination:=tclRight;
@@ -5245,7 +5327,7 @@ begin
     CommandFuncResult:=Commands.Commands.ExecuteCommand(CommandItem.Command, CommandItem.Params);
     if gToolbarReportErrorWithCommands AND (CommandFuncResult=cfrNotFound) then
     begin
-      MsgError('Command not found! ('+CommandItem.Command+')');
+      MsgError(Format(rsMsgCommandNotFound, [CommandItem.Command]));
     end;
   end;
   Draging := False;
@@ -5502,8 +5584,10 @@ begin
       FOperationsPanel.DoubleBuffered := True;
       PanelAllProgress.OnResize := @FOperationsPanel.ParentResized;
     end;
+
     PanelAllProgress.Visible := gPanelOfOp;
-    Timer.Enabled := gPanelOfOp or gProgInMenuBar;
+    Timer.Enabled := (gPanelOfOp or gProgInMenuBar) and
+                     (OperationsManager.OperationsCount > 0);
 
     // Log window
     seLogWindow.Visible := gLogWindow;
@@ -6140,6 +6224,11 @@ begin
 
   if filenames.Count>0 then Result:= filenames;
 end;
+
+procedure TfrmMain.NSThemeChangedHandler;
+begin
+  ThemeServices.IntfDoOnThemeChange;
+end;
 {$ENDIF}
 
 procedure TfrmMain.LoadWindowState;
@@ -6161,6 +6250,10 @@ begin
       FRestoredWidth := MulDiv(FRestoredWidth, Screen.PixelsPerInch, FPixelsPerInch);
       FRestoredHeight := MulDiv(FRestoredHeight, Screen.PixelsPerInch, FPixelsPerInch);
     end;
+    if gConfig.GetValue(ANode, 'Maximized', True) then
+      lastWindowState:= TWindowState.wsMaximized
+    else
+      lastWindowState:= TWindowState.wsNormal;
     SetBounds(FRestoredLeft, FRestoredTop, FRestoredWidth, FRestoredHeight);
   end;
 end;
@@ -6278,7 +6371,7 @@ begin
 
     for I := 0 to DrivesList.Count - 1 do
     begin
-      if DrivesList[I]^.DriveType = dtSpecial then
+      if (DrivesList[I]^.DriveType = dtSpecial) and (Length(Address) > 0) then
       begin
         if Pos(Address, DrivesList[I]^.Path) = 1 then
           Exit(I);
@@ -6610,8 +6703,6 @@ begin
 end;
 
 procedure TfrmMain.UpdatePrompt;
-const
-  PTLen = 40;
 var
   st: String;
   Properties: TFileSourceProperties;
@@ -6621,18 +6712,11 @@ begin
     with lblCommandPath do
     begin
       Visible := True;
-      AutoSize := False;
-      if UTF8Length(ActiveFrame.CurrentPath) > PTLen
-      then
-        st:= UTF8Copy(ActiveFrame.CurrentPath,
-                              UTF8Length(ActiveFrame.CurrentPath) - PTLen,
-                              PTLen)
-      else
-        st:= ActiveFrame.CurrentPath;
-      //
-      Caption := Format(fmtCommandPath, [st]);
-      AutoSize := True;
-      Left := 1;
+      st := ExcludeTrailingBackslash(ActiveFrame.CurrentPath);
+      Hint := st;
+
+      Caption := MinimizeFilePath(Format(fmtCommandPath, [st]),
+              Canvas, pnlCommand.Width div 3);
     end;
 
     // Change path in terminal
@@ -6773,33 +6857,54 @@ procedure TfrmMain.AllProgressOnUpdateTimer(Sender: TObject);
 var
   AllProgressPoint: Integer;
 begin
-  // Hide progress bar if there are no operations
-  if OperationsManager.OperationsCount = 0 then
+  if gPanelOfOp = True then
+  begin
+    FOperationsPanel.UpdateView;
+  end;
+
+  // Show progress in the menu
+  if gProgInMenuBar = True then
+  begin
+    AllProgressPoint:= Round(OperationsManager.AllProgressPoint * 100);
+    mnuAllOperProgress.Caption:= IntToStr(AllProgressPoint) + ' %';
+  end;
+
+  Sleep(0);
+end;
+
+procedure TfrmMain.OperationManagerNotify(Item: TOperationsManagerItem;
+  Event: TOperationManagerEvent);
+begin
+  if Event = omevOperationRemoved then
+  begin
+    // Hide progress bar if there are no operations
+    if OperationsManager.OperationsCount = 0 then
     begin
       mnuAllOperProgress.Visible:= False;
       mnuAllOperPause.Visible:= False;
       mnuAllOperStart.Visible:= False;
-    end
-  else
-    begin
-      if gPanelOfOp = True then
-        FOperationsPanel.UpdateView;
-
-      if gProgInMenuBar = True then
-        begin
-          AllProgressPoint:= Round(OperationsManager.AllProgressPoint * 100);
-          // Show in menu line
-          mnuAllOperProgress.Caption:=IntToStr(AllProgressPoint) + ' %';
-          mnuAllOperProgress.Visible:= True;
-          mnuAllOperPause.Visible:= True;
-          mnuAllOperStart.Visible:= True;
-        end;
+      mnuAllOperStop.Visible:= False;
     end;
+  end
+  else if Event = omevOperationAdded then
+  begin
+    if gProgInMenuBar = True then
+    begin
+      mnuAllOperProgress.Visible:= True;
+      mnuAllOperPause.Visible:= True;
+      mnuAllOperStart.Visible:= True;
+      mnuAllOperStop.Visible:= True;
+    end;
+  end;
+  AllProgressOnUpdateTimer(Timer);
+  Timer.Enabled := (gPanelOfOp or gProgInMenuBar) and
+                   (OperationsManager.OperationsCount > 0);
 end;
 
 procedure TfrmMain.SetPanelDrive(aPanel: TFilePanelSelect; Drive: PDrive; ActivateIfNeeded: Boolean);
 var
   Index: Integer;
+  DrivePath: String;
   DriveIndex: Integer;
   FoundPath: Boolean = False;
   aFileView, OtherFileView: TFileView;
@@ -6841,18 +6946,28 @@ begin
       Exit;
     end;
 
+    DrivePath:= ExcludeTrailingPathDelimiter(Drive^.Path);
     // Copy path opened in the other panel if the file source and drive match
     // and that path is not already opened in this panel.
-    if OtherFileView.FileSource.IsClass(TFileSystemFileSource) and
-       mbCompareFileNames(ExtractRootDir(OtherFileView.CurrentPath), ExcludeTrailingPathDelimiter(Drive^.Path)) and
-       not mbCompareFileNames(OtherFileView.CurrentPath, aFileView.CurrentPath) and not gGoToRoot then
+    if (not gGoToRoot) and OtherFileView.FileSource.IsClass(TFileSystemFileSource) and
+       mbCompareFileNames(ExtractRootDir(OtherFileView.CurrentPath), DrivePath) and
+       not mbCompareFileNames(OtherFileView.CurrentPath, aFileView.CurrentPath) then
     begin
       FoundPath:= True;
       SetFileSystemPath(aFileView, OtherFileView.CurrentPath);
     end
+    // Open archive parent directory
+    else if (gGoToRoot = False) and OtherFileView.FileSource.IsClass(TArchiveFileSource) and
+       (not IsInPath(GetTempFolder, OtherFileView.FileSource.CurrentAddress, True, False)) and
+       mbCompareFileNames(ExtractRootDir(OtherFileView.FileSource.CurrentAddress), DrivePath) and
+       not mbCompareFileNames(ExtractFilePath(OtherFileView.FileSource.CurrentAddress), aFileView.CurrentPath) then
+    begin
+      FoundPath:= True;
+      SetFileSystemPath(aFileView, ExtractFilePath(OtherFileView.FileSource.CurrentAddress));
+    end
     // Open latest path from history for chosen drive
     else if (gGoToRoot = False) and aFileView.FileSource.IsClass(TFileSystemFileSource) and
-            not mbCompareFileNames(ExtractRootDir(aFileView.CurrentPath), ExcludeTrailingPathDelimiter(Drive^.Path)) then
+            not mbCompareFileNames(ExtractRootDir(aFileView.CurrentPath), DrivePath) then
     begin
       for Index:= 0 to glsDirHistory.Count - 1 do
       begin
@@ -6969,6 +7084,25 @@ begin
   frmMainClose(Sender, CloseAction);
 end;
 
+procedure TfrmMain.AppThemeChange(Sender: TObject);
+var
+  Index: Integer;
+begin
+  FrameLeft.UpdateColor;
+  FrameRight.UpdateColor;
+
+  ColSet.UpdateStyle;
+  gColorExt.UpdateStyle;
+  gHighlighters.UpdateStyle;
+
+  DCDebug('AppThemeChange');
+
+  for Index:= 0 to Screen.CustomFormCount - 1 do
+  begin
+    Screen.CustomForms[Index].Perform(CM_THEMECHANGED, 0, 0);
+  end;
+end;
+
 procedure TfrmMain.AppQueryEndSession(var Cancel: Boolean);
 var
   CanClose: Boolean = True;
@@ -6981,14 +7115,20 @@ end;
 function TfrmMain.QObjectEventFilter(Sender: QObjectH; Event: QEventH): Boolean; cdecl;
 begin
   Result:= False;
-  if QEvent_type(Event) = QEventClose then
-  begin
-    TQtWidget(Self.Handle).SlotClose;
-    Result:= CloseQueryResult;
-    if Result then
-      QEvent_accept(Event)
-    else
-      QEvent_ignore(Event);
+  case QEvent_type(Event) of
+    QEventApplicationPaletteChange:
+    begin
+      ThemeServices.IntfDoOnThemeChange;
+    end;
+    QEventClose:
+    begin
+      TQtWidget(Self.Handle).SlotClose;
+      Result:= CloseQueryResult;
+      if Result then
+        QEvent_accept(Event)
+      else
+        QEvent_ignore(Event);
+    end;
   end;
 end;
 {$ENDIF}

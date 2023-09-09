@@ -10,9 +10,6 @@ uses
   uDarkStyle,
   {$ENDIF}
   {$ENDIF}
-  {$IF DEFINED(WIN64) AND (FPC_FULLVERSION < 30000)}
-  uExceptionHandlerFix,
-  {$ENDIF}
   {$IFDEF UNIX}
   cthreads,
   {$IFNDEF HEAPTRC}
@@ -20,8 +17,9 @@ uses
   {$ENDIF}
   cwstring,
   clocale,
-  {$IFDEF DARWIN}
+  {$IFDEF darwin}
   uAppleMagnifiedModeFix,
+  uMyDarwin,
   {$ENDIF}
   uElevation,
   {$IFDEF LINUX}
@@ -36,6 +34,7 @@ uses
   uQt5Workaround,
   {$ENDIF}
   {$ENDIF}
+  uMoveConfig,
   uEarlyConfig,
   DCConvertEncoding,
   {$IF DEFINED(LCLWIN32) and DEFINED(DARKWIN)}
@@ -149,6 +148,10 @@ begin
   ApplyDarkStyle;
 {$ENDIF}
 
+{$IF DEFINED(darwin)}
+  setMacOSAppearance( gAppMode );
+{$ENDIF}
+
   // Use only current directory separator
   AllowDirectorySeparators:= [DirectorySeparator];
   {$IF lcl_fullversion >= 093100}
@@ -179,7 +182,7 @@ begin
   if WSVersion <> EmptyStr then
     DCDebug('Widgetset library: ' + WSVersion);
   DCDebug('This program is free software released under terms of GNU GPL 2');
-  DCDebug('(C)opyright 2006-2022 Alexander Koblov (alexx2000@mail.ru)');
+  DCDebug('(C)opyright 2006-2023 Alexander Koblov (alexx2000@mail.ru)');
   DCDebug('   and contributors (see about dialog)');
 
   Application.ShowMainForm:= False;
@@ -191,7 +194,6 @@ begin
   begin
     // Let's show the starting slash screen to confirm user application has been started
     Application.CreateForm(TfrmStartingSplash, frmStartingSplash);
-    frmStartingSplash.Show;
   end;
 
   LoadInMemoryOurAccentLookupTableList; // Used for conversion of string to remove accents.
@@ -212,7 +214,6 @@ begin
       InitPasswordStore;
       LoadPixMapManager;
       Application.CreateForm(TfrmMain, frmMain); // main form
-      Application.CreateForm(TdmHighl, dmHighl); // highlighters
       Application.CreateForm(TdmComData, dmComData); // common data
       Application.CreateForm(TdmHelpManager, dmHelpMgr); // help manager
 
@@ -228,14 +229,11 @@ begin
       // in Application.CreateForm above.
       uKeyboard.HookKeyboardLayoutChanged;
 
-      if (gSplashForm) and (not CommandLineParams.NoSplash) then
-      begin
-        // We may now remove the starting splash screen, most of the application has been started now
-        frmStartingSplash.Close;
-        frmStartingSplash.Release;
-      end;
-
       frmMain.ShowOnTop;
+      Application.ProcessMessages;
+      {$IFDEF LCLCOCOA}
+      frmMain.RestoreWindow;
+      {$ENDIF}
 
       Application.Run;
 

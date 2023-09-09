@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    Implementing of Options dialog
 
-   Copyright (C) 2006-2018 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2006-2023 Alexander Koblov (alexx2000@mail.ru)
 
    contributors:
 
@@ -30,8 +30,9 @@ unit fOptions;
 interface
 
 uses
-  ActnList,  SysUtils, Classes, Controls, Forms, Dialogs, ExtCtrls, ComCtrls,
-  Buttons, StdCtrls, KASButtonPanel, fgl, uGlobs, fOptionsFrame, uDCUtils;
+  ActnList, SysUtils, Classes, Controls, Forms, Dialogs, ExtCtrls, ComCtrls,
+  Buttons, StdCtrls, LMessages, TreeFilterEdit, KASButtonPanel, fgl, uGlobs,
+  fOptionsFrame, uDCUtils, EditBtn;
 
 type
 
@@ -49,6 +50,7 @@ type
   { TfrmOptions }
 
   TfrmOptions = class(TForm, IOptionsDialog)
+    btnHelp: TBitBtn;
     lblEmptyEditor: TLabel;
     OptionsEditorsImageList: TImageList;
     pnlButtons: TKASButtonPanel;
@@ -58,19 +60,23 @@ type
     btnApply: TBitBtn;
     btnCancel: TBitBtn;
     sboxOptionsEditor: TScrollBox;
+    TreeFilterEdit: TTreeFilterEdit;
     tvTreeView: TTreeView;
     splOptionsSplitter: TSplitter;
-    alOptionsActionList: TActionList;
-    actCloseWithEscape: TAction;
     procedure btnCancelClick(Sender: TObject);
+    procedure btnCancelMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure btnHelpClick(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCloseQuery(Sender: TObject; var CanClose: boolean);
     procedure FormCreate(Sender: TObject);
     procedure btnOKClick(Sender: TObject);
     procedure btnApplyClick(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
+    procedure splOptionsSplitterMoved(Sender: TObject);
+    function TreeFilterEditFilterItem(ItemData: Pointer;
+                                      out Done: Boolean): Boolean;
     procedure tvTreeViewChange(Sender: TObject; Node: TTreeNode);
-    procedure actCloseWithEscapeExecute(Sender: TObject);
   private
     FOptionsEditorList: TOptionsEditorViews;
     FOldEditor: TOptionsEditorView;
@@ -82,6 +88,8 @@ type
     function CompareTwoNodeOfConfigurationOptionTree(Node1, Node2: TTreeNode): integer;
     function CycleThroughOptionEditors(bForceSaving:boolean):boolean;
     procedure MakeVisible(Data: PtrInt);
+  protected
+    procedure CMThemeChanged(var Message: TLMessage); message CM_THEMECHANGED;
   public
     constructor Create(TheOwner: TComponent); override;
     constructor Create(TheOwner: TComponent; EditorClass: TOptionsEditorClass); overload;
@@ -101,18 +109,64 @@ implementation
 {$R *.lfm}
 
 uses
-  LCLProc, LCLVersion, uLng, fMain;
+  HelpIntfs, LCLProc, LCLVersion, LazUTF8, LResources, Menus, Translations, Graphics,
+  DCStrUtils, uTranslator, uLng, uGlobsPaths, fMain;
 
 var
   LastOpenedEditor: TOptionsEditorClass = nil;
+  OptionsSearchFile: TPOFile = nil;
+  OptionsSearchCache: TList = nil;
   frmOptions: TfrmOptions = nil;
+
+procedure CreateSearchCache;
+var
+  POFile: TPOFile;
+
+  procedure FillCache(AList: TOptionsEditorClassList);
+  var
+    I, J: Integer;
+    AClassName: String;
+    PoFileItem: TPoFileItem;
+    AEditor: TOptionsEditorRec;
+  begin
+    for I:= 0 to AList.Count - 1 do
+    begin
+      AEditor:= AList[I];
+      AClassName:= LowerCase(AEditor.EditorClass.ClassName);
+
+      for J:= 0 to POFile.Count - 1 do
+      begin
+        PoFileItem:= POFile.PoItems[J];
+        if StrBegins(PoFileItem.IdentifierLow, AClassName) then
+        begin
+          OptionsSearchCache.Add(PoFileItem);
+        end;
+      end;
+      if AEditor.HasChildren then FillCache(AEditor.Children);
+    end;
+  end;
+
+begin
+  OptionsSearchCache:= TList.Create;
+  try
+    if Assigned(LRSTranslator) then
+      POFile:= (LRSTranslator as TTranslator).POFile
+    else begin
+      POFile:= TPOFile.Create(gpLngDir + gPOFileName, True);
+      OptionsSearchFile:= POFile;
+    end;
+    FillCache(OptionsEditorClassList);
+  except
+    // Skip
+  end;
+end;
 
 { GetOptionsForm }
 // To get a point on the frmOptions.
 // Could have been simple to place "frmOptions" in the "interface" section but not sure why original author hide it under. Let's play safe.
 function GetOptionsForm: TfrmOptions;
 begin
-  result := frmOptions;
+  Result := frmOptions;
 end;
 
 function ShowOptions(EditorClass: TOptionsEditorClass): IOptionsDialog;
@@ -122,6 +176,10 @@ end;
 
 function ShowOptions(EditorClassName: String): IOptionsDialog;
 begin
+  if (OptionsSearchCache = nil) then
+  begin
+    CreateSearchCache;
+  end;
   if Assigned(frmOptions) then
     begin
       if frmOptions.WindowState = wsMinimized then
@@ -154,6 +212,7 @@ procedure TfrmOptions.FormCreate(Sender: TObject);
 begin
   // Initialize property storage
   InitPropStorage(Self);
+  TreeFilterEdit.Visible:= (OptionsSearchCache.Count > 0);
 end;
 
 procedure TfrmOptions.FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -167,10 +226,22 @@ begin
   CanClose := (ModalResult in [mrOK, mrCancel]) or CycleThroughOptionEditors(False);
 end;
 
+procedure TfrmOptions.btnCancelMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+begin
+  // set ModalResult when mouse click, to pass FormCloseQuery
+  ModalResult:= mrCancel;
+end;
+
 procedure TfrmOptions.btnCancelClick(Sender: TObject);
 begin
   // close window
   Close;
+end;
+
+procedure TfrmOptions.btnHelpClick(Sender: TObject);
+begin
+  ShowHelpOrErrorForKeyword('', HelpKeyword);
 end;
 
 procedure TfrmOptions.btnOKClick(Sender: TObject);
@@ -193,7 +264,59 @@ end;
 
 procedure TfrmOptions.FormDestroy(Sender: TObject);
 begin
-  FreeThenNil(FOptionsEditorList);
+  FreeAndNil(FOptionsEditorList);
+end;
+
+procedure TfrmOptions.splOptionsSplitterMoved(Sender: TObject);
+var
+  ARight, ADelta: Integer;
+begin
+  ADelta:= ScaleX(8, DesignTimePPI) * 2 + btnHelp.Width;
+  ARight:= splOptionsSplitter.Left;
+  if (ARight > (btnOK.Left - ADelta)) then
+  begin
+    ARight:= btnOK.Left - ADelta;
+  end;
+  TreeFilterEdit.Width:= (ARight - TreeFilterEdit.Left);
+end;
+
+function TfrmOptions.TreeFilterEditFilterItem(ItemData: Pointer; out
+  Done: Boolean): Boolean;
+var
+  Index: Integer;
+  AClassName: String;
+  AFind, AText: String;
+  POFileItem: TPOFileItem;
+  aOptionsEditorView: TOptionsEditorView absolute ItemData;
+begin
+  Done:= True;
+  AFind:= TreeFilterEdit.Text;
+  if Length(AFind) = 0 then Exit(True);
+
+  AFind:= UTF8LowerCase(AFind);
+  AClassName:= LowerCase(aOptionsEditorView.EditorClass.ClassName);
+
+  for Index:= 0 to OptionsSearchCache.Count - 1 do
+  begin
+    POFileItem:= TPOFileItem(OptionsSearchCache[Index]);
+
+    if Length(POFileItem.Translation) = 0 then
+      AText:= POFileItem.Original
+    else begin
+      AText:= POFileItem.Translation;
+    end;
+    AText:= UTF8LowerCase(StripHotkey(AText));
+
+    if Pos(AFind, AText) > 0 then
+    begin
+      if StrBegins(POFileItem.IdentifierLow, AClassName) then
+      begin
+        // DebugLn(AClassName + ': ' + AText);
+        Exit(True);
+      end;
+    end;
+  end;
+  Result:= False;
 end;
 
 function TfrmOptions.CompareTwoNodeOfConfigurationOptionTree(Node1, Node2: TTreeNode): integer;
@@ -331,12 +454,17 @@ begin
   inherited Create(TheOwner);
   CreateOptionsEditorList;
   SelectEditor(EditorClassName);
+{$if lcl_fullversion >= 2030000}
+  // Lazarus 2.3 workaround (fixes selection reset)
+  TreeFilterEdit.IdleConnected := False;
+{$endif}
 end;
 
 procedure TfrmOptions.tvTreeViewChange(Sender: TObject; Node: TTreeNode);
 var
   SelectedEditorView: TOptionsEditorView;
 begin
+  if (Node = nil) then Exit;
   SelectedEditorView := TOptionsEditorView(Node.Data);
 
   if Assigned(SelectedEditorView) and (FOldEditor <> SelectedEditorView) then
@@ -356,6 +484,14 @@ begin
     LastOpenedEditor := SelectedEditorView.EditorClass;
 
     pnlCaption.Caption := SelectedEditorView.EditorClass.GetTitle;
+
+    if Assigned(SelectedEditorView.Instance) then
+    begin
+      HelpKeyword:= SelectedEditorView.Instance.HelpKeyword;
+      btnHelp.Visible := HelpKeyword <> '';
+    end
+    else
+      btnHelp.Visible:= False;
   end;
 end;
 
@@ -443,13 +579,24 @@ var
   TreeNode: TTreeNode absolute Data;
 begin
   TreeNode.MakeVisible;
+  TreeFilterEdit.StoreSelection;
 end;
 
-{ TfrmOptions.actCloseWithEscapeExecute }
-procedure TfrmOptions.actCloseWithEscapeExecute(Sender: TObject);
+procedure TfrmOptions.CMThemeChanged(var Message: TLMessage);
+var
+  Index: Integer;
 begin
-  // Closing with the "Escape" key this way won't set the modalresult to mrCancel so this way, if an unsaved modification has been made, we'll be able to prompt confirmation from user who attempt to quit by hitting "Escape".
-  close;
+  for Index:= 0 to FOptionsEditorList.Count - 1 do
+  begin
+    if Assigned(FOptionsEditorList[Index].Instance) then
+    begin
+      FOptionsEditorList[Index].Instance.Perform(CM_THEMECHANGED, 0, 0);
+    end;
+  end;
 end;
+
+finalization
+  FreeAndNil(OptionsSearchCache);
+  FreeAndNil(OptionsSearchFile);
 
 end.
