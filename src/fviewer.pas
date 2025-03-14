@@ -2364,8 +2364,8 @@ begin
 
   // @Mine@
   // 文本查看器默认使用书籍模式的颜色，因为可以配置
-  ViewerControl.Color:= gBookBackgroundColor;
-  ViewerControl.Font.Color:= gBookFontColor;
+  ViewerControl.Color:= gColors.Viewer^.BookBackgroundColor;
+  ViewerControl.Font.Color:= gColors.Viewer^.BookFontColor;
   // @@
   FontOptionsToFont(gFonts[dcfViewer], ViewerControl.Font);
 
