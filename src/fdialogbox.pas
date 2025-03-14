@@ -3,7 +3,7 @@
     -------------------------------------------------------------------------
     This unit contains realization of Dialog API functions.
 
-    Copyright (C) 2008-2023 Alexander Koblov (alexx2000@mail.ru)
+    Copyright (C) 2008-2024 Alexander Koblov (alexx2000@mail.ru)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,33 +28,14 @@ interface
 
 uses
   Classes, SysUtils, LResources, Forms, Controls, Graphics, Dialogs, StdCtrls,
-  Types, Buttons, ExtCtrls, EditBtn, Extension, ComCtrls, DividerBevel;
+  Types, Buttons, ExtCtrls, EditBtn, Extension, ComCtrls, DividerBevel, SynEdit,
+  RttiUtils, TypInfo;
 
 type
 
   { TDialogBox }
 
   TDialogBox = class(TForm)
-    DialogTimer: TTimer;
-    DialogButton: TButton;
-    DialogBitBtn: TBitBtn;
-    DialogFileNameEdit: TFileNameEdit;
-    DialogDirectoryEdit: TDirectoryEdit;
-    DialogComboBox: TComboBox;
-    DialogListBox: TListBox;
-    DialogCheckBox: TCheckBox;
-    DialogGroupBox: TGroupBox;
-    DialogLabel: TLabel;
-    DialogPanel: TPanel;
-    DialogEdit: TEdit;
-    DialogMemo: TMemo;
-    DialogImage: TImage;
-    DialogTabSheet: TTabSheet;
-    DialogScrollBox: TScrollBox;
-    DialogRadioGroup: TRadioGroup;
-    DialogPageControl: TPageControl;
-    DialogProgressBar: TProgressBar;
-    DialogDividerBevel: TDividerBevel;
     // Dialog events
     procedure DialogBoxShow(Sender: TObject);
     procedure DialogBoxClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -99,9 +80,18 @@ type
     FLRSData: String;
     FResult: LongBool;
     FDlgProc: TDlgProc;
+    FPropValue: String;
+    FInfoList: TStringList;
+    FPropsStorage: TPropsStorage;
     FTranslator: TAbstractTranslator;
+  private
+    function GetComponent(const AName: PAnsiChar): TComponent;
+    procedure WritePropValue(const ASection, Item, Value: String);
+    function ReadPropValue(const ASection, Item, Default: String): String;
+    function FindPropInfo(var AObject: TObject; const AName: String): PPropInfo;
+    function SetProperty(AComponent: TComponent; const AName: String; AValue: Pointer; AType: Integer): Boolean;
+    function GetProperty(AComponent: TComponent; const AName: String; AValue: Pointer; AType, ASize: Integer): Boolean;
   protected
-    procedure ShowDialogBox;
     procedure ProcessResource; override;
     function InitResourceComponent(Instance: TComponent; RootAncestor: TClass): Boolean;
   public
@@ -109,18 +99,36 @@ type
     destructor Destroy; override;
   end; 
 
+  { TDialogBoxData }
+
+  TDialogBoxData = class
+  private
+    FLRSData: String;
+    FDlgProc: TDlgProc;
+    FUserData: Pointer;
+    DialogResult: LongBool;
+    procedure ShowDialogBox;
+  public
+    constructor Create(const LRSData: String; DlgProc: TDlgProc; UserData: Pointer);
+  end;
+
 function InputBox(Caption, Prompt: PAnsiChar; MaskInput: LongBool; Value: PAnsiChar; ValueMaxLen: Integer): LongBool; dcpcall;
 function MessageBox(Text, Caption: PAnsiChar; Flags: Longint): Integer; dcpcall;
+function MsgChoiceBox(Text, Caption: PAnsiChar; Buttons: PPAnsiChar; BtnDef, BtnEsc: Integer): Integer; dcpcall;
 function DialogBoxLFM(LFMData: Pointer; DataSize: LongWord; DlgProc: TDlgProc): LongBool; dcpcall;
 function DialogBoxLRS(LRSData: Pointer; DataSize: LongWord; DlgProc: TDlgProc): LongBool; dcpcall;
 function DialogBoxLFMFile(lfmFileName: PAnsiChar; DlgProc: TDlgProc): LongBool; dcpcall;
+function DialogBoxParam(Data: Pointer; DataSize: LongWord; DlgProc: TDlgProc; Flags: UInt32; UserData, Reserved: Pointer): UIntPtr; dcpcall;
 function SendDlgMsg(pDlg: PtrUInt; DlgItemName: PAnsiChar; Msg, wParam, lParam: PtrInt): PtrInt; dcpcall;
+function SetProperty(pDlg: UIntPtr; DlgItemName, PropName: PAnsiChar; PropValue: Pointer; PropType: Integer): PtrInt; dcpcall;
+function GetProperty(pDlg: UIntPtr; DlgItemName, PropName: PAnsiChar; PropValue: Pointer; PropType, PropSize: Integer): PtrInt; dcpcall;
+function CreateComponent(pDlg: UIntPtr; Parent, DlgItemName, DlgItemClass: PAnsiChar; Reserved: Pointer): UIntPtr; dcpcall;
 
 implementation
 
 uses
-  LCLStrConsts, LazFileUtils, DCClassesUtf8, DCOSUtils, uShowMsg, uDebug,
-  uTranslator, uGlobs;
+  LCLStrConsts, LazFileUtils, DCOSUtils, DCStrUtils, uShowMsg,
+  uDebug, uTranslator, uGlobs, uFileProcs;
 
 type
   TControlProtected = class(TControl);
@@ -139,6 +147,19 @@ begin
   Result:= ShowMessageBox(Text, Caption, Flags);
 end;
 
+function MsgChoiceBox(Text, Caption: PAnsiChar; Buttons: PPAnsiChar; BtnDef, BtnEsc: Integer): Integer; dcpcall;
+var
+  AButtons: TStringArray;
+begin
+  AButtons:= Default(TStringArray);
+  while (Buttons^ <> nil) do
+  begin
+    AddString(AButtons, Buttons^);
+    Inc(Buttons);
+  end;
+  Result:= uShowMsg.MsgChoiceBox(nil, Text, Caption, AButtons, BtnDef, BtnEsc);
+end;
+
 function LFMToLRS(const LFMData: String): String;
 var
   LFMStream: TStringStream = nil;
@@ -155,19 +176,16 @@ begin
   end;
 end;
 
-function DialogBox(const LRSData: String; DlgProc: TDlgProc): LongBool;
+function DialogBox(const LRSData: String; DlgProc: TDlgProc; UserData: Pointer): LongBool;
 var
-  Dialog: TDialogBox;
+  AData: TDialogBoxData;
 begin
-  Dialog:= TDialogBox.Create(LRSData, DlgProc);
+  AData:= TDialogBoxData.Create(LRSData, DlgProc, UserData);
   try
-    with Dialog do
-    begin
-      TThread.Synchronize(nil, @ShowDialogBox);
-      Result:= FResult;
-    end;
+    TThread.Synchronize(nil, @AData.ShowDialogBox);
+    Result:= AData.DialogResult;
   finally
-    FreeAndNil(Dialog);
+    AData.Free;
   end;
 end;
 
@@ -178,7 +196,7 @@ begin
   if Assigned(LFMData) and (DataSize > 0) then
   begin
     SetString(DataString, LFMData, DataSize);
-    Result := DialogBox(LFMToLRS(DataString), DlgProc);
+    Result := DialogBox(LFMToLRS(DataString), DlgProc, nil);
   end
   else
     Result := False;
@@ -191,7 +209,7 @@ begin
   if Assigned(LRSData) and (DataSize > 0) then
   begin
     SetString(DataString, LRSData, DataSize);
-    Result := DialogBox(DataString, DlgProc);
+    Result := DialogBox(DataString, DlgProc, nil);
   end
   else
     Result := False;
@@ -199,27 +217,42 @@ end;
 
 function DialogBoxLFMFile(lfmFileName: PAnsiChar; DlgProc: TDlgProc): LongBool; dcpcall;
 var
-  lfmStringList: TStringListEx;
+  DataString: String;
 begin
-  if Assigned(lfmFileName) then
+  if (lfmFileName = nil) then
+    Result := False
+  else begin
+    DataString := mbReadFileToString(lfmFileName);
+    Result := DialogBox(LFMToLRS(DataString), DlgProc, nil);
+  end;
+end;
+
+function DialogBoxParam(Data: Pointer; DataSize: LongWord;
+  DlgProc: TDlgProc; Flags: UInt32; UserData, Reserved: Pointer): UIntPtr; dcpcall;
+var
+  DataString: String;
+begin
+  if (Data = nil) then Exit(0);
+  if (DataSize = 0) then Exit(0);
+  SetString(DataString, Data, DataSize);
+
+  if (Flags and DB_FILENAME <> 0) then
   begin
-    lfmStringList:= TStringListEx.Create;
-    try
-      lfmStringList.LoadFromFile(lfmFileName);
-      Result := DialogBox(LFMToLRS(lfmStringList.Text), DlgProc);
-    finally
-      FreeAndNil(lfmStringList);
-    end;
+    DataString:= LFMToLRS(mbReadFileToString(DataString));
   end
-  else
-    Result := False;
+  else if (Flags and DB_LRS = 0) then
+  begin
+    DataString:= LFMToLRS(DataString);
+  end;
+
+  Result:= UIntPtr(DialogBox(DataString, DlgProc, UserData));
 end;
 
 function SendDlgMsg(pDlg: PtrUInt; DlgItemName: PAnsiChar; Msg, wParam, lParam: PtrInt): PtrInt; dcpcall;
 var
   Key: Word;
   AText: String;
-  Component: TComponent = nil;
+  Component: TComponent;
   lText: PAnsiChar absolute lParam;
   wText: PAnsiChar absolute wParam;
   pResult: Pointer absolute Result;
@@ -227,7 +260,7 @@ var
   Control: TControl absolute Component;
 begin
   // find component by name
-  Component:= DialogBox.FindComponent(DlgItemName);
+  Component:= DialogBox.GetComponent(DlgItemName);
   if (Component = nil) then Exit(-1);
   // process message
   case Msg of
@@ -301,7 +334,9 @@ begin
       else if Control is TListBox then
         Result:= TListBox(Control).Items.AddObject(AText, TObject(lText))
       else if Control is TMemo then
-        Result:= TMemo(Control).Lines.AddObject(AText, TObject(lText));
+        Result:= TMemo(Control).Lines.AddObject(AText, TObject(lText))
+      else if Control is TSynEdit then
+        Result:= TSynEdit(Control).Lines.AddObject(AText, TObject(lText));
     end;
   DM_LISTADDSTR:
     begin
@@ -311,7 +346,9 @@ begin
       else if Control is TListBox then
         Result:= TListBox(Control).Items.Add(AText)
       else if Control is TMemo then
-        Result:= TMemo(Control).Lines.Add(AText);
+        Result:= TMemo(Control).Lines.Add(AText)
+      else if Control is TSynEdit then
+        Result:= TSynEdit(Control).Lines.Add(AText);
     end;
   DM_LISTDELETE:
     begin
@@ -320,7 +357,9 @@ begin
       else if Control is TListBox then
         TListBox(Control).Items.Delete(wParam)
       else if Control is TMemo then
-        TMemo(Control).Lines.Delete(wParam);
+        TMemo(Control).Lines.Delete(wParam)
+      else if Control is TSynEdit then
+        TSynEdit(Control).Lines.Delete(wParam);
     end;
   DM_LISTINDEXOF:
     begin
@@ -330,7 +369,9 @@ begin
       else if Control is TListBox then
         Result:= TListBox(Control).Items.IndexOf(AText)
       else if Control is TMemo then
-        Result:= TMemo(Control).Lines.IndexOf(AText);
+        Result:= TMemo(Control).Lines.IndexOf(AText)
+      else if Control is TSynEdit then
+        Result:= TSynEdit(Control).Lines.IndexOf(AText);
     end;
   DM_LISTINSERT:
     begin
@@ -340,7 +381,9 @@ begin
       else if Control is TListBox then
         TListBox(Control).Items.Insert(wParam, AText)
       else if Control is TMemo then
-        TMemo(Control).Lines.Insert(wParam, AText);
+        TMemo(Control).Lines.Insert(wParam, AText)
+      else if Control is TSynEdit then
+        TSynEdit(Control).Lines.Insert(wParam, AText);
     end;
   DM_LISTGETCOUNT:
     begin
@@ -349,7 +392,9 @@ begin
       else if Control is TListBox then
         Result:= TListBox(Control).Items.Count
       else if Control is TMemo then
-        Result:= TMemo(Control).Lines.Count;
+        Result:= TMemo(Control).Lines.Count
+      else if Control is TSynEdit then
+        Result:= TSynEdit(Control).Lines.Count;
     end;
   DM_LISTGETDATA:
     begin
@@ -358,7 +403,9 @@ begin
       else if Control is TListBox then
         Result:= PtrInt(TListBox(Control).Items.Objects[wParam])
       else if Control is TMemo then
-        Result:= PtrInt(TMemo(Control).Lines.Objects[wParam]);
+        Result:= PtrInt(TMemo(Control).Lines.Objects[wParam])
+      else if Control is TSynEdit then
+        Result:= PtrInt(TSynEdit(Control).Lines.Objects[wParam]);
     end;
   DM_LISTGETITEM:
     begin
@@ -369,7 +416,9 @@ begin
         else if Control is TListBox then
           FText:= TListBox(Control).Items[wParam]
         else if Control is TMemo then
-          FText:= TMemo(Control).Lines[wParam];
+          FText:= TMemo(Control).Lines[wParam]
+        else if Control is TSynEdit then
+          FText:= TSynEdit(Control).Lines[wParam];
         pResult:= PAnsiChar(FText);
       end;
     end;
@@ -400,7 +449,9 @@ begin
       else if Control is TListBox then
         TListBox(Control).Items[wParam]:= AText
       else if Control is TMemo then
-        TMemo(Control).Lines[wParam]:= AText;
+        TMemo(Control).Lines[wParam]:= AText
+      else if Control is TSynEdit then
+        TSynEdit(Control).Lines[wParam]:= AText;
     end;
   DM_LISTCLEAR:
     begin
@@ -409,7 +460,9 @@ begin
       else if Control is TListBox then
         TListBox(Control).Clear
       else if Control is TMemo then
-        TMemo(Control).Clear;
+        TMemo(Control).Clear
+      else if Control is TSynEdit then
+        TSynEdit(Control).Clear;
     end;
   DM_GETTEXT:
     begin
@@ -473,7 +526,9 @@ begin
       else if Control is TListBox then
         TListBox(Control).Items.Objects[wParam]:= TObject(lText)
       else if Control is TMemo then
-        TMemo(Control).Lines.Objects[wParam]:= TObject(lText);
+        TMemo(Control).Lines.Objects[wParam]:= TObject(lText)
+      else if Control is TSynEdit then
+        TSynEdit(Control).Lines.Objects[wParam]:= TObject(lText);
     end;
   DM_SETDLGBOUNDS:
     begin
@@ -597,12 +652,59 @@ begin
   end;
 end;
 
-{ TDialogBox }
-
-procedure TDialogBox.ShowDialogBox;
+function SetProperty(pDlg: UIntPtr; DlgItemName, PropName: PAnsiChar; PropValue: Pointer; PropType: Integer): PtrInt; dcpcall;
+var
+  Component: TComponent;
+  DialogBox: TDialogBox absolute pDlg;
 begin
-  FResult:= (ShowModal = mrOK);
+  // find component by name
+  Component:= DialogBox.GetComponent(DlgItemName);
+  if (Component = nil) then
+    Result:= -1
+  else begin
+    Result:= PtrInt(DialogBox.SetProperty(Component, PropName, PropValue, PropType));
+  end;
 end;
+
+function GetProperty(pDlg: UIntPtr; DlgItemName, PropName: PAnsiChar; PropValue: Pointer; PropType, PropSize: Integer): PtrInt; dcpcall;
+var
+  Component: TComponent;
+  DialogBox: TDialogBox absolute pDlg;
+begin
+  // find component by name
+  Component:= DialogBox.GetComponent(DlgItemName);
+  if (Component = nil) then
+    Result:= -1
+  else begin
+    Result:= PtrInt(DialogBox.GetProperty(Component, PropName, PropValue, PropType, PropSize));
+  end;
+end;
+
+function CreateComponent(pDlg: UIntPtr; Parent, DlgItemName, DlgItemClass: PAnsiChar; Reserved: Pointer): UIntPtr; dcpcall;
+var
+  AParent: TComponent;
+  AClass: TPersistentClass;
+  DialogBox: TDialogBox absolute pDlg;
+  Component: TComponent absolute Result;
+begin
+  AClass:= GetClass(DlgItemClass);
+  if (AClass = nil) then
+    Result:= 0
+  else begin
+    Component:= TComponent(TComponentClass(AClass).Create(DialogBox));
+    Component.Name:= DlgItemName;
+    if Component is TControl then
+    begin
+      AParent:= DialogBox.GetComponent(Parent);
+      if Assigned(AParent) and (AParent is TWinControl) then
+      begin
+        TControl(Component).Parent:= TWinControl(AParent);
+      end;
+    end;
+  end;
+end;
+
+{ TDialogBox }
 
 procedure TDialogBox.ProcessResource;
 begin
@@ -682,13 +784,181 @@ begin
   FileName:= Path + ExtractFileNameOnly(FileName) + Language + '.po';
   if mbFileExists(FileName) then FTranslator:= TTranslator.Create(FileName);
 
+  FInfoList:= TStringList.Create;
+  FInfoList.OwnsObjects:= True;
+  FPropsStorage:= TPropsStorage.Create;
+  FPropsStorage.OnReadString:= @ReadPropValue;
+  FPropsStorage.OnWriteString:= @WritePropValue;
+
   inherited Create(Screen.ActiveForm);
 end;
 
 destructor TDialogBox.Destroy;
 begin
   inherited Destroy;
+  FPropsStorage.Free;
   FTranslator.Free;
+  FInfoList.Free;
+end;
+
+procedure TDialogBox.WritePropValue(const ASection, Item, Value: String);
+begin
+  FPropValue:= Value;
+end;
+
+function TDialogBox.ReadPropValue(const ASection, Item, Default: String): String;
+begin
+  Result:= FPropValue;
+end;
+
+function TDialogBox.GetComponent(const AName: PAnsiChar): TComponent;
+begin
+  if (AName = nil) then
+    Result:= Self
+  else begin
+    Result:= Self.FindComponent(AName);
+  end;
+end;
+
+function TDialogBox.FindPropInfo(var AObject: TObject; const AName: String): PPropInfo;
+var
+  PropName: String;
+  FullName: String;
+  Index, J: Integer;
+  Props: TPropInfoList;
+  ANames: TStringArray;
+begin
+  FullName:= TComponent(AObject).Name;
+  ANames:= AName.Split(['.'], TStringSplitOptions.ExcludeEmpty);
+  for J:= 0 to High(ANames) do
+  begin
+    FPropsStorage.AObject:= AObject;
+    Index:= FInfoList.IndexOf(FullName);
+    if Index >= 0 then
+      Props:= TPropInfoList(FInfoList.Objects[Index])
+    else begin
+      Props:= TPropInfoList.Create(AObject, tkAny - [tkUnknown]);
+      FInfoList.AddObject(FullName, Props);
+    end;
+    PropName:= ANames[J];
+    Result:= Props.Find(PropName);
+    if (Result = nil) then Break;
+    if (J < High(ANames)) then
+    begin
+      if Result^.PropType^.Kind <> tkClass then Exit(nil);
+      AObject:= GetObjectProp(AObject, PropName);
+      if (AObject = nil) then Exit(nil);
+      FullName+= '.' + PropName;
+    end;
+  end;
+end;
+
+function TDialogBox.SetProperty(AComponent: TComponent; const AName: String;
+  AValue: Pointer; AType: Integer): Boolean;
+var
+  Method: TMethod;
+  AObject: TObject;
+  PropInfo: PPropInfo;
+  Address: CodePointer;
+begin
+  Result:= False;
+  AObject:= AComponent;
+  PropInfo:= FindPropInfo(AObject, AName);
+  if Assigned(PropInfo) then
+  begin
+    case AType of
+      TK_BOOL:
+        begin
+          Result:= (PropInfo^.PropType^.Kind = tkBool);
+          if Result then SetOrdProp(AObject, PropInfo, PInt32(AValue)^);
+        end;
+      TK_INT32:
+        begin
+          Result:= (PropInfo^.PropType^.Kind = tkInteger);
+          if Result then SetOrdProp(AObject, PropInfo, PInt32(AValue)^);
+        end;
+      TK_INT64:
+        begin
+          Result:= (PropInfo^.PropType^.Kind = tkInt64);
+          if Result then SetOrdProp(AObject, PropInfo, PInt64(AValue)^);
+        end;
+      TK_FLOAT:
+        begin
+          Result:= (PropInfo^.PropType^.Kind = tkFloat);
+          if Result then SetFloatProp(AObject, PropInfo, PDouble(AValue)^);
+        end;
+      TK_STRING:
+        begin
+          if (PropInfo^.PropType^.Kind = tkMethod) then
+          begin
+            Address:= MethodAddress(PAnsiChar(AValue));
+            if Assigned(Address) then
+            begin
+              Result:= True;
+              Method.Data:= Self;
+              Method.Code:= Address;
+              SetMethodProp(AObject, AName, Method);
+            end;
+          end
+          else begin
+            Result:= True;
+            FPropValue:= StrPas(PAnsiChar(AValue));
+            FPropsStorage.LoadAnyProperty(PropInfo);
+          end;
+        end;
+    end;
+  end;
+end;
+
+function TDialogBox.GetProperty(AComponent: TComponent; const AName: String;
+  AValue: Pointer; AType, ASize: Integer): Boolean;
+var
+  Method: TMethod;
+  AObject: TObject;
+  PropInfo: PPropInfo;
+  Props: TPropInfoList;
+begin
+  Result:= False;
+  AObject:= AComponent;
+  PropInfo:= FindPropInfo(AObject, AName);
+  if Assigned(PropInfo) then
+  begin
+    case AType of
+      TK_BOOL:
+        begin
+          Result:= (PropInfo^.PropType^.Kind = tkBool) and (ASize = SizeOf(Int32));
+          if Result then PInt32(AValue)^:= Int32(GetOrdProp(AObject, PropInfo));
+        end;
+      TK_INT32:
+        begin
+          Result:= (PropInfo^.PropType^.Kind = tkInteger) and (ASize = SizeOf(Int32));
+          if Result then PInt32(AValue)^:= Int32(GetOrdProp(AObject, PropInfo));
+        end;
+      TK_INT64:
+        begin
+          Result:= (PropInfo^.PropType^.Kind = tkInt64) and (ASize = SizeOf(Int64));
+          if Result then PInt64(AValue)^:= GetOrdProp(AObject, PropInfo);
+        end;
+      TK_FLOAT:
+        begin
+          Result:= (PropInfo^.PropType^.Kind = tkFloat) and (ASize = SizeOf(Double));
+          if Result then PDouble(AValue)^:= Double(GetFloatProp(AObject, PropInfo));
+        end;
+      TK_STRING:
+        begin
+          if (PropInfo^.PropType^.Kind = tkMethod) then
+          begin
+            Method:= GetMethodProp(AObject, PropInfo);
+            FPropValue:= MethodName(Method.Code);
+          end
+          else begin
+            FPropsStorage.StoreAnyProperty(PropInfo);
+          end;
+          Result:= True;
+          StrPLCopy(PAnsiChar(AValue), FPropValue, ASize);
+        end;
+    end;
+  end;
 end;
 
 procedure TDialogBox.DialogBoxShow(Sender: TObject);
@@ -893,6 +1163,40 @@ begin
     fDlgProc(FSelf, PAnsiChar((Sender as TTimer).Name), DN_TIMER, 0, 0);
   end;
 end;
+
+{ TDialogBoxData }
+
+procedure TDialogBoxData.ShowDialogBox;
+var
+  UserData: Pointer;
+  Dialog: TDialogBox;
+  TagData: PtrInt absolute UserData;
+begin
+  Dialog:= TDialogBox.Create(FLRSData, FDlgProc);
+  try
+    UserData:= FUserData;
+    Dialog.Tag:= TagData;
+    DialogResult:= (Dialog.ShowModal = mrOK);
+  finally
+    FreeAndNil(Dialog);
+  end;
+end;
+
+constructor TDialogBoxData.Create(const LRSData: String; DlgProc: TDlgProc;
+  UserData: Pointer);
+begin
+  inherited Create;
+  FLRSData:= LRSData;
+  FDlgProc:= DlgProc;
+  FUserData:= UserData;
+end;
+
+initialization
+  RegisterClasses([TTimer, TButton, TBitBtn, TFileNameEdit,
+                   TDirectoryEdit, TComboBox, TListBox, TCheckBox,
+                   TGroupBox, TLabel, TPanel, TEdit, TMemo, TImage,
+                   TSynEdit, TTabSheet, TScrollBox, TRadioGroup,
+                   TPageControl, TProgressBar, TDividerBevel]);
 
 end.
 

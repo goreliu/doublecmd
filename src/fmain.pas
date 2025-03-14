@@ -43,7 +43,7 @@ uses
   ufavoritetabs, Graphics, Forms, Menus, Controls, StdCtrls, ExtCtrls, ActnList,
   Buttons, SysUtils, Classes, SynEdit, LCLType, ComCtrls, LResources,
   KASToolBar, KASComboBox, uFilePanelSelect, uBriefFileView, VTEmuCtl, VTEmuPty,
-  uFileView, uFileSource, uFileViewNotebook, uFile, LCLVersion, KASToolPanel,
+  uFileView, uFileSource, uFileSourceManager, uFileViewNotebook, uFile, LCLVersion, KASToolPanel,
   uOperationsManager, uFileSourceOperation, uDrivesList, DCClassesUtf8,
   DCXmlConfig, uDrive, uDriveWatcher, uDCVersion, uMainCommands, uFormCommands,
   uOperationsPanel, KASToolItems, uKASToolItemsExtended, uCmdLineParams, uOSForms
@@ -56,6 +56,7 @@ uses
   {$ELSEIF DEFINED(LCLGTK2)}
   , Glib2, Gtk2
   {$ELSEIF DEFINED(DARWIN)}
+  , CocoaConfig
   , uMyDarwin
   {$ENDIF}
   , Types, LMessages;
@@ -64,10 +65,16 @@ type
 
   TForEachViewFunction = procedure (AFileView: TFileView; UserData: Pointer) of object;
 
+  // currently only used on Cocoa, but it is universal,
+  // so no conditional compilation instruction is set.
+  TFileViewUpdatedHandler = procedure (const AFileView: TFileView);
+
   { TfrmMain }
 
   TfrmMain = class(TAloneForm, IFormCommands)
     actAddPlugin: TAction;
+    actMapNetworkDrive: TAction;
+    actShowTabsList: TAction;
     actSaveFileDetailsToFile: TAction;
     actLoadList: TAction;
     actExtractFiles: TAction;
@@ -608,6 +615,7 @@ type
     procedure miTrayIconExitClick(Sender: TObject);
     procedure miTrayIconRestoreClick(Sender: TObject);
     procedure PanelButtonClick(Button: TSpeedButton; FileView: TFileView);
+    procedure pnlDiskResize(Sender: TObject);
     procedure ShellTreeViewSelect;
     procedure ShellTreeViewKeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
@@ -772,7 +780,6 @@ type
     function  FindMatchingDrive(Address, Path: String): Integer;
     procedure UpdateDriveToolbarSelection(DriveToolbar: TKAStoolBar; FileView: TFileView);
     procedure UpdateDriveButtonSelection(DriveButton: TSpeedButton; FileView: TFileView);
-    procedure UpdateSelectedDrive(ANoteBook: TFileViewNotebook);
 {$IF DEFINED(MSWINDOWS)}
     procedure OnDriveIconLoaded(Data: PtrInt);
 {$ENDIF}
@@ -797,12 +804,14 @@ type
     procedure LeftDriveBarExecuteDrive(ToolItem: TKASToolItem);
     procedure RightDriveBarExecuteDrive(ToolItem: TKASToolItem);
     procedure SetDragCursor(Shift: TShiftState);
+    {$IFDEF DARWIN}
+    procedure GlobalMacOSKeyDownHandler(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure OpenNewWindow(Sender: TObject);
+    {$ENDIF}
 
   protected
     procedure CreateWnd; override;
-    {$IFNDEF LCLCOCOA}
     procedure DoFirstShow; override;
-    {$ENDIF}
     procedure DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy;
                             const AXProportion, AYProportion: Double); override;
 
@@ -825,10 +834,11 @@ type
     procedure HotDirSelected(Sender:TObject);
     procedure HotDirActualSwitchToDir(Index:longint);
     procedure HistorySelected(Sender:TObject);
+    procedure HistorySomeSelected(Sender:TObject);
     procedure ViewHistorySelected(Sender:TObject);
     procedure ViewHistoryPrevSelected(Sender:TObject);
     procedure ViewHistoryNextSelected(Sender:TObject);
-    procedure CreatePopUpDirHistory;
+    procedure CreatePopUpDirHistory(UseTreeViewMenu: Boolean; FromPathIndex: Integer);
     procedure ShowFileViewHistory(const Params: array of string);
     procedure ShowFileViewHistory(const Params: array of string; FromFileSourceIndex, FromPathIndex, ToFileSourceIndex, ToPathIndex: Integer);
     procedure miHotAddOrConfigClick(Sender: TObject);
@@ -872,6 +882,7 @@ type
     procedure UpdateGUIFunctionKeys;
     procedure UpdateMainTitleBar;
     procedure CreateDiskPanel(dskPanel : TKASToolBar);
+    procedure UpdateSelectedDrive(ANoteBook: TFileViewNotebook);
     procedure SetPanelDrive(aPanel: TFilePanelSelect; Drive: PDrive; ActivateIfNeeded: Boolean);
     function CreateFileView(sType: String; Page: TFileViewPage; AConfig: TXmlConfig; ANode: TXmlNode): TFileView;
     procedure AssignEvents(AFileView: TFileView);
@@ -889,7 +900,7 @@ type
     {$IF DEFINED(DARWIN)}
     procedure OnNSServiceOpenWithNewTab( filenames:TStringList );
     function NSServiceMenuIsReady(): boolean;
-    function NSServiceMenuGetFilenames(): TStringList;
+    function NSServiceMenuGetFilenames(): TStringArray;
     procedure NSThemeChangedHandler();
     {$ENDIF}
     procedure LoadWindowState;
@@ -937,6 +948,7 @@ type
 
 var
   frmMain: TfrmMain;
+  onFileViewUpdated: TFileViewUpdatedHandler;
   Cons: TCustomPtyDevice = nil;
 
 implementation
@@ -947,7 +959,7 @@ uses
   Themes, uFileProcs, uShellContextMenu, fTreeViewMenu, uSearchResultFileSource,
   Math, LCLIntf, Dialogs, uGlobs, uLng, uMasks, fCopyMoveDlg, uQuickViewPanel,
   uShowMsg, uDCUtils, uLog, uGlobsPaths, LCLProc, uOSUtils, uPixMapManager, LazUTF8,
-  uDragDropEx, uKeyboard, uFileSystemFileSource, fViewOperations, uMultiListFileSource,
+  uDragDropEx, uKeyboard, uLocalFileSource, uFileSystemFileSource, fViewOperations, uMultiListFileSource,
   uFileSourceOperationTypes, uFileSourceCopyOperation, uFileSourceMoveOperation,
   uFileSourceProperty, uFileSourceExecuteOperation, uArchiveFileSource, uThumbFileView,
   uShellExecute, fSymLink, fHardLink, uExceptions, uUniqueInstance, Clipbrd, ShellCtrls,
@@ -955,7 +967,7 @@ uses
   Laz2_XMLRead, DCOSUtils, DCStrUtils, fOptions, fOptionsFrame, fOptionsToolbar, uClassesEx,
   uHotDir, uFileSorting, DCBasicTypes, foptionsDirectoryHotlist, uConnectionManager,
   fOptionsToolbarBase, fOptionsToolbarMiddle, fEditor, uColumns, StrUtils, uSysFolders,
-  uColumnsFileView, dmHigh
+  uColumnsFileView, dmHigh, uFileSourceOperationMisc
 {$IFDEF MSWINDOWS}
   , uShellFileSource, uNetworkThread
 {$ENDIF}
@@ -1127,6 +1139,8 @@ begin
   // See details at http://doublecmd.sourceforge.net/mantisbt/view.php?id=712
   Application.MainForm.OnClose := @frmMainClose;
   Application.MainForm.OnCloseQuery := @FormCloseQuery;
+  // support closing windows with Command+W
+  Application.AddOnKeyDownBeforeHandler( @GlobalMacOSKeyDownHandler );
   {$ENDIF}
 
   ConvertToolbarBarConfig(gpCfgDir + 'default.bar');
@@ -1479,7 +1493,7 @@ begin
         TargetPath := IncludeTrailingPathDelimiter(TargetPath);
         if not Assigned(TargetFileSource) then
           TargetFileSource := TFileSystemFileSource.GetFileSource;
-        case GetDropEffectByKeyAndMouse(GetKeyShiftState, mbLeft) of
+        case GetDropEffectByKeyAndMouse(GetKeyShiftStateEx, mbLeft, gDefaultDropEffect) of
           DropCopyEffect:
             Self.CopyFiles(ActiveFrame.FileSource, TargetFileSource, SourceFiles, TargetPath, gShowDialogOnDragDrop);
           DropMoveEffect:
@@ -1609,6 +1623,11 @@ begin
             FreeAndNil(aFile);
           end;
         end;
+      if (Source is TKASToolButton) and (Toolbar <> TKASToolButton(Source).ToolBar) then
+      begin
+        Accept := False;
+        Exit;
+      end;
       if (NumberOfMoveButton <> (Sender as TSpeedButton).Tag) then
         begin
           Draging := True;
@@ -1706,6 +1725,32 @@ begin
 
   if tb_activate_panel_on_click in gDirTabOptions then
     SetActiveFrame(FileView);
+end;
+
+procedure TfrmMain.pnlDiskResize(Sender: TObject);
+var
+  ADelta, AWidth: Integer;
+begin
+  if not gDriveBarSyncWidth then
+  begin
+    if gDriveBar1 and gDriveBar2 then
+    begin
+      if gHorizontalFilePanels then
+        ADelta:= 0
+      else begin
+        ADelta:= MainSplitter.Width;
+        ADelta+= IfThen(MiddleToolBar.Visible, MiddleToolBar.Width);
+      end;
+      AWidth:= Max(0, (pnlDisk.ClientWidth - ADelta) div 2);
+    end
+    else begin
+      AWidth:= Max(0, pnlDisk.ClientWidth);
+    end;
+    pnlDskLeft.Constraints.MinWidth:= AWidth;
+    pnlDskLeft.Constraints.MaxWidth:= AWidth;
+    pnlDskRight.Constraints.MinWidth:= AWidth;
+    pnlDskRight.Constraints.MaxWidth:= AWidth;
+  end;
 end;
 
 procedure TfrmMain.ShellTreeViewSelect;
@@ -1882,7 +1927,7 @@ begin
 
         DropParams := TDropParams.Create(
             Files,
-            GetDropEffectByKeyAndMouse(GetKeyShiftState, mbLeft),
+            GetDropEffectByKeyAndMouse(GetKeyShiftState, mbLeft, gDefaultDropEffect),
             Point, False,
             nil, TargetFileView,
             TargetFileView.FileSource,
@@ -2026,9 +2071,9 @@ begin
                 TargetFileName := TargetPath + ExtractFileName(SourceFileName);
 
                 if ((Operation = ddoSymLink) and
-                   ShowSymLinkForm(SourceFileName, TargetFileName, TargetPath))
+                   ShowSymLinkForm(Self, SourceFileName, TargetFileName, TargetPath))
                 or ((Operation = ddoHardLink) and
-                   ShowHardLinkForm(SourceFileName, TargetFileName, TargetPath))
+                   ShowHardLinkForm(Self, SourceFileName, TargetFileName, TargetPath))
                 then
                   TargetFileSource.Reload(TargetPath);
               end
@@ -2683,7 +2728,7 @@ begin
         begin
           TargetPath := ANotebook.View[ATabIndex].CurrentPath;
           TargetFileSource := ANotebook.View[ATabIndex].FileSource;
-          case GetDropEffectByKeyAndMouse(GetKeyShiftState, mbLeft) of
+          case GetDropEffectByKeyAndMouse(GetKeyShiftStateEx, mbLeft, gDefaultDropEffect) of
             DropCopyEffect:
               Self.CopyFiles(ActiveFrame.FileSource, TargetFileSource, SourceFiles, TargetPath, gShowDialogOnDragDrop);
             DropMoveEffect:
@@ -2917,6 +2962,27 @@ begin
 end;
 
 constructor TfrmMain.Create(TheOwner: TComponent);
+{$IF DEFINED(DARWIN)}
+  procedure setMacOSAppMenu();
+  begin
+    CocoaConfigMenu.appMenu.aboutItem:= mnuHelpAbout;
+    CocoaConfigMenu.appMenu.preferencesItem:= mnuConfigOptions;
+    CocoaConfigMenu.appMenu.onCreate:= @onMainMenuCreate;
+  end;
+
+  procedure setMacOSDockMenu();
+  var
+    dockMenu: TMenuItem;
+    newItem: TMenuItem;
+  begin
+    dockMenu:= TMenuItem.Create(self);
+    newItem:= TMenuItem.Create(dockMenu);
+    newItem.Caption:= rsMnuNewWindow;
+    newItem.OnClick:= @OpenNewWindow;
+    dockMenu.Add(newItem);
+    CocoaConfigMenu.dockMenu.customMenus:= dockMenu;
+  end;
+{$ENDIF}
 begin
   FMainSplitterPos := 50.0;
   inherited Create(TheOwner);
@@ -2929,6 +2995,11 @@ begin
   Screen.Cursors[crArrowCopy] := LoadCursorFromLazarusResource('ArrowCopy');
   Screen.Cursors[crArrowMove] := LoadCursorFromLazarusResource('ArrowMove');
   Screen.Cursors[crArrowLink] := LoadCursorFromLazarusResource('ArrowLink');
+
+{$IF DEFINED(DARWIN)}
+  setMacOSAppMenu;
+  setMacOSDockMenu;
+{$ENDIF}
 end;
 
 procedure TfrmMain.AfterConstruction;
@@ -3049,7 +3120,7 @@ var
     AToolbar.AddButton(CommandItem);
   end;
 
-  procedure AddSeparator(Style: Boolean = False);
+  procedure AddSeparator(Style: TKASSeparatorStyle = kssSeparator);
   var
     SeparatorItem: TKASSeparatorItem;
   begin
@@ -3087,6 +3158,7 @@ begin
       AddCommand('cm_PackFiles');
       AddCommand('cm_ExtractFiles');
       AddSeparator;
+      AddCommand('cm_NetworkConnect');
       AddCommand('cm_Search');
       AddCommand('cm_MultiRename');
       AddCommand('cm_SyncDirs');
@@ -3104,7 +3176,7 @@ begin
       AddCommand('cm_Edit');
       AddCommand('cm_Copy');
       AddCommand('cm_Rename');
-      AddSeparator(True);
+      AddSeparator(kssDivider);
       AddCommand('cm_PackFiles');
       AddCommand('cm_MakeDir');
       SaveToolBar(MiddleToolBar);
@@ -3120,7 +3192,7 @@ begin
   if Files.Count > 1 then
     Result := Format(sLngMulti, [Files.Count])
   else
-    Result := Format(sLngOne, [Files[0].Name]);
+    Result := Format(sLngOne, [ActiveFrame.FileSource.GetFileName(Files[0])]);
 end;
 
 procedure TfrmMain.miHotAddOrConfigClick(Sender: TObject);
@@ -3128,19 +3200,44 @@ begin
   with Sender as TComponent do Commands.cm_WorkWithDirectoryHotlist(['action='+HOTLISTMAGICWORDS[tag], 'source='+QuoteStr(ActiveFrame.CurrentLocation), 'target='+QuoteStr(NotActiveFrame.CurrentLocation), 'index=0']);
 end;
 
-procedure TfrmMain.CreatePopUpDirHistory;
+procedure TfrmMain.CreatePopUpDirHistory(UseTreeViewMenu: Boolean;
+  FromPathIndex: Integer);
 var
-  I: Integer;
+  I, Finish: Integer;
   MenuItem: TMenuItem;
 begin
   pmDirHistory.Items.Clear;
 
-  for I:= 0 to Min(gDirHistoryCount, glsDirHistory.Count - 1) do
+  if UseTreeViewMenu then
+    Finish:= glsDirHistory.Count - 1
+  else begin
+    Finish:= Min(FromPathIndex + gDirHistoryCount, glsDirHistory.Count - 1);
+  end;
+
+  if (not UseTreeViewMenu) and (FromPathIndex > 0) then
+  begin
+    MenuItem := TMenuItem.Create(pmDirHistory);
+    MenuItem.Caption := '...';
+    MenuItem.OnClick := @HistorySomeSelected;
+    MenuItem.Tag := Max(0, FromPathIndex - gDirHistoryCount - 1);
+    pmDirHistory.Items.Add(MenuItem);
+  end;
+
+  for I:= FromPathIndex to Finish do
   begin
     MenuItem:= TMenuItem.Create(pmDirHistory);
     MenuItem.Caption:= glsDirHistory[I].Replace('&','&&');
     MenuItem.Hint:= glsDirHistory[I];
     MenuItem.OnClick:= @HistorySelected;
+    pmDirHistory.Items.Add(MenuItem);
+  end;
+
+  if (not UseTreeViewMenu) and (Finish < glsDirHistory.Count - 1) then
+  begin
+    MenuItem := TMenuItem.Create(pmDirHistory);
+    MenuItem.Caption := '...';
+    MenuItem.OnClick := @HistorySomeSelected;
+    MenuItem.Tag := Finish + 1;
     pmDirHistory.Items.Add(MenuItem);
   end;
 end;
@@ -3481,6 +3578,18 @@ begin
   ChooseFileSource(ActiveFrame, aPath);
 end;
 
+procedure TfrmMain.HistorySomeSelected(Sender: TObject);
+var
+  P: TPoint;
+begin
+  if Sender is TMenuItem then
+  begin
+    P:= ActiveFrame.ClientToScreen(Classes.Point(0, 0));
+    CreatePopUpDirHistory(False, TMenuItem(Sender).Tag);
+    pmDirHistory.Popup(P.X, P.Y);
+  end;
+end;
+
 procedure TfrmMain.ViewHistorySelected(Sender: TObject);
 var
   FileSourceIndex, PathIndex: Integer;
@@ -3537,84 +3646,65 @@ function TfrmMain.CopyFiles(SourceFileSource, TargetFileSource: IFileSource;
                             QueueIdentifier: TOperationsManagerQueueIdentifier): Boolean;
 var
   BaseDir: String;
-  sDestination: String;
   sDstMaskTemp: String;
-  FileSource: IFileSource;
   TargetFiles: TFiles = nil;
   CopyDialog: TfrmCopyDlg = nil;
-  OperationTemp: Boolean = False;
-  OperationType: TFileSourceOperationType;
   OperationClass: TFileSourceOperationClass;
   Operation: TFileSourceCopyOperation = nil;
   OperationOptionsUIClass: TFileSourceOperationOptionsUIClass = nil;
+
+  params: TFileSourceConsultParams;
 begin
   Result := False;
   try
     if SourceFiles.Count = 0 then
       Exit;
 
-    if (SourceFiles.Count = 1) and
-       ((not (SourceFiles[0].IsDirectory or SourceFiles[0].IsLinkToDirectory)) or
-        (TargetPath = ''))
-    then
-      sDestination := TargetPath + ReplaceInvalidChars(SourceFiles[0].Name)
-    else
-      sDestination := TargetPath + '*.*';
+    params:= Default(TFileSourceConsultParams);
+    params.operationType:= fsoCopy;
+    params.sourceFS:= SourceFileSource;
+    params.targetFS:= TargetFileSource;
+    params.files:= SourceFiles;
+    params.targetPath:= TargetPath;
+    FileSourceManager.consultOperation( params );
 
-    // If same file source and address
-    if (fsoCopy in SourceFileSource.GetOperationsTypes) and
-       (fsoCopy in TargetFileSource.GetOperationsTypes) and
-       SourceFileSource.Equals(TargetFileSource) and
-       SameText(SourceFileSource.GetCurrentAddress, TargetFileSource.GetCurrentAddress) then
-    begin
-      OperationType := fsoCopy;
-      FileSource := SourceFileSource;
-      OperationClass := SourceFileSource.GetOperationClass(fsoCopy);
-    end
-    else if TargetFileSource.IsClass(TFileSystemFileSource) and
-            (fsoCopyOut in SourceFileSource.GetOperationsTypes) then
-    begin
-      OperationType := fsoCopyOut;
-      FileSource := SourceFileSource;
-      OperationClass := SourceFileSource.GetOperationClass(fsoCopyOut);
-    end
-    else if SourceFileSource.IsClass(TFileSystemFileSource) and
-            (fsoCopyIn in TargetFileSource.GetOperationsTypes) then
-    begin
-      OperationType := fsoCopyIn;
-      FileSource := TargetFileSource;
-      OperationClass := TargetFileSource.GetOperationClass(fsoCopyIn);
-    end
-    else if (fsoCopyOut in SourceFileSource.GetOperationsTypes) and
-            (fsoCopyIn in TargetFileSource.GetOperationsTypes) then
-    begin
-      OperationTemp := True;
-      OperationType := fsoCopyOut;
-      FileSource := SourceFileSource;
-      OperationClass := SourceFileSource.GetOperationClass(fsoCopyOut);
-      if (fspCopyOutOnMainThread in SourceFileSource.Properties) or
-         (fspCopyInOnMainThread in TargetFileSource.Properties) then
-      begin
-        QueueIdentifier:= ModalQueueId;
-      end;
-    end
-    else
-    begin
+    if params.consultResult = fscrCancel then
+      Exit;
+
+    if params.consultResult <> fscrSuccess then begin
       msgWarning(rsMsgErrNotSupported);
       Exit;
     end;
+
+    if params.operationTemp then begin
+      if (fspCopyOutOnMainThread in params.sourceFS.Properties) or
+         (fspCopyInOnMainThread in params.targetFS.Properties) then
+      begin
+        QueueIdentifier:= ModalQueueId;
+      end;
+    end;
+
+    OperationClass:= params.resultFS.GetOperationClass( params.resultOperationType );
+
+    if (SourceFiles.Count = 1) and
+       ((not (SourceFiles[0].IsDirectory or SourceFiles[0].IsLinkToDirectory)) or
+        (params.targetPath = ''))
+    then
+      params.targetPath := params.targetPath + ReplaceInvalidChars(SourceFiles[0].Name)
+    else
+      params.targetPath := params.targetPath + '*.*';
 
     if bShowDialog then
     begin
       if Assigned(OperationClass) then
         OperationOptionsUIClass := OperationClass.GetOptionsUIClass;
 
-      CopyDialog := TfrmCopyDlg.Create(Self, cmdtCopy, FileSource, OperationOptionsUIClass);
-      CopyDialog.edtDst.Text := sDestination;
-      CopyDialog.edtDst.ReadOnly := OperationTemp;
+      CopyDialog := TfrmCopyDlg.Create(Self, cmdtCopy, params.resultFS, OperationOptionsUIClass);
+      CopyDialog.edtDst.Text := params.targetPath;
+      CopyDialog.edtDst.ReadOnly := params.operationTemp;
       CopyDialog.lblCopySrc.Caption := GetFileDlgStr(rsMsgCpSel, rsMsgCpFlDr, SourceFiles);
 
-      if OperationTemp and (QueueIdentifier = ModalQueueId) then
+      if params.operationTemp and (QueueIdentifier = ModalQueueId) then
       begin
         CopyDialog.QueueIdentifier:= QueueIdentifier;
         CopyDialog.btnAddToQueue.Visible:= False;
@@ -3627,7 +3717,8 @@ begin
         if CopyDialog.ShowModal = mrCancel then
           Exit;
 
-        sDestination := CopyDialog.edtDst.Text;
+        params.targetPath := CopyDialog.edtDst.Text;
+        FileSourceManager.confirmOperation( params );
 
         if SourceFileSource.IsClass(TArchiveFileSource) then
           BaseDir := ExtractFilePath(SourceFileSource.CurrentAddress)
@@ -3636,17 +3727,18 @@ begin
         end;
 
         GetDestinationPathAndMask(SourceFiles, SourceFileSource,
-                                  TargetFileSource, sDestination,
+                                  params.targetFS, params.resultTargetPath,
                                   BaseDir, TargetPath, sDstMaskTemp);
+        params.resultTargetPath:= TargetPath;
 
-        if (TargetFileSource = nil) or (Length(TargetPath) = 0) then
+        if (TargetFileSource = nil) or (Length(params.resultTargetPath) = 0) then
         begin
           MessageDlg(rsMsgInvalidPath, rsMsgErrNotSupported, mtWarning, [mbOK], 0);
           Continue;
         end;
 
-        if HasPathInvalidCharacters(TargetPath) then
-          MessageDlg(rsMsgInvalidPath, Format(rsMsgInvalidPathLong, [TargetPath]),
+        if HasPathInvalidCharacters(params.resultTargetPath) then
+          MessageDlg(rsMsgInvalidPath, Format(rsMsgInvalidPathLong, [params.resultTargetPath]),
             mtWarning, [mbOK], 0)
         else
           Break;
@@ -3654,46 +3746,48 @@ begin
 
       QueueIdentifier := CopyDialog.QueueIdentifier;
     end
-    else
-      GetDestinationPathAndMask(SourceFiles, TargetFileSource, sDestination,
+    else begin
+      FileSourceManager.confirmOperation( params );
+      GetDestinationPathAndMask(SourceFiles, TargetFileSource, params.resultTargetPath,
                                 SourceFiles.Path, TargetPath, sDstMaskTemp);
+      params.resultTargetPath:= TargetPath;
+    end;
 
     // Copy via temp directory
-    if OperationTemp then
+    if params.operationTemp then
     begin
       // Execute both operations in one new queue
       if QueueIdentifier = FreeOperationsQueueId then
         QueueIdentifier := OperationsManager.GetNewQueueIdentifier;
       // Save real target
-      sDestination := TargetPath;
-      FileSource := TargetFileSource;
+      params.targetPath := TargetPath;
       TargetFiles := SourceFiles.Clone;
       // Replace target by temp directory
       TargetFileSource := TTempFileSystemFileSource.Create();
-      TargetPath := TargetFileSource.GetRootDir;
-      ChangeFileListRoot(TargetPath, TargetFiles);
+      params.resultTargetPath := TargetFileSource.GetRootDir;
+      ChangeFileListRoot(params.resultTargetPath, TargetFiles);
     end;
 
-    case OperationType of
+    case params.resultOperationType of
       fsoCopy:
         begin
           // Copy within the same file source.
-          Operation := SourceFileSource.CreateCopyOperation(
+          Operation := params.resultFS.CreateCopyOperation(
                          SourceFiles,
-                         TargetPath) as TFileSourceCopyOperation;
+                         params.resultTargetPath) as TFileSourceCopyOperation;
         end;
       fsoCopyOut:
         // CopyOut to filesystem.
-        Operation := SourceFileSource.CreateCopyOutOperation(
+        Operation := params.resultFS.CreateCopyOutOperation(
                        TargetFileSource,
                        SourceFiles,
-                       TargetPath) as TFileSourceCopyOperation;
+                       params.resultTargetPath) as TFileSourceCopyOperation;
       fsoCopyIn:
         // CopyIn from filesystem.
-        Operation := TargetFileSource.CreateCopyInOperation(
+        Operation := params.resultFS.CreateCopyInOperation(
                        SourceFileSource,
                        SourceFiles,
-                       TargetPath) as TFileSourceCopyOperation;
+                       params.resultTargetPath) as TFileSourceCopyOperation;
     end;
 
     if Assigned(Operation) then
@@ -3704,7 +3798,7 @@ begin
       if Assigned(CopyDialog) then
         CopyDialog.SetOperationOptions(Operation);
 
-      if OperationTemp and (QueueIdentifier = ModalQueueId) then
+      if params.operationTemp and (QueueIdentifier = ModalQueueId) then
       begin
         Operation.AddStateChangedListener([fsosStopped], @OnCopyOutTempStateChanged);
       end;
@@ -3717,13 +3811,13 @@ begin
       msgWarning(rsMsgNotImplemented);
 
     // Copy via temp directory
-    if OperationTemp and Result and ((QueueIdentifier <> ModalQueueId) or FModalOperationResult) then
+    if params.operationTemp and Result and ((QueueIdentifier <> ModalQueueId) or FModalOperationResult) then
     begin
       // CopyIn from temp filesystem
-      Operation := FileSource.CreateCopyInOperation(
+      Operation := params.targetFS.CreateCopyInOperation(
                      TargetFileSource,
                      TargetFiles,
-                     sDestination) as TFileSourceCopyOperation;
+                     params.targetPath) as TFileSourceCopyOperation;
 
       Result := Assigned(Operation);
       if Result then
@@ -3748,38 +3842,37 @@ function TfrmMain.MoveFiles(SourceFileSource, TargetFileSource: IFileSource;
                             bShowDialog: Boolean;
                             QueueIdentifier: TOperationsManagerQueueIdentifier = FreeOperationsQueueId): Boolean;
 var
-  sDestination: String;
   sDstMaskTemp: String;
   Operation: TFileSourceMoveOperation;
   bMove: Boolean;
   MoveDialog: TfrmCopyDlg = nil;
+
+  params: TFileSourceConsultParams;
 begin
   Result := False;
   try
-    // Special case for Search Result File Source
-    if SourceFileSource.IsClass(TSearchResultFileSource) then begin
-      SourceFileSource:= ISearchResultFileSource(SourceFileSource).FileSource;
-    end;
-    // Only allow moving within the same file source.
-    if (SourceFileSource.IsInterface(TargetFileSource) or
-        TargetFileSource.IsInterface(SourceFileSource)) and
-       (SourceFileSource.CurrentAddress = TargetFileSource.CurrentAddress) and
-       (fsoMove in SourceFileSource.GetOperationsTypes) and
-       (fsoMove in TargetFileSource.GetOperationsTypes) then
-    begin
-      bMove := True;
-    end
-    else if ((fsoCopyOut in SourceFileSource.GetOperationsTypes) and
-             (fsoCopyIn in TargetFileSource.GetOperationsTypes)) then
-    begin
-      bMove := False;  // copy + delete through temporary file system
-      msgWarning(rsMsgNotImplemented);
-      Exit;
-    end
-    else
-    begin
-      msgWarning(rsMsgErrNotSupported);
-      Exit;
+    params:= Default(TFileSourceConsultParams);
+    params.operationType:= fsoMove;
+    params.sourceFS:= SourceFileSource;
+    params.targetFS:= TargetFileSource;
+    params.files:= SourceFiles;
+    params.targetPath:= TargetPath;
+    FileSourceManager.consultOperation( params );
+
+    SourceFileSource:= params.sourceFS;
+    bMove:= (params.consultResult = fscrSuccess);
+
+    if NOT bMove then begin
+      if params.consultResult = fscrNotImplemented then
+      begin
+        msgWarning(rsMsgNotImplemented);
+        Exit;
+      end
+      else
+      begin
+        msgWarning(rsMsgErrNotSupported);
+        Exit;
+      end;
     end;
 
     if SourceFiles.Count = 0 then
@@ -3788,15 +3881,15 @@ begin
     if (SourceFiles.Count = 1) and
        (not (SourceFiles[0].IsDirectory or SourceFiles[0].IsLinkToDirectory))
     then
-      sDestination := TargetPath + ExtractFileName(SourceFiles[0].Name)
+      params.targetPath := TargetPath + ExtractFileName(SourceFiles[0].Name)
     else
-      sDestination := TargetPath + '*.*';
+      params.targetPath := TargetPath + '*.*';
 
     if bShowDialog then
     begin
       MoveDialog := TfrmCopyDlg.Create(Self, cmdtMove, SourceFileSource,
         SourceFileSource.GetOperationClass(fsoMove).GetOptionsUIClass);
-      MoveDialog.edtDst.Text := sDestination;
+      MoveDialog.edtDst.Text := params.targetPath;
       MoveDialog.lblCopySrc.Caption := GetFileDlgStr(rsMsgRenSel, rsMsgRenFlDr, SourceFiles);
 
       while True do
@@ -3804,20 +3897,22 @@ begin
         if MoveDialog.ShowModal = mrCancel then
           Exit;
 
-        sDestination := MoveDialog.edtDst.Text;
+        params.targetPath := MoveDialog.edtDst.Text;
+        FileSourceManager.confirmOperation( params );
 
         GetDestinationPathAndMask(SourceFiles, SourceFileSource,
-                                  TargetFileSource, sDestination,
+                                  TargetFileSource, params.resultTargetPath,
                                   SourceFiles.Path, TargetPath, sDstMaskTemp);
+        params.resultTargetPath:= TargetPath;
 
-        if (TargetFileSource = nil) or (Length(TargetPath) = 0) then
+        if (TargetFileSource = nil) or (Length(params.resultTargetPath) = 0) then
         begin
           MessageDlg(EmptyStr, rsMsgInvalidPath, mtWarning, [mbOK], 0);
           Continue;
         end;
 
-        if HasPathInvalidCharacters(TargetPath) then
-          MessageDlg(rsMsgInvalidPath, Format(rsMsgInvalidPathLong, [TargetPath]),
+        if HasPathInvalidCharacters(params.resultTargetPath) then
+          MessageDlg(rsMsgInvalidPath, Format(rsMsgInvalidPathLong, [params.resultTargetPath]),
             mtWarning, [mbOK], 0)
         else
           Break;
@@ -3825,14 +3920,17 @@ begin
 
       QueueIdentifier := MoveDialog.QueueIdentifier;
     end
-    else
-      GetDestinationPathAndMask(SourceFiles, TargetFileSource, sDestination,
+    else begin
+      FileSourceManager.confirmOperation( params );
+      GetDestinationPathAndMask(SourceFiles, TargetFileSource, params.resultTargetPath,
                                 SourceFiles.Path, TargetPath, sDstMaskTemp);
+      params.resultTargetPath:= TargetPath;
+    end;
 
     if bMove then
     begin
       Operation := SourceFileSource.CreateMoveOperation(
-                     SourceFiles, TargetPath) as TFileSourceMoveOperation;
+                     SourceFiles, params.resultTargetPath) as TFileSourceMoveOperation;
 
       if Assigned(Operation) then
       begin
@@ -3922,7 +4020,7 @@ begin
   else
   begin
     // This only work for filesystem for now.
-    if TargetFileSource.IsClass(TFileSystemFileSource) then
+    if TargetFileSource.IsClass(TLocalFileSource) then
       AbsolutePath := BaseDir + EnteredPath
     else
       AbsolutePath := PathDelim{TargetFileSource.GetRoot} + EnteredPath;
@@ -4020,7 +4118,6 @@ begin
   Application.MainForm.Tag:= Handle;
 end;
 
-{$IFNDEF LCLCOCOA}
 procedure TfrmMain.DoFirstShow;
 var
   ANode: TXmlNode;
@@ -4035,7 +4132,6 @@ begin
 
   lastWindowState := WindowState;
 end;
-{$ENDIF}
 
 procedure TfrmMain.WMMove(var Message: TLMMove);
 begin
@@ -4051,6 +4147,13 @@ end;
 
 procedure TfrmMain.WMSize(var message: TLMSize);
 begin
+  // https://github.com/doublecmd/doublecmd/issues/736
+  if (Message.Width > High(Int16)) or (Message.Height > High(Int16)) then
+  begin
+    DCDebug('TfrmMain.WMSize invalid size %u x %u', [Message.Width, Message.Height]);
+    Exit;
+  end;
+
   inherited WMSize(Message);
 
   if not (csDestroying in ComponentState) then
@@ -4160,11 +4263,14 @@ begin
 
     VK_TAB:
       begin
-        // Select opposite panel.
-        case PanelSelected of
-          fpLeft: SetActiveFrame(fpRight);
-          fpRight: SetActiveFrame(fpLeft);
-        else SetActiveFrame(fpLeft);
+        if (QuickViewPanel = nil) then
+        begin
+          // Select opposite panel.
+          case PanelSelected of
+            fpLeft: SetActiveFrame(fpRight);
+            fpRight: SetActiveFrame(fpLeft);
+            else     SetActiveFrame(fpLeft);
+          end;
         end;
         Key := 0;
       end;
@@ -4218,10 +4324,13 @@ end;
 
 procedure TfrmMain.pnlLeftResize(Sender: TObject);
 begin
-  if gDriveBar1 and gDriveBar2 and not gHorizontalFilePanels then
+  if gDriveBarSyncWidth then
   begin
-    pnlDskLeft.Constraints.MinWidth:= pnlLeft.Width;
-    pnlDskLeft.Constraints.MaxWidth:= pnlLeft.Width;
+    if gDriveBar1 and gDriveBar2 and not gHorizontalFilePanels then
+    begin
+      pnlDskLeft.Constraints.MinWidth:= pnlLeft.Width;
+      pnlDskLeft.Constraints.MaxWidth:= pnlLeft.Width;
+    end;
   end;
 
   // Put splitter after left panel.
@@ -4321,22 +4430,25 @@ procedure TfrmMain.pnlRightResize(Sender: TObject);
 var
   AWidth: Integer;
 begin
-  if gDriveBar1 and not gHorizontalFilePanels then
+  if gDriveBarSyncWidth then
   begin
-    if gDriveBar2 then
-      AWidth := pnlRight.Width + 1
-    else begin
-      AWidth := pnlNotebooks.Width - 2;
+    if gDriveBar1 and not gHorizontalFilePanels then
+    begin
+      if gDriveBar2 then
+        AWidth := pnlRight.Width + 1
+      else begin
+        AWidth := pnlNotebooks.Width - 2;
+      end;
+      if AWidth < 0 then AWidth := 0;
+      pnlDskRight.Constraints.MinWidth := AWidth;
+      pnlDskRight.Constraints.MaxWidth := AWidth;
+    end
+    else if gHorizontalFilePanels and not gDriveBar2 then
+    begin
+      AWidth := Max(0, pnlNotebooks.Width - 2);
+      pnlDskRight.Constraints.MinWidth := AWidth;
+      pnlDskRight.Constraints.MaxWidth := AWidth;
     end;
-    if AWidth < 0 then AWidth := 0;
-    pnlDskRight.Constraints.MinWidth := AWidth;
-    pnlDskRight.Constraints.MaxWidth := AWidth;
-  end
-  else if gHorizontalFilePanels and not gDriveBar2 then
-  begin
-    AWidth := Max(0, pnlNotebooks.Width - 2);
-    pnlDskRight.Constraints.MinWidth := AWidth;
-    pnlDskRight.Constraints.MaxWidth := AWidth;
   end;
 end;
 
@@ -4770,6 +4882,8 @@ begin
     actBriefView.Checked:= True
   else if AFileView is TThumbFileView then
     actThumbnailsView.Checked:= True;
+  if Assigned(onFileViewUpdated) then
+    onFileViewUpdated(AFileView);
 end;
 
 procedure TfrmMain.UpdateShellTreeView;
@@ -4993,11 +5107,17 @@ begin
 
   if gDelayLoadingTabs then
     FileViewFlags := [fvfDelayLoadingFiles];
-  if sType = 'columns' then
-    Result := TColumnsFileView.Create(Page, AConfig, ANode, FileViewFlags)
-  else if sType = 'brief' then
-    Result := TBriefFileView.Create(Page, AConfig, ANode, FileViewFlags)
-  else if sType = 'thumbnails' then
+  if sType = 'columns' then begin
+    Result := TColumnsFileView.Create(Page, AConfig, ANode, FileViewFlags);
+    {$IFDEF DARWIN}
+    TColumnsFileView(Result).OnDrawCell:= @DarwinFileViewDrawHelper.OnDrawCell;
+    {$ENDIF}
+  end else if sType = 'brief' then begin
+    Result := TBriefFileView.Create(Page, AConfig, ANode, FileViewFlags);
+    {$IFDEF DARWIN}
+    TBriefFileView(Result).OnDrawCell:= @DarwinFileViewDrawHelper.OnDrawCell;
+    {$ENDIF}
+  end else if sType = 'thumbnails' then
     Result := TThumbFileView.Create(Page, AConfig, ANode, FileViewFlags)
   else begin
     DCDebug(rsMsgLogError + 'Invalid file view type "%s"', [sType]);
@@ -5376,8 +5496,16 @@ procedure TfrmMain.UpdateWindowView;
 
     if FInitializedView then
     begin
-      for I := 0 to NoteBook.PageCount - 1 do  //  change on all tabs
+      // Update all tabs
+      for I := 0 to NoteBook.PageCount - 1 do
+      begin
         NoteBook.View[I].UpdateView;
+      end;
+      // Update active tab
+      if Assigned(NoteBook.ActiveView) then
+      begin
+        NoteBook.ActiveView.ApplySettings;
+      end;
     end;
   end;
 
@@ -5477,6 +5605,7 @@ begin
       dskRight.Parent := pnlDskRight;
     end;
 
+    pnlDiskResize(pnlDisk);
     pnlRightResize(pnlRight);
 
     dskLeft.GlyphSize:= gDiskIconsSize;
@@ -5573,6 +5702,7 @@ begin
 
     // Separate tree
     UpdateShellTreeView;
+    UpdateTreeView;
 
     // Operations panel and menu
     if (gPanelOfOp = False) then
@@ -5893,16 +6023,16 @@ end;
 function TfrmMain.ExecuteCommandFromEdit(sCmd: String; bRunInTerm: Boolean): Boolean;
 var
   iIndex: Integer;
+  aFile: TFile = nil;
   sDir, sParams: String;
   sFilename: String = '';
   Operation: TFileSourceExecuteOperation = nil;
-  aFile: TFile = nil;
 begin
   Result:= True;
 
   InsertFirstItem(sCmd, edtCommand);
-  // only cMaxStringItems(see uGlobs.pas) is stored
-  if edtCommand.Items.Count>cMaxStringItems then
+  // only gMaxStringItems(see uGlobs.pas) is stored
+  if edtCommand.Items.Count>gMaxStringItems then
     edtCommand.Items.Delete(edtCommand.Items.Count-1);
   edtCommand.DroppedDown:= False;
 
@@ -5912,8 +6042,13 @@ begin
   if (True) then
   // @@
     begin
-      iIndex:= Pos('cd ', sCmd);
-      if (iIndex = 1) or (sCmd = 'cd') then
+      if FileNameCaseSensitive then
+        sDir:= sCmd
+      else begin
+        sDir:= LowerCase(sCmd);
+      end;
+      iIndex:= Pos('cd ', sDir);
+      if (iIndex = 1) or (sDir = 'cd') then
         begin
           sCmd:= ReplaceEnvVars(sCmd);
 
@@ -5922,7 +6057,7 @@ begin
           else
             begin
               sDir:= RemoveQuotation(Copy(sCmd, iIndex + 3, Length(sCmd)));
-              sDir:= NormalizePathDelimiters(Trim(sDir));
+              sDir:= mbExpandFileName(Trim(sDir));
 
               if (sDir = DirectorySeparator) or (sDir = '..') then
               begin
@@ -6094,9 +6229,21 @@ begin
 end;
 
 procedure TfrmMain.LoadTabs;
+var
+  AConfig: TXmlConfig;
 begin
-  LoadTabsXml(gConfig,'Tabs/OpenedTabs/Left', nbLeft);
-  LoadTabsXml(gConfig,'Tabs/OpenedTabs/Right', nbRight);
+  if gConfig.FindNode(gConfig.RootNode, 'Tabs/OpenedTabs') <> nil then
+    AConfig:= gConfig
+  else begin
+    AConfig:= TXmlConfig.Create(gpCfgDir + 'tabs.xml', True);
+  end;
+
+  try
+    LoadTabsXml(AConfig, 'Tabs/OpenedTabs/Left', nbLeft);
+    LoadTabsXml(AConfig, 'Tabs/OpenedTabs/Right', nbRight);
+  finally
+    if (AConfig <> gConfig) then AConfig.Free;
+  end;
 
   if not CommandLineParams.ActivePanelSpecified then
   begin
@@ -6192,37 +6339,38 @@ begin
   Result:= true;
 end;
 
-function TfrmMain.NSServiceMenuGetFilenames(): TStringList;
+function TfrmMain.NSServiceMenuGetFilenames(): TStringArray;
 var
-  filenames: TStringList;
+  filenames: TStringArray;
   i: Integer;
   files: TFiles;
   activeFile: TFile;
+  path: String;
 begin
-  Result:= nil;
-  filenames:= TStringList.Create;
-
+  filenames:= nil;
   files:= ActiveFrame.CloneSelectedFiles();
-  if files.Count>0 then
-  begin
-    for i:=0 to files.Count-1 do
-    begin
-      filenames.add( files[i].FullPath );
+  if files.Count>0 then begin
+    SetLength( filenames, files.Count );
+    for i:=0 to files.Count-1 do begin
+      filenames[i]:= files[i].FullPath;
+    end;
+  end else begin
+    activeFile:= ActiveFrame.CloneActiveFile;
+    if activeFile<>nil then begin
+      if activeFile.IsNameValid() then
+        path:= activeFile.FullPath
+      else
+        path:= activeFile.Path;
+      FreeAndNil( activeFile );
+      if path <> '' then begin
+        SetLength( filenames, 1 );
+        filenames[0]:= path;
+      end;
     end;
   end;
+
   FreeAndNil( files );
-
-  if filenames.Count = 0 then
-  begin
-    activeFile:= ActiveFrame.CloneActiveFile;
-    if activeFile.IsNameValid() then
-      filenames.add( activeFile.FullPath )
-    else
-      filenames.add( activeFile.Path );
-    FreeAndNil( activeFile );
-  end;
-
-  if filenames.Count>0 then Result:= filenames;
+  Result:= filenames;
 end;
 
 procedure TfrmMain.NSThemeChangedHandler;
@@ -6270,7 +6418,7 @@ begin
     gConfig.SetValue(ANode, 'Width', FRestoredWidth);
     gConfig.SetValue(ANode, 'Height', FRestoredHeight);
     gConfig.SetValue(ANode, 'PixelsPerInch', Screen.PixelsPerInch);
-    gConfig.SetValue(ANode, 'Maximized', (WindowState = wsMaximized));
+    gConfig.SetValue(ANode, 'Maximized', (WindowState in [wsMaximized,wsFullScreen]));
     gConfig.SetValue(ANode, 'Splitter', FMainSplitterPos);
   end;
 end;
@@ -6312,6 +6460,8 @@ begin
 end;
 
 procedure TfrmMain.ConfigSaveSettings(bForce: Boolean);
+var
+  AConfig: TXmlConfig;
 begin
   try
     DebugLn('Saving configuration');
@@ -6322,8 +6472,15 @@ begin
     (* Save all tabs *)
     if gSaveFolderTabs or bForce then
     begin
-      SaveTabsXml(gConfig, 'Tabs/OpenedTabs/', nbLeft, gSaveDirHistory);
-      SaveTabsXml(gConfig, 'Tabs/OpenedTabs/', nbRight, gSaveDirHistory);
+      AConfig:= TXmlConfig.Create(gpCfgDir + 'tabs.xml');
+      try
+        SaveTabsXml(AConfig, 'Tabs/OpenedTabs/', nbLeft, gSaveDirHistory);
+        SaveTabsXml(AConfig, 'Tabs/OpenedTabs/', nbRight, gSaveDirHistory);
+        AConfig.Save;
+      finally
+        AConfig.Free;
+      end;
+      gConfig.DeleteNode(gConfig.RootNode, 'Tabs/OpenedTabs');
     end;
 
     if gSaveWindowState then SaveWindowState;
@@ -6885,6 +7042,7 @@ begin
       mnuAllOperStart.Visible:= False;
       mnuAllOperStop.Visible:= False;
     end;
+    PlaySound(Item);
   end
   else if Event = omevOperationAdded then
   begin
@@ -6909,7 +7067,7 @@ var
   FoundPath: Boolean = False;
   aFileView, OtherFileView: TFileView;
 begin
-  if (Drive^.DriveType in [dtSpecial, dtVirtual]) or IsAvailable(Drive, Drive^.AutoMount) then
+  if (Drive^.DriveType in [dtSpecial, dtVirtual]) or IsAvailable(Drive, True) then
   begin
     case aPanel of
       fpLeft:
@@ -7024,9 +7182,9 @@ begin
   if (EventType = dweDriveRemoved) and Assigned(ADrive) then
   begin
     if IsInPath(ADrive^.Path, ActiveFrame.CurrentPath, True, True) then
-      ActiveFrame.CurrentPath:= gpExePath
+      ActiveFrame.CurrentPath:= GetHomeDir
     else if IsInPath(ADrive^.Path, NotActiveFrame.CurrentPath, True, True) then
-      NotActiveFrame.CurrentPath:= gpExePath;
+      NotActiveFrame.CurrentPath:= GetHomeDir;
   end;
 
   UpdateSelectedDrives;
@@ -7085,11 +7243,22 @@ begin
 end;
 
 procedure TfrmMain.AppThemeChange(Sender: TObject);
+
+  procedure UpdateNoteBook(NoteBook: TFileViewNotebook);
+  var
+    Index: Integer;
+  begin
+    for Index := 0 to NoteBook.PageCount - 1 do
+    begin
+      NoteBook.View[Index].UpdateColor;
+    end;
+  end;
+
 var
   Index: Integer;
 begin
-  FrameLeft.UpdateColor;
-  FrameRight.UpdateColor;
+  UpdateNoteBook(LeftTabs);
+  UpdateNoteBook(RightTabs);
 
   ColSet.UpdateStyle;
   gColorExt.UpdateStyle;
@@ -7110,6 +7279,32 @@ begin
   FormCloseQuery(Self, CanClose);
   Cancel := not CanClose;
 end;
+
+{$IFDEF DARWIN}
+procedure TfrmMain.GlobalMacOSKeyDownHandler(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+var
+  topForm: TCustomForm;
+begin
+  if (Key=VK_W) and (Shift=[ssMeta]) then
+  begin
+    if Sender is TControl then
+    begin
+      topForm:= GetParentForm( TControl(Sender), true );
+      if topForm<>self then
+      begin
+        topForm.Close;
+        Key:= 0;
+      end;
+    end;
+  end;
+end;
+
+procedure TfrmMain.OpenNewWindow(Sender: TObject);
+begin
+  uMyDarwin.openNewInstance;
+end;
+{$ENDIF}
 
 {$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)) and not DEFINED(MSWINDOWS)}
 function TfrmMain.QObjectEventFilter(Sender: QObjectH; Event: QEventH): Boolean; cdecl;

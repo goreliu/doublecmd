@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    This unit contains TFileViewPage and TFileViewNotebook objects.
 
-   Copyright (C) 2016-2022 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2016-2024 Alexander Koblov (alexx2000@mail.ru)
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -139,6 +139,14 @@ type
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure WMEraseBkgnd(var Message: TLMEraseBkgnd); message LM_ERASEBKGND;
 
+{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6))}
+    procedure CNNotify(var Message: TLMNotify); message CN_NOTIFY;
+{$ENDIF}
+
+{$IF DEFINED(LCLWIN32)}
+    procedure PaintWindow(DC: HDC); override;
+{$ENDIF}
+
   public
     constructor Create(ParentControl: TWinControl;
                        NotebookSide: TFilePanelSelect); reintroduce;
@@ -193,7 +201,8 @@ uses
   {$IF DEFINED(LCLGTK2)}
   , Glib2, Gtk2
   {$ELSEIF DEFINED(LCLWIN32)}
-  , Win32Proc
+  , Win32Proc, Win32Themes, UxTheme, Graphics
+  , Themes {$IF DEFINED(DARKWIN)}, uDarkStyle {$ENDIF}
   {$ENDIF}
   {$IF DEFINED(MSWINDOWS)}
   , Windows, Messages
@@ -548,6 +557,38 @@ begin
   Message.Result := 1;
 end;
 
+{$IF (DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6))}
+procedure TFileViewNotebook.CNNotify(var Message: TLMNotify);
+begin
+  // Workaround: https://github.com/doublecmd/doublecmd/issues/1570
+  if Message.NMHdr^.code = TCN_SELCHANGE then
+  begin
+    if PtrInt(Message.NMHDR^.idfrom) >= PageCount then
+      Message.NMHDR^.idfrom:= PtrUInt(PageCount - 1);
+  end;
+  inherited CNNotify(Message);
+end;
+{$ENDIF}
+
+{$IF DEFINED(LCLWIN32)}
+procedure TFileViewNotebook.PaintWindow(DC: HDC);
+var
+  ARect: TRect;
+begin
+  inherited PaintWindow(DC);
+{$IF DEFINED(DARKWIN)}
+  if g_darkModeEnabled then Exit;
+{$ENDIF}
+  if (Win32MajorVersion >= 10) and (PageIndex > -1) then
+  begin
+    ARect:= TabRect(PageIndex);
+    IntersectClipRect(DC, ARect.Left, ARect.Top, ARect.Right, ARect.Top + ScaleY(3, 96));
+    InflateRect(ARect, ScaleX(8, 96), 0);
+    DrawThemeBackground(TWin32ThemeServices(ThemeServices).Theme[teToolBar], DC, TP_BUTTON, TS_CHECKED, ARect, nil);
+  end;
+end;
+{$ENDIF}
+
 procedure TFileViewNotebook.DestroyAllPages;
 var
   i: Integer;
@@ -792,6 +833,11 @@ procedure TFileViewNotebook.DoChange;
 begin
   inherited DoChange;
   ActivePage.DoActivate;
+{$IF DEFINED(LCLWIN32)}
+  if (Win32MajorVersion >= 10)
+  {$IF DEFINED(DARKWIN)} and (not g_darkModeEnabled){$ENDIF} then
+    Invalidate;
+{$ENDIF}
 end;
 
 function TFileViewNotebook.GetPageClass: TCustomPageClass;

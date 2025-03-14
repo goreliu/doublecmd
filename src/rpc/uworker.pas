@@ -122,9 +122,9 @@ var
   LastError: Integer;
   Data: TMemoryStream;
   SearchRec: PSearchRecEx;
-  CreationTime: TFileTime;
-  LastAccessTime: TFileTime;
-  ModificationTime: TFileTime;
+  CreationTime: TFileTimeEx;
+  LastAccessTime: TFileTimeEx;
+  ModificationTime: TFileTimeEx;
   FileAttr: TFileAttributeData;
 
   procedure WriteSearchRec(Data: TMemoryStream; SearchRec: PSearchRecEx);
@@ -188,11 +188,11 @@ begin
   RPC_FileSetTime:
     begin
       FileName:= ARequest.ReadAnsiString;
-      ModificationTime:= ARequest.ReadQWord;
-      CreationTime:= ARequest.ReadQWord;
-      LastAccessTime:= ARequest.ReadQWord;
+      ARequest.ReadBuffer(ModificationTime, SizeOf(TFileTimeEx));
+      ARequest.ReadBuffer(CreationTime, SizeOf(TFileTimeEx));
+      ARequest.ReadBuffer(LastAccessTime, SizeOf(TFileTimeEx));
       DCDebug('FileSetTime ', FileName);
-      Result:= mbFileSetTime(FileName, ModificationTime, CreationTime, LastAccessTime);
+      Result:= mbFileSetTimeEx(FileName, ModificationTime, CreationTime, LastAccessTime);
       LastError:= GetLastOSError;
       ATransport.WriteBuffer(Result, SizeOf(Result));
       ATransport.WriteBuffer(LastError, SizeOf(LastError));
@@ -224,7 +224,13 @@ begin
       Mode:= ARequest.ReadDWord;
       DCDebug('FileOpen ', FileName);
       Handle:= mbFileOpen(FileName, Mode);
-      ATransport.WriteHandle(Handle);
+      if (Handle <> feInvalidHandle) then
+        LastError:= 0
+      else begin
+        LastError:= GetLastOSError;
+      end;
+      ATransport.WriteBuffer(LastError, SizeOf(LastError));
+      if (LastError = 0) then ATransport.WriteHandle(Handle);
     end;
   RPC_FileCreate:
     begin
@@ -232,7 +238,13 @@ begin
       Mode:= ARequest.ReadDWord;
       DCDebug('FileCreate ', FileName);
       Handle:= mbFileCreate(FileName, Mode);
-      ATransport.WriteHandle(Handle);
+      if (Handle <> feInvalidHandle) then
+        LastError:= 0
+      else begin
+        LastError:= GetLastOSError;
+      end;
+      ATransport.WriteBuffer(LastError, SizeOf(LastError));
+      if (LastError = 0) then ATransport.WriteHandle(Handle);
     end;
   RPC_RenameFile:
     begin
@@ -310,8 +322,9 @@ begin
     begin
       FileName:= ARequest.ReadAnsiString;
       NewName:= ARequest.ReadAnsiString;
+      Attr:= ARequest.ReadDWord;
       DCDebug('CreateSymbolicLink ', NewName);
-      Result:= CreateSymLink(FileName, NewName);
+      Result:= CreateSymLink(FileName, NewName, Attr);
       LastError:= GetLastOSError;
       ATransport.WriteBuffer(Result, SizeOf(Result));
       ATransport.WriteBuffer(LastError, SizeOf(LastError));

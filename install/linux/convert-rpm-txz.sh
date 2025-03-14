@@ -5,9 +5,6 @@
 # Script directory
 SCRIPT_DIR=$(pwd)
 
-# Source directory
-DC_SOURCE_DIR=$SCRIPT_DIR/../..
-
 # The new package will be saved here
 PACK_DIR=$SCRIPT_DIR/release
 
@@ -66,13 +63,13 @@ mv usr/share/doublecmd/highlighters              $DC_ROOT_DIR/
 mv usr/share/pixmaps/doublecmd.png               $DC_ROOT_DIR/
 
 # Copy libraries
-pushd $DC_SOURCE_DIR/install/linux
+pushd $SCRIPT_DIR
 cp -a lib/$CPU_TARGET/*.so*                      $DC_ROOT_DIR/
 cp -a lib/$CPU_TARGET/$LCL_PLATFORM/*.so*        $DC_ROOT_DIR/
 popd
 
-# Copy script for execute portable version
-install -m 755 $DC_SOURCE_DIR/doublecmd.sh       $DC_ROOT_DIR/
+# Set run-time library search path
+patchelf --set-rpath '$ORIGIN' $DC_ROOT_DIR/doublecmd
 
 # Make portable config file
 mkdir $DC_ROOT_DIR/settings

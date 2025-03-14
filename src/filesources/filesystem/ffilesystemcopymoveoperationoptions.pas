@@ -112,10 +112,6 @@ constructor TFileSystemCopyMoveOperationOptionsUI.Create(AOwner: TComponent; AFi
 begin
   inherited;
 
-  {$IFDEF DARWIN}
-  chkVerify.Visible := False;
-  {$ENDIF}
-
   {$IFDEF MSWINDOWS}
   cbCopyOwnership.Visible := False;
   cbCopyPermissions.Visible := True;
@@ -310,6 +306,11 @@ begin
       0: SetPropertyError := fsoospeNone;
       1: SetPropertyError := fsoospeDontSet;
       2: SetPropertyError := fsoospeIgnoreErrors;
+    end;
+    case chkCopyOnWrite.State of
+      cbGrayed    : CopyOnWrite := fsoogNone;
+      cbChecked   : CopyOnWrite := fsoogYes;
+      cbUnchecked : CopyOnWrite := fsoogNo;
     end;
     CorrectSymLinks := cbCorrectLinks.Checked;
     CheckFreeSpace := cbCheckFreeSpace.Checked;

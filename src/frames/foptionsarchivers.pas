@@ -35,6 +35,7 @@ type
 
   { TfrmOptionsArchivers }
   TfrmOptionsArchivers = class(TOptionsEditor)
+    chkHide: TCheckBox;
     chkFileNameOnlyList: TCheckBox;
     pnlFileNameOnlyList: TPanel;
     pnlArchiverListbox: TPanel;
@@ -120,6 +121,7 @@ type
     SaveArchiverDialog: TSaveDialog;
     OpenArchiverDialog: TOpenDialog;
     procedure chkFileNameOnlyListChange(Sender: TObject);
+    procedure chkHideChange(Sender: TObject);
     procedure lbxArchiverSelectionChange(Sender: TObject; {%H-}User: boolean);
     procedure lbxArchiverDragOver(Sender, {%H-}Source: TObject; {%H-}X, {%H-}Y: integer; {%H-}State: TDragState; var Accept: boolean);
     procedure lbxArchiverDragDrop(Sender, {%H-}Source: TObject; {%H-}X, Y: integer);
@@ -174,7 +176,7 @@ implementation
 
 uses
   //Lazarus, Free-Pascal, etc.
-
+  IntegerList,
   //DC
   DCStrUtils, uGlobs, uLng, uSpecialDir, uGlobsPaths, uShowMsg;
 
@@ -190,8 +192,8 @@ var
 { TfrmOptionsArchivers.Init }
 procedure TfrmOptionsArchivers.Init;
 begin
-  OpenArchiverDialog.Filter := ParseLineToFileFilter([rsFilterArchiverConfigFiles, '*.ini;*.addon', rsFilterAnyFiles, '*.*']);
-  SaveArchiverDialog.Filter := ParseLineToFileFilter([rsFilterArchiverConfigFiles, '*.ini', rsFilterAnyFiles, '*.*']);
+  OpenArchiverDialog.Filter := ParseLineToFileFilter([rsFilterArchiverConfigFiles, '*.ini;*.addon', rsFilterAnyFiles, AllFilesMask]);
+  SaveArchiverDialog.Filter := ParseLineToFileFilter([rsFilterArchiverConfigFiles, '*.ini', rsFilterAnyFiles, AllFilesMask]);
 end;
 
 { TfrmOptionsArchivers.Load }
@@ -341,6 +343,7 @@ begin
         edtArchiverIdPosition.Text := FIDPos;
         edtArchiverIdSeekRange.Text := FIDSeekRange;
         chkFileNameOnlyList.Checked:= mafFileNameList in FFlags;
+        chkHide.Checked:= mafHide in FFlags;
         ckbArchiverUnixPath.Checked := (FFormMode and $01 <> $00);
         ckbArchiverWindowsPath.Checked := (FFormMode and $02 <> $00);
         ckbArchiverUnixFileAttributes.Checked := (FFormMode and $04 <> $00);
@@ -368,6 +371,11 @@ begin
   edtArchiverListStart.Enabled:= AEnabled;
   edtArchiverListEnd.Enabled:= AEnabled;
   memArchiverListFormat.Enabled:= AEnabled;
+  edtAnyChange(Sender);
+end;
+
+procedure TfrmOptionsArchivers.chkHideChange(Sender: TObject);
+begin
   edtAnyChange(Sender);
 end;
 
@@ -528,6 +536,7 @@ begin
     FIDSeekRange := edtArchiverIdSeekRange.Text;
     FFlags := [];
     if chkFileNameOnlyList.Checked then Include(FFlags, mafFileNameList);
+    if chkHide.Checked then Include(FFlags, mafHide);
     FFormMode := 0;
     if ckbArchiverUnixPath.Checked then  FFormMode := FFormMode or $01;
     if ckbArchiverWindowsPath.Checked then  FFormMode := FFormMode or $02;
@@ -671,6 +680,7 @@ begin
   if MultiArcListTemp <> nil then
     MultiArcListTemp.Free;
   MultiArcListTemp := gMultiArcList.Clone;
+  FillListBoxWithArchiverList;
   lbxArchiverSelectionChange(lbxArchiver, False);
 end;
 
@@ -699,14 +709,15 @@ end;
 { TfrmOptionsArchivers.miArchiverExportClick }
 procedure TfrmOptionsArchivers.miArchiverExportClick(Sender: TObject);
 var
-  slValueList, slOutputIndexSelected: TStringList;
+  slValueList: TStringList;
+  slOutputIndexSelected: TIntegerList;
   ExportedMultiArcList: TMultiArcList;
   iIndex, iExportedIndex: integer;
 begin
   if MultiArcListTemp.Count > 0 then
   begin
     slValueList := TStringList.Create;
-    slOutputIndexSelected := TStringList.Create;
+    slOutputIndexSelected := TIntegerList.Create;
     try
       for iIndex := 0 to pred(MultiArcListTemp.Count) do
         slValueList.Add(MultiArcListTemp.FList.Strings[iIndex]);
@@ -717,7 +728,7 @@ begin
         try
           for iIndex := 0 to pred(slOutputIndexSelected.Count) do
           begin
-            iExportedIndex := StrToIntDef(slOutputIndexSelected.Strings[iIndex], -1);
+            iExportedIndex := slOutputIndexSelected[iIndex];
             if iExportedIndex <> -1 then
               ExportedMultiArcList.Add(MultiArcListTemp.FList.Strings[iExportedIndex], MultiArcListTemp.Items[iExportedIndex].Clone);
           end;
@@ -748,8 +759,9 @@ end;
 { TfrmOptionsArchivers.miArchiverImportClick }
 procedure TfrmOptionsArchivers.miArchiverImportClick(Sender: TObject);
 var
+  slValueList: TStringList;
   ImportedMultiArcList: TMultiArcList;
-  slValueList, slOutputIndexSelected: TStringList;
+  slOutputIndexSelected: TIntegerList;
   iIndex, iImportedIndex, iNbImported: integer;
 begin
   OpenArchiverDialog.DefaultExt := '*.ini';
@@ -763,16 +775,16 @@ begin
       if ImportedMultiArcList.Count > 0 then
       begin
         slValueList := TStringList.Create;
-        slOutputIndexSelected := TStringList.Create;
+        slOutputIndexSelected := TIntegerList.Create;
         try
           for iIndex := 0 to pred(ImportedMultiArcList.Count) do
             slValueList.Add(ImportedMultiArcList.FList.Strings[iIndex]);
           if ShowInputMultiSelectListBox(rsOptArchiverImportCaption, rsOptArchiverImportPrompt, slValueList, slOutputIndexSelected) then
           begin
             iNbImported := 0;
-            for iIndex := 0 to pred(slOutputIndexSelected.Count) do
+            for iIndex := 0 to Pred(slOutputIndexSelected.Count) do
             begin
-              iImportedIndex := StrToIntDef(slOutputIndexSelected.Strings[iIndex], -1);
+              iImportedIndex := slOutputIndexSelected[iIndex];
               if iImportedIndex <> -1 then
               begin
                 MultiArcListTemp.Add(ImportedMultiArcList.FList.Strings[iImportedIndex], ImportedMultiArcList.Items[iImportedIndex].Clone);

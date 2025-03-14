@@ -203,6 +203,7 @@ const
 
 const
   ViewerEncodingMultiByte: TViewerEncodings = [
+    veCp932, veCp936, veCp949, veCp950,
     veUtf8, veUtf8bom, veUcs2le, veUcs2be,
     veUtf16le, veUtf16be, veUtf32le, veUtf32be];
 
@@ -351,9 +352,9 @@ type
     procedure OutText(x, y: Integer; const sText: String; StartPos: PtrInt; DataLength: Integer);
     procedure OutBin(x, y: Integer; const sText: String; StartPos: PtrInt; DataLength: Integer);
 
-    procedure OutCustom(x, y: Integer; const sText: string;StartPos: PtrInt; DataLength: Integer);  // render one line
-    function  TransformCustom(var APosition: PtrInt; ALimit: PtrInt;AWithAdditionalData:boolean=True): AnsiString;
-    function  TransformCustomBlock(var APosition: PtrInt; DataLength: integer ; ASeparatorsOn, AAlignData:boolean; out AChars:AnsiString): AnsiString;
+    procedure OutCustom(x, y: Integer; const sText: String;StartPos: PtrInt; DataLength: Integer);  // render one line
+    function  TransformCustom(var APosition: PtrInt; ALimit: PtrInt; AWithAdditionalData: Boolean = True): String;
+    function  TransformCustomBlock(var APosition: PtrInt; DataLength: Integer; ASeparatorsOn, AAlignData: Boolean; out AChars: String): String;
 
     function HexToValueProc(AChar:AnsiChar;AMaxDigitsCount:integer):AnsiString;
     function DecToValueProc(AChar:AnsiChar;AMaxDigitsCount:integer):AnsiString;
@@ -362,7 +363,7 @@ type
     procedure WriteText;
     procedure WriteCustom; virtual;
     function  TransformText(const sText: String; const Xoffset: Integer): String;
-    function  TransformBin(var aPosition: PtrInt; aLimit: PtrInt): AnsiString;
+    function  TransformBin(var aPosition: PtrInt; aLimit: PtrInt): String;
     function  TransformHex(var aPosition: PtrInt; aLimit: PtrInt): AnsiString;virtual;
 
     procedure AddLineOffset(const iOffset: PtrInt); inline;
@@ -451,9 +452,7 @@ type
     function DoMouseWheelUp(Shift: TShiftState; MousePos: TPoint): Boolean; override;
     function DoMouseWheelLeft(Shift: TShiftState; MousePos: TPoint): Boolean; override;
     function DoMouseWheelRight(Shift: TShiftState; MousePos: TPoint): Boolean; override;
-{$if lcl_fullversion >= 1070000}
     procedure DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy; const AXProportion, AYProportion: Double); override;
-{$endif}
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -555,6 +554,9 @@ implementation
 uses
   Math, LCLType, Graphics, Forms, LCLProc, Clipbrd, LConvEncoding,
   DCUnicodeUtils, LCLIntf, LazUTF8, DCOSUtils , DCConvertEncoding
+  {$IF LCL_FULLVERSION >= 4990000}
+  , LazUTF16
+  {$ENDIF}
   {$IF DEFINED(UNIX)}
   , BaseUnix, Unix, DCUnix
   {$ELSEIF DEFINED(WINDOWS)}
@@ -689,6 +691,8 @@ begin
 end;
 
 procedure TViewerControl.Paint;
+var
+  AText: String;
 begin
   if not IsFileOpen then
   begin
@@ -712,8 +716,10 @@ begin
 
   if FViewerControlMode = vcmBook then
     FTextWidth := ((ClientWidth - (Canvas.TextWidth('W') * FColCount)) div FColCount)
-  else
-    FTextWidth := ClientWidth  div Canvas.TextWidth('W') - 2;
+  else begin
+    AText := StringOfChar('W', FMaxTextWidth);
+    FTextWidth := Canvas.TextFitInfo(AText, GetViewerRect.Width - FLeftMargin);
+  end;
 
   FLineList.Clear;
 
@@ -984,27 +990,48 @@ begin
   end;
 end;
 
-
-function TViewerControl.TransformBin(var aPosition: PtrInt; aLimit: PtrInt): AnsiString;
+function TViewerControl.TransformBin(var aPosition: PtrInt; aLimit: PtrInt): String;
 var
-  c: AnsiChar;
-  i: Integer;
+  S: String;
+  C: AnsiChar;
+  P: PAnsiChar;
+  Len: Integer;
+  I, L: Integer;
+  SingleByte: Boolean;
 begin
-  Result := '';
-  for i := 0 to cBinWidth - 1 do
-  begin
-    if aPosition >= aLimit then
-      Break;
-    c := PAnsiChar(GetDataAdr)[aPosition];
-    if c < ' ' then
-      Result := Result + '.'
-    else if c > #127 then
-      Result := Result + '.'
-    else
-      Result := Result + c;
+  Result := EmptyStr;
 
-    Inc(aPosition);
+  if (APosition + cBinWidth) > aLimit then
+    Len:= aLimit - APosition
+  else begin
+    Len:= cBinWidth;
   end;
+
+  SetString(S, PAnsiChar(GetDataAdr) + aPosition, Len);
+  SingleByte:= not (FEncoding in ViewerEncodingMultiByte);
+
+  if SingleByte then
+  begin
+    S:= ConvertToUTF8(S);
+  end;
+  L:= Length(S);
+  P:= PAnsiChar(S);
+
+  for I := 1 to L do
+  begin
+    C := P^;
+    if C < ' ' then
+      Result := Result + '.'
+    else if SingleByte then
+      Result := Result + C
+    else if C > #127 then
+      Result := Result + '.'
+    else begin
+      Result := Result + C;
+    end;
+    Inc(P);
+  end;
+  Inc(aPosition, Len);
 end;
 
 function TViewerControl.TransformHex(var aPosition: PtrInt; aLimit: PtrInt): AnsiString;
@@ -1012,9 +1039,8 @@ begin
   Result:=TransformCustom(aPosition,aLimit);
 end;
 
-
 function TViewerControl.TransformCustom(var APosition: PtrInt; ALimit: PtrInt;
-  AWithAdditionalData: boolean): AnsiString;
+  AWithAdditionalData: boolean): String;
 var
   sAscii: string = '';
   sRez  : string = '';
@@ -1039,61 +1065,82 @@ begin
   Result:=sRez;
 end;
 
-function TViewerControl.TransformCustomBlock(var APosition: PtrInt; DataLength: integer ; ASeparatorsOn, AAlignData:boolean; out AChars:AnsiString): AnsiString;
+function TViewerControl.TransformCustomBlock(var APosition: PtrInt;
+  DataLength: Integer; ASeparatorsOn, AAlignData: Boolean; out AChars: String): String;
 var
-  c: AnsiChar;
-  i: Integer;
-  iSep,Len :integer;
-  sStr: string = '';
-  sRez: string = '';
-  sEmpty:string;
-  aStartOffset: PtrInt;
+  S: String;
+  C: AnsiChar;
+  P: PAnsiChar;
+  Len: Integer;
+  I, L: Integer;
+  sEmpty: String;
+  iSep: Integer = 1;
+  SingleByte: Boolean;
 begin
-  if (APosition+DataLength)>FHighLimit then Len:=FHighLimit-APosition else
-     Len:=DataLength;
+  Result:= EmptyStr;
 
-  iSep:=1;                      // counter for set separator
-  aStartOffset := APosition;
-  for i := 0 to Len - 1 do
+  if (APosition + DataLength) > FHighLimit then
+    Len:= FHighLimit - APosition
+  else begin
+    Len:= DataLength;
+  end;
+
+  SetString(S, PAnsiChar(GetDataAdr) + aPosition, Len);
+  SingleByte:= not (FEncoding in ViewerEncodingMultiByte);
+
+  if SingleByte then
   begin
-    c := PAnsiChar(GetDataAdr)[aPosition];
-    if c < ' ' then
-      AChars := AChars + '.'
-    else if c > #127 then
-      AChars := AChars + '.'
-    else
-      AChars := AChars + c;
+    S:= ConvertToUTF8(S);
+  end;
+  L:= Length(S);
+  P:= PAnsiChar(S);
+  AChars:= EmptyStr;
 
-    sRez := sRez + FCustom.ChrToValueProc(c, FCustom.MaxValueDigits);
-    if ( iSep  =  FCustom.CountSeperate) and ASeparatorsOn and
-       ( i     < (FCustom.ValuesPerLine - 1))then
+  for I := 1 to L do
+  begin
+    C := P^;
+    if C < ' ' then
+      AChars := AChars + '.'
+    else if SingleByte then
+      AChars := AChars + C
+    else if C > #127 then
+      AChars := AChars + '.'
+    else begin
+      AChars := AChars + C;
+    end;
+    Inc(P);
+  end;
+  P:= PAnsiChar(GetDataAdr);
+
+  for I := 0 to Len - 1 do
+  begin
+    C := P[aPosition];
+    Result += FCustom.ChrToValueProc(C, FCustom.MaxValueDigits);
+
+    if (iSep  =  FCustom.CountSeperate) and ASeparatorsOn and
+       (I     < (FCustom.ValuesPerLine - 1))then
     begin
-      sRez := sRez + FCustom.SeparatorChar;
-      iSep:=0;
+      iSep := 0;
+      Result += FCustom.SeparatorChar;
     end else
     begin
-      sRez := sRez + FCustom.SeparatorSpace;
+      Result += FCustom.SeparatorSpace;
     end;
 
     Inc(aPosition);
-    inc(iSep);
+    Inc(iSep);
   end;
 
   if AAlignData then
   begin
-    setlength(sEmpty,FCustom.MaxValueDigits);
-    FillChar(sEmpty[1],FCustom.MaxValueDigits,chr(VK_SPACE));
+    sEmpty := StringOfChar(#32, FCustom.MaxValueDigits);
 
-    while (i<FCustom.ValuesPerLine-1) do
+    while (I < FCustom.ValuesPerLine - 1) do
     begin
-      sRez := sRez + sEmpty + FCustom.SeparatorSpace;
-      inc(i);
+      Result += sEmpty + FCustom.SeparatorSpace;
+      Inc(I);
     end;
-
-    setlength(sEmpty,0);
   end;
-
-  Result:=sRez;
 end;
 
 
@@ -1735,6 +1782,16 @@ var
   CharLenInBytes: Integer;
   DataLength: PtrInt;
   sText: String;
+
+  procedure DrawCaret(X, Y: Integer; LinePos: PtrInt);
+  begin
+    if FShowCaret and (FCaretPos = LinePos) then
+    begin
+      LCLIntf.SetCaretPos(X, Y);
+      if not FCaretVisible then FCaretVisible:= LCLIntf.ShowCaret(Handle);
+    end;
+  end;
+
 begin
   iPos := FPosition;
   if Mode = vcmBook then
@@ -1747,8 +1804,17 @@ begin
   begin
     for yIndex := 0 to GetClientHeightInLines(False) - 1 do
     begin
-      if iPos >= FHighLimit then
+      if iPos > FHighLimit then
         Break;
+
+      if iPos = FHighLimit then
+      begin
+        if GetPrevCharAsAscii(iPos, CharLenInBytes) = 10 then
+        begin
+          DrawCaret(0, yIndex * FTextHeight, iPos);
+        end;
+        Break;
+      end;
 
       AddLineOffset(iPos);
       LineStart := iPos;
@@ -1757,8 +1823,9 @@ begin
 
       if i > FHLowEnd then FHLowEnd:= i;
 
-      if DataLength > 0 then
-      begin
+      if DataLength = 0 then
+        DrawCaret(0, yIndex * FTextHeight, LineStart)
+      else begin
         if (Mode = vcmText) and (FHPosition > 0) then
         begin
           for i:= 1 to FHPosition do
@@ -1896,7 +1963,10 @@ begin
     // Don't allow empty lines at the bottom of the control.
     LinesTooMany := GetClientHeightInLines - GetLinesTillEnd(Value, LastLineReached);
     if LinesTooMany > 0 then
-      ScrollPosition(Value, -LinesTooMany); // scroll back upwards
+    begin
+      // scroll back upwards
+      ScrollPosition(Value, -LinesTooMany);
+    end;
 
     FPosition := Value;
     if Assigned(FOnPositionChanged) then
@@ -1977,9 +2047,10 @@ end;
 function TViewerControl.GetLinesTillEnd(FromPosition: PtrInt;
   out LastLineReached: Boolean): Integer;
 var
+  iPos: PtrInt;
   yIndex: Integer;
-  iPos:   PtrInt;
   DataLength: PtrInt;
+  CharLenInBytes: Integer;
 begin
   Result := 0;
   iPos   := FromPosition;
@@ -1998,6 +2069,11 @@ begin
     end;
   end;
   LastLineReached := (iPos >= FHighLimit);
+  if LastLineReached and (FViewerControlMode in [vcmText, vcmWrap, vcmBook]) then
+  begin
+    if (GetPrevCharAsAscii(FHighLimit, CharLenInBytes) = 10) then
+      Inc(Result);
+  end;
 end;
 
 procedure TViewerControl.SetShowCaret(AValue: Boolean);
@@ -2122,7 +2198,7 @@ begin
     Canvas.TextOut(X, Y, GetText(StartPos, iBegDrawIndex - pBegLine, 0));
 end;
 
-procedure TViewerControl.OutCustom(x, y: Integer; const sText: string;
+procedure TViewerControl.OutCustom(x, y: Integer; const sText: String;
   StartPos: PtrInt; DataLength: Integer);
 var
   sTmpText: String;
@@ -2157,13 +2233,16 @@ begin
   // Get selection start
   if (FBlockBeg <= pBegLine) then
     iBegDrawIndex := pBegLine
-  else
+  else begin
     iBegDrawIndex := FBlockBeg;
+  end;
+
   // Get selection end
   if (FBlockEnd < pEndLine) then
     iEndDrawIndex := FBlockEnd
-  else
+  else begin
     iEndDrawIndex := pEndLine;
+  end;
 
   // Text after selection (hex part)
   if pEndLine - iEndDrawIndex > 0 then
@@ -2198,7 +2277,11 @@ begin
   end;
 
   // Text before selection + selected text (ascii part)
-  sTmpText := Copy(sText, 1 + FCustom.StartAscii, iEndDrawIndex - pBegLine);
+  if (iEndDrawIndex - pBegLine) = FCustom.ValuesPerLine then
+    sTmpText := Copy(sText, 1 + FCustom.StartAscii, MaxInt)
+  else begin
+    sTmpText := UTF8Copy(sText, 1 + FCustom.StartAscii, iEndDrawIndex - pBegLine);
+  end;
   Canvas.Brush.Color := clHighlight;
   Canvas.Font.Color  := clHighlightText;
   Canvas.TextOut(x, y, sTmpText);
@@ -2210,7 +2293,7 @@ begin
   // Text before selection (ascii part)
   if iBegDrawIndex - pBegLine > 0 then
   begin
-    sTmpText := Copy(sText, 1 + FCustom.StartAscii, iBegDrawIndex - pBegLine);
+    sTmpText := UTF8Copy(sText, 1 + FCustom.StartAscii, iBegDrawIndex - pBegLine);
     Canvas.TextOut(x, y, sTmpText);
   end;
 end;
@@ -2243,12 +2326,15 @@ begin
   // Get selection start/end.
   if (FBlockBeg <= pBegLine) then
     iBegDrawIndex := pBegLine
-  else
+  else begin
     iBegDrawIndex := FBlockBeg;
+  end;
+
   if (FBlockEnd < pEndLine) then
     iEndDrawIndex := FBlockEnd
-  else
+  else begin
     iEndDrawIndex := pEndLine;
+  end;
 
   // Text after selection.
   if pEndLine - iEndDrawIndex > 0 then
@@ -2258,7 +2344,12 @@ begin
   Canvas.Brush.Color := clHighlight;
   Canvas.Font.Color  := clHighlightText;
 
-  Canvas.TextOut(X, Y, Copy(sText, 1, iEndDrawIndex - pBegLine));
+  // Whole line selected
+  if (iEndDrawIndex - pBegLine) = DataLength then
+    Canvas.TextOut(X, Y, sText)
+  else begin
+    Canvas.TextOut(X, Y, UTF8Copy(sText, 1, iEndDrawIndex - pBegLine));
+  end;
 
   // Restore previous canvas settings
   Canvas.Brush.Color := Color;
@@ -2266,7 +2357,7 @@ begin
 
   // Text before selection
   if iBegDrawIndex - pBegLine > 0 then
-    Canvas.TextOut(X, Y, Copy(sText, 1, iBegDrawIndex - pBegLine));
+    Canvas.TextOut(X, Y, UTF8Copy(sText, 1, iBegDrawIndex - pBegLine));
 end;
 
 procedure TViewerControl.AddLineOffset(const iOffset: PtrInt);
@@ -2337,8 +2428,7 @@ begin
       VK_END:
         begin
           Key := 0;
-          GetPrevCharAsAscii(FHighLimit, CharLenInBytes);
-          CaretPos := (FHighLimit - CharLenInBytes);
+          CaretPos := FHighLimit;
           MakeVisible(FCaretPos);
         end;
       else
@@ -2464,7 +2554,11 @@ begin
 
             if CharSide in [csRight, csAfter] then
             begin
-              GetNextCharAsAscii(FCaretPos, CharLenInBytes);
+              if FViewerControlMode in [vcmDec, vcmHex, vcmBin] then
+                CharLenInBytes := 1
+              else begin
+                GetNextCharAsAscii(FCaretPos, CharLenInBytes);
+              end;
               FCaretPos := FCaretPos + CharLenInBytes;
             end;
 
@@ -2520,7 +2614,11 @@ procedure TViewerControl.MouseMove(Shift: TShiftState; X, Y: Integer);
   var
     CharLenInBytes: Integer;
   begin
-    GetNextCharAsAscii(aPosition, CharLenInBytes);
+    if FViewerControlMode in [vcmDec, vcmHex, vcmBin] then
+      CharLenInBytes := 1
+    else begin
+      GetNextCharAsAscii(aPosition, CharLenInBytes);
+    end;
     aPosition := aPosition + CharLenInBytes;
   end;
 
@@ -2652,14 +2750,12 @@ begin
     Result := HScroll(Mouse.WheelScrollLines);
 end;
 
-{$if lcl_fullversion >= 1070000}
 procedure TViewerControl.DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy; const AXProportion, AYProportion: Double);
 begin
   FScrollBarVert.Width  := LCLIntf.GetSystemMetrics(SM_CYVSCROLL);
   FScrollBarHorz.Height := LCLIntf.GetSystemMetrics(SM_CYHSCROLL);
   inherited DoAutoAdjustLayout(AMode, AXProportion, AYProportion);
 end;
-{$endif}
 
 function TViewerControl.XYPos2Adr(x, y: Integer; out CharSide: TCharSide): PtrInt;
 var
@@ -2668,18 +2764,24 @@ var
 
   function XYPos2AdrBin: PtrInt;
   var
-    I:  Integer;
+    I, J, L:  Integer;
     charWidth: Integer;
     textWidth: Integer;
     tmpPosition: PtrInt;
     s, ss, sText: String;
+    InvalidCharLen: Integer;
   begin
+    J:= 1;
     ss := EmptyStr;
     tmpPosition := StartLine;
     sText := TransformBin(tmpPosition, EndLine);
-    for I := 1 to Length(sText) do
+    L:= Length(sText);
+
+    for I := 1 to L do
     begin
-      s:= sText[I];
+      charWidth:= SafeUTF8NextCharLen(PByte(@sText[J]), (L - J) + 1, InvalidCharLen);
+      s:= Copy(sText, J, charWidth);
+      Inc(J, charWidth);
       ss := ss + s;
       textWidth := Canvas.TextWidth(ss);
       if textWidth > x then
@@ -2703,10 +2805,11 @@ var
   //    |     0000AAAA: | FF AA CC AE | djfjks       |
 
   var
-    i:  Integer;
+    I, J, L:  Integer;
     charWidth: Integer;
     textWidth: Integer;
     tmpPosition: PtrInt;
+    InvalidCharLen: Integer;
     ss, sText, sPartialText: String;
   begin
     tmpPosition  := StartLine;
@@ -2723,15 +2826,15 @@ var
     end;
 
     // Clicked on custom part
-    for i := 0 to FCustom.ValuesPerLine - 1 do
+    for I := 0 to FCustom.ValuesPerLine - 1 do
     begin
-      sPartialText := Copy(sText, 1 + FCustom.StartOfs + i * (FCustom.MaxValueDigits + FCustom.SpaceCount), FCustom.MaxValueDigits);
+      sPartialText := Copy(sText, 1 + FCustom.StartOfs + I * (FCustom.MaxValueDigits + FCustom.SpaceCount), FCustom.MaxValueDigits);
       ss := ss + sPartialText;
       textWidth := Canvas.TextWidth(ss);
       if textWidth > x then
       begin
         // Check if we're not after end of data.
-        if StartLine + i >= EndLine then
+        if StartLine + I >= EndLine then
         begin
           CharSide := csBefore;
           Exit(EndLine);
@@ -2744,17 +2847,17 @@ var
         else
           CharSide := csRight;
 
-        Exit(StartLine + i);
+        Exit(StartLine + I);
       end;
 
       // Space after hex number.
-      ss := ss + string(sText[1 + FCustom.StartOfs + i * (FCustom.MaxValueDigits + 1) + FCustom.MaxValueDigits]);
+      ss := ss + string(sText[1 + FCustom.StartOfs + I * (FCustom.MaxValueDigits + 1) + FCustom.MaxValueDigits]);
       textWidth := Canvas.TextWidth(ss);
 
       if textWidth > x then
       begin
         CharSide := csAfter;
-        Exit(StartLine + i);
+        Exit(StartLine + I);
       end;
     end;
 
@@ -2768,15 +2871,19 @@ var
     end;
 
     // Clicked on ascii part.
-    for i := 0 to FCustom.ValuesPerLine - 1 do
+    L:= Length(sText);
+    J:= 1 + FCustom.StartAscii;
+    for I := 0 to FCustom.ValuesPerLine - 1 do
     begin
-      sPartialText := string(sText[1 + FCustom.StartAscii + i]);
+      charWidth := SafeUTF8NextCharLen(PByte(@sText[J]), (L - J) + 1, InvalidCharLen);
+      sPartialText := Copy(sText, J, charWidth);
+      Inc(J, charWidth);
       ss := ss + sPartialText;
       textWidth := Canvas.TextWidth(ss);
       if textWidth > x then
       begin
         // Check if we're not after end of data.
-        if StartLine + i >= EndLine then
+        if StartLine + I >= EndLine then
         begin
           CharSide := csBefore;
           Exit(EndLine);
@@ -2789,7 +2896,7 @@ var
         else
           CharSide := csRight;
 
-        Exit(StartLine + i);
+        Exit(StartLine + I);
       end;
     end;
 
@@ -2827,7 +2934,7 @@ var
           Inc(len); // Assume there is one character after conversion
                     // (otherwise use Inc(len, UTF8Length(s))).
 
-        if len <= FHPosition then
+        if (Mode = vcmText) and (len <= FHPosition) then
         begin
           i := i + CharLenInBytes;
           Continue;
@@ -3009,14 +3116,14 @@ begin
             Result := PByte(GetDataAdr)[iPosition];
 
           // Full conversion:
-          // Result := UTF8CharacterToUnicode(PAnsiChar(GetDataAdr + iPosition), CharLenInBytes);
+          // Result := UTF8CodepointToUnicode(PAnsiChar(GetDataAdr + iPosition), CharLenInBytes);
         end
         else
           CharLenInBytes := 0;
       end;
 
     veAnsi, veOem,
-    veCp1250..veCp950,
+    veCp1250..veCp874,
     veIso88591,
     veIso88592,
     veKoi8r,
@@ -3108,6 +3215,18 @@ begin
       else
         CharLenInBytes := 0;
 
+    veCp932, // Unsupported variable-width encodings
+    veCp936, // TODO: Add cp932, cp936, cp949, cp950 encoding support
+    veCp949,
+    veCp950:
+      if iPosition < FHighLimit then
+      begin
+        Result := PByte(GetDataAdr)[iPosition];
+        CharLenInBytes := 1;
+      end
+      else
+        CharLenInBytes := 0;
+
     else
       raise Exception.Create('Unsupported viewer encoding');
   end;
@@ -3133,14 +3252,14 @@ begin
             Result := PByte(GetDataAdr)[iPosition - 1];
 
           // Full conversion:
-          // Result := UTF8CharacterToUnicode(PAnsiChar(GetDataAdr + iPosition - CharLenInBytes), CharLenInBytes);
+          // Result := UTF8CodepointToUnicode(PAnsiChar(GetDataAdr + iPosition - CharLenInBytes), CharLenInBytes);
         end
         else
           CharLenInBytes := 0;
       end;
 
     veAnsi, veOem,
-    veCp1250..veCp950,
+    veCp1250..veCp874,
     veIso88591,
     veIso88592,
     veKoi8r,
@@ -3232,6 +3351,18 @@ begin
       else
         CharLenInBytes := 0;
 
+    veCp932, // Unsupported variable-width encodings
+    veCp936, // TODO: Add cp932, cp936, cp949, cp950 encoding support
+    veCp949,
+    veCp950:
+      if iPosition > FLowLimit then
+      begin
+        Result := PByte(GetDataAdr + iPosition)[-1];
+        CharLenInBytes := 1;
+      end
+      else
+        CharLenInBytes := 0;
+
     else
       raise Exception.Create('Unsupported viewer encoding');
   end;
@@ -3250,7 +3381,7 @@ begin
                                             FHighLimit - iPosition,
                                             InvalidCharLen);
     veAnsi, veOem,
-    veCp1250..veCp950,
+    veCp1250..veCp874,
     veIso88591,
     veIso88592,
     veKoi8r,
@@ -3277,6 +3408,13 @@ begin
         CharLenInBytes := 0;
     veUtf32be, veUtf32le:
       CharLenInBytes := 4;
+
+    veCp932, // Unsupported variable-width encodings
+    veCp936, // TODO: Add cp932, cp936, cp949, cp950 encoding support
+    veCp949,
+    veCp950:
+      CharLenInBytes := 1;
+
     else
       raise Exception.Create('Unsupported viewer encoding');
   end;
@@ -3383,11 +3521,14 @@ begin
 
     Update;
 
-    if (FVisibleOffset < FHPosition) or
-       (FVisibleOffset > FHPosition + FTextWidth) then
+    if FViewerControlMode = vcmText then
     begin
-      SetHPosition(FVisibleOffset);
-      HScroll(-1);
+      if (FVisibleOffset < FHPosition) or
+         (FVisibleOffset > FHPosition + FTextWidth) then
+      begin
+        SetHPosition(FVisibleOffset);
+        HScroll(-1);
+      end;
     end;
   end;
 end;
@@ -3503,7 +3644,7 @@ end;
 
 function TViewerControl.DetectEncoding: TViewerEncoding;
 var
-  DetectStringLength: Integer = 2048; // take first 2kB of the file to detect encoding
+  DetectStringLength: Integer = 4096; // take first 4kB of the file to detect encoding
   DetectString: String;
   DetectedEncodingName: String;
   Enc: TViewerEncoding;
@@ -3658,7 +3799,7 @@ procedure TViewerControl.UpdateSelection;
         end;
 
       veAnsi, veOem,
-      veCp1250..veCp950,
+      veCp1250..veCp874,
       veIso88591,
       veIso88592,
       veKoi8r,
@@ -3673,6 +3814,12 @@ procedure TViewerControl.UpdateSelection;
         aPosition := ((aPosition - FLowLimit) and not 1) + FLowLimit;
       veUtf32be, veUtf32le:
         aPosition := ((aPosition - FLowLimit) and not 3) + FLowLimit;
+
+      veCp932, // Unsupported variable-width encodings
+      veCp936, // TODO: Add cp932, cp936, cp949, cp950 encoding support
+      veCp949,
+      veCp950:
+        ;
 
       else
         raise Exception.Create('Unsupported viewer encoding');

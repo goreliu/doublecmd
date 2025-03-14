@@ -3,7 +3,7 @@
     -------------------------------------------------------------------------
     This unit contains platform dependent functions dealing with operating system.
 
-    Copyright (C) 2006-2023 Alexander Koblov (alexx2000@mail.ru)
+    Copyright (C) 2006-2025 Alexander Koblov (alexx2000@mail.ru)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -30,6 +30,9 @@ uses
   SysUtils, Classes, DynLibs, DCClassesUtf8, DCBasicTypes, DCConvertEncoding
 {$IFDEF UNIX}
   , BaseUnix, DCUnix
+{$ENDIF}
+{$IFDEF LINUX}
+  , DCLinux
 {$ENDIF}
 {$IFDEF HAIKU}
   , DCHaiku
@@ -96,7 +99,7 @@ type
   PCopyAttributesResult = ^TCopyAttributesResult;
 
 const
-  faInvalidAttributes: TFileAttrs = TFileAttrs(-1);
+  faInvalidAttributes = TFileAttrs(-1);
   CopyAttributesOptionCopyAll = [caoCopyAttributes, caoCopyTime, caoCopyOwnership];
 
 {en
@@ -111,6 +114,12 @@ function FPS_ISDIR(iAttr: TFileAttrs) : Boolean;
    @returns(@true if file is a symbolic link, @false otherwise)
 }
 function FPS_ISLNK(iAttr: TFileAttrs) : Boolean;
+{en
+   Is file a regular file
+   @param(iAttr File attributes)
+   @returns(@true if file is a regular file, @false otherwise)
+}
+function FPS_ISREG(iAttr: TFileAttrs) : Boolean;
 {en
    Is file executable
    @param(sFileName File name)
@@ -181,6 +190,7 @@ function mbFileCreate(const FileName: String): System.THandle; overload; inline;
 function mbFileCreate(const FileName: String; Mode: LongWord): System.THandle; overload; inline;
 function mbFileCreate(const FileName: String; Mode, Rights: LongWord): System.THandle; overload;
 function mbFileAge(const FileName: String): DCBasicTypes.TFileTime;
+function mbFileGetTime(const FileName: String): DCBasicTypes.TFileTimeEx;
 // On success returns True.
 // nanoseconds supported
 function mbFileGetTime(const FileName: String;
@@ -226,6 +236,7 @@ function mbFileSize(const FileName: String): Int64;
 function FileGetSize(Handle: System.THandle): Int64;
 function FileFlush(Handle: System.THandle): Boolean;
 function FileFlushData(Handle: System.THandle): Boolean;
+function FileIsReadOnlyEx(Handle: System.THandle): Boolean;
 function FileAllocate(Handle: System.THandle; Size: Int64): Boolean;
 { Directory handling functions}
 function mbGetCurrentDir: String;
@@ -297,7 +308,7 @@ function CreateHardLink(const Path, LinkName: String) : Boolean;
    @param(LinkName Name of symbolic link)
    @returns(The function returns @true if successful, @false otherwise)
 }
-function CreateSymLink(const Path, LinkName: string) : Boolean;
+function CreateSymLink(const Path, LinkName: string; Attr: UInt32 = faInvalidAttributes) : Boolean;
 {en
    Read destination of symbolic link
    @param(LinkName Name of symbolic link)
@@ -385,8 +396,6 @@ const
                 O_SYNC or O_DIRECT);
 {$ENDIF}
 
-(*Is Directory*)
-
 function  FPS_ISDIR(iAttr: TFileAttrs) : Boolean; inline;
 {$IFDEF MSWINDOWS}
 begin
@@ -398,8 +407,6 @@ begin
 end;
 {$ENDIF}
 
-(*Is Link*)
-
 function FPS_ISLNK(iAttr: TFileAttrs) : Boolean; inline;
 {$IFDEF MSWINDOWS}
 begin
@@ -408,6 +415,17 @@ end;
 {$ELSE}
 begin
   Result := BaseUnix.FPS_ISLNK(TMode(iAttr));
+end;
+{$ENDIF}
+
+function FPS_ISREG(iAttr: TFileAttrs) : Boolean; inline;
+{$IFDEF MSWINDOWS}
+begin
+  Result := (iAttr and FILE_ATTRIBUTE_DIRECTORY = 0);
+end;
+{$ELSE}
+begin
+  Result := BaseUnix.FPS_ISREG(TMode(iAttr));
 end;
 {$ENDIF}
 
@@ -488,54 +506,59 @@ function mbFileCopyAttr(const sSrc, sDst: String;
   ): TCopyAttributesOptions;
 {$IFDEF MSWINDOWS}
 var
-  Attr : TFileAttrs;
+  Attr: TWin32FileAttributeData;
+  Option: TCopyAttributesOption;
   ModificationTime, CreationTime, LastAccessTime: DCBasicTypes.TFileTime;
 begin
   Result := [];
 
+  if not GetFileAttributesExW(PWideChar(UTF16LongName(sSrc)), GetFileExInfoStandard, @Attr) then
+  begin
+    Result := Options;
+    if Assigned(Errors) then
+    begin
+      for Option in Result do
+        Errors^[Option]:= GetLastOSError;
+    end;
+    Exit;
+  end;
+
   if [caoCopyAttributes, caoCopyAttrEx] * Options <> [] then
   begin
-    Attr := mbFileGetAttr(sSrc);
-    if Attr <> faInvalidAttributes then
+    if (not (caoCopyAttributes in Options)) and (Attr.dwFileAttributes and faDirectory = 0) then
+      Attr.dwFileAttributes := (Attr.dwFileAttributes or faArchive);
+    if (caoRemoveReadOnlyAttr in Options) and ((Attr.dwFileAttributes and faReadOnly) <> 0) then
+      Attr.dwFileAttributes := (Attr.dwFileAttributes and not faReadOnly);
+    if not mbFileSetAttr(sDst, Attr.dwFileAttributes) then
     begin
-      if (not (caoCopyAttributes in Options)) and (Attr and faDirectory = 0) then
-        Attr := (Attr or faArchive);
-      if (caoRemoveReadOnlyAttr in Options) and ((Attr and faReadOnly) <> 0) then
-        Attr := (Attr and not faReadOnly);
-      if not mbFileSetAttr(sDst, Attr) then
-      begin
-        Include(Result, caoCopyAttributes);
-        if Assigned(Errors) then Errors^[caoCopyAttributes]:= GetLastOSError;
-      end;
-    end
-    else begin
       Include(Result, caoCopyAttributes);
       if Assigned(Errors) then Errors^[caoCopyAttributes]:= GetLastOSError;
     end;
   end;
 
-  if caoCopyXattributes in Options then
+  if not FPS_ISLNK(Attr.dwFileAttributes) then
   begin
-    if not mbFileCopyXattr(sSrc, sDst) then
+    if (caoCopyXattributes in Options) then
     begin
-      Include(Result, caoCopyXattributes);
-      if Assigned(Errors) then Errors^[caoCopyXattributes]:= GetLastOSError;
+      if not mbFileCopyXattr(sSrc, sDst) then
+      begin
+        Include(Result, caoCopyXattributes);
+        if Assigned(Errors) then Errors^[caoCopyXattributes]:= GetLastOSError;
+      end;
     end;
-  end;
 
-  if [caoCopyTime, caoCopyTimeEx] * Options <> [] then
-  begin
-    if not mbFileGetTime(sSrc, ModificationTime, CreationTime, LastAccessTime) then
+    if ([caoCopyTime, caoCopyTimeEx] * Options <> []) then
     begin
-      Include(Result, caoCopyTime);
-      if Assigned(Errors) then Errors^[caoCopyTime]:= GetLastOSError;
-    end
-    else begin
       if not (caoCopyTime in Options) then
       begin
         CreationTime:= 0;
         LastAccessTime:= 0;
+      end
+      else begin
+        CreationTime:= DCBasicTypes.TFileTime(Attr.ftCreationTime);
+        LastAccessTime:= DCBasicTypes.TFileTime(Attr.ftLastAccessTime);
       end;
+      ModificationTime:= DCBasicTypes.TFileTime(Attr.ftLastWriteTime);
 
       if not mbFileSetTime(sDst, ModificationTime, CreationTime, LastAccessTime) then
       begin
@@ -856,6 +879,16 @@ begin
   if Result <> feInvalidHandle then
   begin
     FileCloseOnExec(Result);
+{$IF DEFINED(DARWIN)}
+    if (Mode and (fmOpenSync or fmOpenDirect) <> 0) then
+    begin
+      if (FpFcntl(Result, F_NOCACHE, 1) = -1) then
+      begin
+        FileClose(Result);
+        Exit(feInvalidHandle);
+      end;
+    end;
+{$ENDIF}
     Result:= FileLock(Result, Mode and $FF);
   end;
 end;
@@ -887,6 +920,16 @@ begin
   if Result <> feInvalidHandle then
   begin
     FileCloseOnExec(Result);
+{$IF DEFINED(DARWIN)}
+    if (Mode and (fmOpenSync or fmOpenDirect) <> 0) then
+    begin
+      if (FpFcntl(Result, F_NOCACHE, 1) = -1) then
+      begin
+        FileClose(Result);
+        Exit(feInvalidHandle);
+      end;
+    end;
+{$ENDIF}
     Result:= FileLock(Result, Mode and $FF);
   end;
 end;
@@ -918,6 +961,14 @@ begin
 {$POP}
 end;
 {$ENDIF}
+
+function mbFileGetTime(const FileName: String): DCBasicTypes.TFileTimeEx;
+var
+  CreationTime, LastAccessTime: DCBasicTypes.TFileTimeEx;
+begin
+  if not mbFileGetTime(FileName, Result, CreationTime, LastAccessTime) then
+    Result:= TFileTimeExNull;
+end;
 
 function mbFileGetTime(const FileName: String;
                        var ModificationTime: DCBasicTypes.TFileTimeEx;
@@ -1274,8 +1325,10 @@ begin
       // (On Linux rename() returns success but doesn't do anything
       // if renaming a file to its hard link.)
       // We cannot use st_nlink for directories because it means "number of
-      // subdirectories"; hard links to directories are not supported on Linux
-      // or Windows anyway (on MacOSX they are). Therefore we always treat
+      // subdirectories" ("number of all entries" under macOS) in that directory,
+      // plus its special entries '.' and '..';
+      // hard links to directories are not supported on Linux
+      // or Windows anyway (on macOS they are). Therefore we always treat
       // directories as if they were a single link and rename them using temporary name.
 
       if (NewFileStat.st_nlink = 1) or BaseUnix.fpS_ISDIR(NewFileStat.st_mode) then
@@ -1289,14 +1342,7 @@ begin
             // We have renamed the old file but the new file name still exists,
             // so this wasn't a single file on a case-insensitive filesystem
             // accessible by two names that differ by case.
-
             FpRename(UTF8ToSys(tmpFileName), UTF8ToSys(OldName));  // Restore old file.
-{$IFDEF DARWIN}
-            // If it's a directory with multiple hard links then simply unlink the source.
-            if BaseUnix.fpS_ISDIR(NewFileStat.st_mode) and (NewFileStat.st_nlink > 1) then
-              Result := (fpUnLink(UTF8ToSys(OldName)) = 0)
-            else
-{$ENDIF}
             Result := False;
           end
           else if FpRename(UTF8ToSys(tmpFileName), UTF8ToSys(NewName)) = 0 then
@@ -1391,14 +1437,48 @@ begin
 end;
 {$ENDIF}
 
+function FileIsReadOnlyEx(Handle: System.THandle): Boolean;
+{$IF DEFINED(MSWINDOWS)}
+var
+  Info: BY_HANDLE_FILE_INFORMATION;
+begin
+  if GetFileInformationByHandle(Handle, Info) then
+    Result:= (Info.dwFileAttributes and (faReadOnly or faHidden or faSysFile) <> 0)
+  else
+    Result:= False;
+end;
+{$ELSEIF DEFINED(LINUX)}
+var
+  Flags: UInt32;
+begin
+  if FileGetFlags(Handle, Flags) then
+  begin
+    if (Flags and (FS_IMMUTABLE_FL or FS_APPEND_FL) <> 0) then
+      Exit(True);
+  end;
+  Result:= False;
+end;
+{$ELSE}
+begin
+  Result:= False;
+end;
+{$ENDIF}
+
 function FileAllocate(Handle: System.THandle; Size: Int64): Boolean;
 {$IF DEFINED(LINUX)}
 var
   Ret: cint;
   Sta: TStat;
+  StaFS: TStatFS;
 begin
   if (Size > 0) then
   begin
+    repeat
+      Ret:= fpfStatFS(Handle, @StaFS);
+    until (Ret <> -1) or (fpgeterrno <> ESysEINTR);
+    // FAT32 does not support a fast allocation
+    if (StaFS.fstype = MSDOS_SUPER_MAGIC) then
+      Exit(False);
     repeat
       Ret:= fpFStat(Handle, Sta);
     until (Ret <> -1) or (fpgeterrno <> ESysEINTR);
@@ -1408,7 +1488,7 @@ begin
       Sta.st_size:= (Size + Sta.st_blksize - 1) and not (Sta.st_blksize - 1);
       repeat
         Ret:= fpFAllocate(Handle, 0, 0, Sta.st_size);
-      until (Ret <> -1) or (fpgeterrno <> ESysEINTR) or (fpgeterrno <> ESysEAGAIN);
+      until (Ret <> -1) or (fpgeterrno <> ESysEINTR);
     end;
   end;
   Result:= FileTruncate(Handle, Size);
@@ -1671,7 +1751,7 @@ begin
     if EqualPos = 0 then Continue;
     EnvName:= Copy(EnvVar, 1, EqualPos - 1);
     EnvValue:= Copy(EnvVar, EqualPos + 1, MaxInt);
-    Result:= StringReplace(Result, '$' + EnvName, EnvValue, [rfReplaceAll, rfIgnoreCase]);
+    Result:= StringReplace(Result, '$' + EnvName, EnvValue, [rfReplaceAll]);
     Inc(Index);
   end;
 end;
@@ -1788,21 +1868,27 @@ end;
 function mbLoadLibrary(const Name: String): TLibHandle;
 {$IFDEF MSWINDOWS}
 var
+  dwMode: DWORD;
+  dwErrCode: DWORD;
   sRememberPath: String;
 begin
+  dwMode:= SetErrorMode(SEM_FAILCRITICALERRORS or SEM_NOOPENFILEERRORBOX);
   try
-    //Some plugins using DLL(s) in their directory are loaded correctly only if "CurrentDir" is poining their location.
-    //Also, TC switch "CurrentDir" to their directory when loading them. So let's do the same.
-    sRememberPath:=GetCurrentDir;
-    SetCurrentDir(ExcludeTrailingPathDelimiter(ExtractFilePath(Name)));
-    Result:= LoadLibraryW(PWideChar(CeUtf8ToUtf16(Name)));
+    // Some plugins using DLL(s) in their directory are loaded correctly only if "CurrentDir" is poining their location.
+    // Also, TC switch "CurrentDir" to their directory when loading them. So let's do the same.
+    sRememberPath:= GetCurrentDir;
+    SetCurrentDir(ExtractFileDir(Name));
+    Result:= SafeLoadLibrary(CeUtf8ToUtf16(Name));
+    dwErrCode:= GetLastError;
   finally
+    SetErrorMode(dwMode);
     SetCurrentDir(sRememberPath);
+    SetLastError(dwErrCode);
   end;
 end;
 {$ELSE}
 begin
-  Result:= TLibHandle(dlopen(PChar(UTF8ToSys(Name)), RTLD_LAZY));
+  Result:= SafeLoadLibrary(CeUtf8ToSys(Name));
 end;
 {$ENDIF}
 
@@ -1848,7 +1934,7 @@ begin
 end;
 {$ELSE}
 begin
-  Result:= TLibHandle(dlopen(PChar(UTF8ToSys(Name)), RTLD_LAZY));
+  Result:= SafeLoadLibrary(CeUtf8ToSys(Name));
 end;
 {$ENDIF}
 
@@ -1959,14 +2045,14 @@ begin
 end;
 {$ENDIF}
 
-function CreateSymLink(const Path, LinkName: string) : Boolean;
+function CreateSymLink(const Path, LinkName: string; Attr: UInt32): Boolean;
 {$IFDEF MSWINDOWS}
 var
   wsPath, wsLinkName: UnicodeString;
 begin
   wsPath:= CeUtf8ToUtf16(Path);
   wsLinkName:= UTF16LongName(LinkName);
-  Result:= DCNtfsLinks.CreateSymlink(wsPath, wsLinkName);
+  Result:= DCNtfsLinks.CreateSymlink(wsPath, wsLinkName, Attr);
 end;
 {$ELSE}
 begin

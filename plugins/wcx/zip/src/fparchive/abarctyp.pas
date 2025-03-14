@@ -210,6 +210,9 @@ type
   TAbArchiveStatus =
     (asInvalid, asIdle, asBusy);
 
+  TAbOpenMode =
+    (opList, opExtract, opModify);
+
   TAbArchiveEvent =
     procedure(Sender : TObject) of object;
   TAbArchiveConfirmEvent =
@@ -287,6 +290,7 @@ type
     FBaseDirectory  : string;
     FCurrentItem    : TAbArchiveItem;
     FDOSMode        : Boolean;
+    FOpenMode       : TAbOpenMode;
     FExtractOptions : TAbExtractOptions;
     FImageNumber    : Word;
     FInStream       : TStream;
@@ -390,6 +394,8 @@ type
       virtual;
     function FixName(const Value : string) : string;
       virtual;
+    function GetStreamMode : Boolean;
+      virtual;
     function GetSpanningThreshold : Int64;
       virtual;
     function GetSupportsEmptyFolders : Boolean;
@@ -441,8 +447,11 @@ type
       virtual;
     procedure TagItems(const FileMask : string);
     procedure TestTaggedItems;
+    procedure TestAt(Index : Integer);
     procedure UnTagItems(const FileMask : string);
 
+    function StreamFindNext(out Item: TAbArchiveItem): Boolean; virtual;
+    procedure StreamSeekNext(ASkip: Boolean); virtual;
 
     procedure DoDeflateProgress(aPercentDone : integer);
       virtual;
@@ -466,6 +475,11 @@ type
     property DOSMode : Boolean
       read FDOSMode
       write FDOSMode;
+    property OpenMode : TAbOpenMode
+      read FOpenMode
+      write FOpenMode;
+    property StreamMode : Boolean
+      read GetStreamMode;
     property ExtractOptions : TAbExtractOptions
       read FExtractOptions
       write FExtractOptions;
@@ -596,7 +610,6 @@ uses
   RTLConsts,
   SysUtils,
   AbExcept,
-  AbDfBase,
   AbConst,
   AbResString,
   DCOSUtils,
@@ -872,7 +885,7 @@ begin
     Look := TAbArchiveItem(Last^);
     while Look <> nil do begin
       if CompareText(Look.FileName, FN) = 0 then begin
-        Move(Look.NextItem, Last^, 4);
+        Move(Look.NextItem, Last^, SizeOf(Pointer));
         Break;
       end;
       Last := @Look.NextItem;
@@ -984,7 +997,7 @@ begin
     { Delete old index }
     while Look <> nil do begin
       if CompareText(Look.FileName, FN) = 0 then begin
-        Move(Look.NextItem, Last^, 4);
+        Move(Look.NextItem, Last^, SizeOf(Pointer));
         Break;
       end;
       Last := @Look.NextItem;
@@ -1558,6 +1571,13 @@ begin
   end;
 end;
 { -------------------------------------------------------------------------- }
+procedure TAbArchive.TestAt(Index: Integer);
+begin
+  FCurrentItem := FItemList[Index];
+  TestItemAt(Index);
+end;
+
+{ -------------------------------------------------------------------------- }
 function TAbArchive.FindFile(const aFileName : string): Integer;
   {find the index of the specified file}
 begin
@@ -1605,6 +1625,11 @@ begin
     AbStripDots(lValue);
 
   Result := lValue;
+end;
+{ -------------------------------------------------------------------------- }
+function TAbArchive.GetStreamMode: Boolean;
+begin
+  Result := False;
 end;
 { -------------------------------------------------------------------------- }
 procedure TAbArchive.Freshen(aItem : TAbArchiveItem);
@@ -2017,6 +2042,16 @@ begin
         if MatchesStoredNameEx(FileMask) then
           Tagged := False;
       end;
+end;
+{ -------------------------------------------------------------------------- }
+function TAbArchive.StreamFindNext(out Item: TAbArchiveItem): Boolean;
+begin
+  Result := False;
+end;
+{ -------------------------------------------------------------------------- }
+procedure TAbArchive.StreamSeekNext(ASkip: Boolean);
+begin
+
 end;
 { -------------------------------------------------------------------------- }
 procedure TAbArchive.DoSpanningMediaRequest(Sender: TObject;

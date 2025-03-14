@@ -660,6 +660,7 @@ uses
 function VerifyZip(Strm : TStream) : TAbArchiveType;
 { determine if stream appears to be in PkZip format }
 var
+  Empty        : TAbZipEndOfCentralDirectoryRecord;
   Footer       : TAbZipEndOfCentralDirectoryRecord;
   Sig          : LongInt;
   TailPosition : int64;
@@ -681,6 +682,8 @@ begin
           if (Strm.Read(Footer, SizeOf(Footer)) = SizeOf(Footer)) and
              (Footer.Signature = Ab_ZipEndCentralDirectorySignature) then
           begin
+            Empty:= Default(TAbZipEndOfCentralDirectoryRecord);
+            Empty.Signature:= Ab_ZipEndCentralDirectorySignature;
             { check Central Directory Offset }
             if (Footer.DirectoryOffset = High(LongWord)) or
                ((Strm.Seek(Footer.DirectoryOffset, soBeginning) = Footer.DirectoryOffset) and
@@ -691,6 +694,12 @@ begin
                 Result := atZip
               else
                 Result := atSpannedZip;
+            end
+            { empty archive }
+            else if (Strm.Size = SizeOf(Footer)) and
+                    (CompareMem(@Footer, @Empty, SizeOf(Footer))) then
+            begin
+              Result := atZip
             end;
           end;
         end;
@@ -1511,7 +1520,7 @@ begin
   FItemInfo.LoadFromStream( Stream );
 
   { decode filename (ANSI/OEM/UTF-8) }
-  if FItemInfo.IsUTF8 and (FindInvalidUTF8Character(PAnsiChar(FItemInfo.FileName), Length(FItemInfo.FileName)) < 0) then
+  if FItemInfo.IsUTF8 and (FindInvalidUTF8Codepoint(PAnsiChar(FItemInfo.FileName), Length(FItemInfo.FileName)) < 0) then
     FFileName := FItemInfo.FileName
   else if FItemInfo.ExtraField.Get(Ab_InfoZipUnicodePathSubfieldID, Pointer(InfoZipField), FieldSize) and
      (FieldSize > SizeOf(TInfoZipUnicodePathRec)) and

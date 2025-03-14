@@ -10,13 +10,14 @@ interface
 uses
   Classes, SysUtils, uDescr, uLog, uGlobs, DCOSUtils,
   uFile,
+  uFileSource,
   uFileSourceOperation,
   uFileSourceOperationOptions,
   uFileSourceOperationUI,
   uFileSourceCopyOperation,
   uFileSourceTreeBuilder;
 
-  function ApplyRenameMask(aFile: TFile; NameMask: String; ExtMask: String): String; overload;
+  function ApplyRenameMask(FileSource: IFileSource; aFile: TFile; NameMask: String; ExtMask: String): String; overload;
   procedure FillAndCount(Files: TFiles;
                          CountDirs: Boolean;
                          ExcludeRootDir: Boolean;
@@ -60,6 +61,7 @@ type
     FMode: TFileSystemOperationHelperMode;
     FBuffer: Pointer;
     FBufferSize: LongWord;
+    FFileSource: IFileSource;
     FRootTargetPath: String;
     FRenameMask: String;
     FRenameNameMask, FRenameExtMask: String;
@@ -74,12 +76,14 @@ type
     FReserveSpace,
     FCheckFreeSpace: Boolean;
     FSkipAllBigFiles: Boolean;
+    FSkipAllCopyItSelf: Boolean;
 {$IF DEFINED(UNIX)}
     FSkipAllSpecialFiles: Boolean;
 {$ENDIF}
     FSkipRenameError: Boolean;
     FSkipOpenForReadingError: Boolean;
     FSkipOpenForWritingError: Boolean;
+    FSkipCreateSymLinkError: Boolean;
     FSkipReadError: Boolean;
     FSkipWriteError: Boolean;
     FSkipCopyError: Boolean;
@@ -149,6 +153,7 @@ type
 
                        OperationThread: TThread;
                        Mode: TFileSystemOperationHelperMode;
+                       FileSource: IFileSource;
                        TargetPath: String;
                        StartingStatistics: TFileSourceCopyOperationStatistics);
     destructor Destroy; override;
@@ -175,8 +180,9 @@ implementation
 
 uses
   uDebug, uDCUtils, uOSUtils, DCStrUtils, FileUtil, uFindEx, DCClassesUtf8, uFileProcs, uLng,
-  DCBasicTypes, uFileSource, uFileSystemFileSource, uFileProperty, uAdministrator,
-  StrUtils, DCDateTimeUtils, uShowMsg, Forms, LazUTF8, uHash, uFileCopyEx, SysConst
+  DCBasicTypes, uFileSystemFileSource, uFileProperty, uAdministrator,
+  StrUtils, DCDateTimeUtils, uShowMsg, Forms, LazUTF8, uHash, uFileCopyEx, SysConst,
+  Math, DateUtils
 {$IFDEF UNIX}
   , BaseUnix, Unix, DCUnix
 {$ENDIF}
@@ -185,13 +191,16 @@ uses
 const
   HASH_TYPE = HASH_BEST;
 
-function ApplyRenameMask(aFile: TFile; NameMask: String; ExtMask: String): String; overload;
+function ApplyRenameMask(FileSource: IFileSource; aFile: TFile; NameMask: String; ExtMask: String): String; overload;
+var
+  filename: String;
 begin
+  filename:= FileSource.GetFileName( aFile );
   // Only change name for files.
   if aFile.IsDirectory or aFile.IsLink then
-    Result := aFile.Name
+    Result := filename
   else
-    Result := ApplyRenameMask(aFile.Name, NameMask, ExtMask);
+    Result := ApplyRenameMask(filename, NameMask, ExtMask);
 end;
 
 procedure FillAndCount(Files: TFiles; CountDirs: Boolean; ExcludeRootDir: Boolean;
@@ -282,6 +291,7 @@ end;
 function FileExistsMessage(const TargetName, SourceName: String;
                            SourceSize: Int64; SourceTime: TDateTime): String;
 var
+  ASize: String;
   TargetInfo: TFileAttributeData;
 begin
   Result:= rsMsgFileExistsOverwrite + LineEnding + WrapTextSimple(TargetName, 100) + LineEnding;
@@ -290,8 +300,13 @@ begin
     Result:= Result + Format(rsMsgFileExistsFileInfo, [IntToStrTS(TargetInfo.Size),
                              DateTimeToStr(FileTimeToDateTime(TargetInfo.LastWriteTime))]) + LineEnding;
   end;
+  if (SourceSize < 0) then
+    ASize:= '?'
+  else begin
+    ASize:= IntToStrTS(SourceSize);
+  end;
   Result:= Result + LineEnding + rsMsgFileExistsWithFile + LineEnding + WrapTextSimple(SourceName, 100) + LineEnding +
-           Format(rsMsgFileExistsFileInfo, [IntToStrTS(SourceSize), DateTimeToStr(SourceTime)]);
+           Format(rsMsgFileExistsFileInfo, [ASize, DateTimeToStr(SourceTime)]);
 end;
 
 function FileCopyProgress(TotalBytes, DoneBytes: Int64; UserData: Pointer): LongBool;
@@ -390,6 +405,7 @@ constructor TFileSystemOperationHelper.Create(
   UpdateStatisticsFunction: TUpdateStatisticsFunction;
   ShowCompareFilesUIFunction: TShowCompareFilesUIFunction;
   OperationThread: TThread; Mode: TFileSystemOperationHelperMode;
+  FileSource: IFileSource;
   TargetPath: String; StartingStatistics: TFileSourceCopyOperationStatistics);
 begin
   AskQuestion := AskQuestionFunction;
@@ -414,6 +430,7 @@ begin
   FDirExistsOption := fsoodeNone;
   FSetPropertyError := fsoospeNone;
   FRootTargetPath := TargetPath;
+  FFileSource := FileSource;
   FRenameMask := '';
   FStatistics := StartingStatistics;
   FRenamingFiles := False;
@@ -582,7 +599,9 @@ var
     while bRetry do
     begin
       bRetry := False;
+{$IF NOT DEFINED(LINUX)}
       if FVerify then Flags := fmOpenSync;
+{$ENDIF}
       try
         TargetFileStream.Free; // In case stream was created but 'while' loop run again
         case Mode of
@@ -605,7 +624,7 @@ var
             TotalBytesToRead := SourceFileStream.Size;
             if FReserveSpace then
             begin
-              TargetFileStream.Size:= SourceFileStream.Size;
+              TargetFileStream.Capacity:= SourceFileStream.Size;
               TargetFileStream.Seek(0, fsFromBeginning);
             end;
           end;
@@ -624,9 +643,8 @@ begin
   Result := False;
 
   { Check disk free space }
-  if FCheckFreeSpace = True then
+  if FCheckFreeSpace and GetDiskFreeSpace(ExtractFilePath(TargetFileName), iFreeDiskSize, iTotalDiskSize) then
   begin
-    GetDiskFreeSpace(ExtractFilePath(TargetFileName), iFreeDiskSize, iTotalDiskSize);
     if SourceFile.Size > iFreeDiskSize then
     begin
       if FSkipAllBigFiles = True then
@@ -749,7 +767,7 @@ begin
 
         if FReserveSpace then
         begin
-          TargetFileStream.Size:= SourceFileStream.Size;
+          TargetFileStream.Capacity:= SourceFileStream.Size;
           TargetFileStream.Seek(0, fsFromBeginning);
         end;
       end else
@@ -760,20 +778,25 @@ begin
         Exit;
 
 {$IF DEFINED(LINUX)}
-      if not FVerify and (fpFStatFS(TargetFileStream.Handle, @Sbfs) = 0) then
+      if FVerify then
+        TargetFileStream.AutoSync:= True
+      else if (fpFStatFS(TargetFileStream.Handle, @Sbfs) = 0) then
       begin
         case UInt32(Sbfs.fstype) of
           NFS_SUPER_MAGIC:
           begin
             TargetFileStream.AutoSync:= True;
-            if (fpFStat(TargetFileStream.Handle, Info) = 0) then
-            begin
-              if FCache.Device = QWord(Info.st_dev) then
-                TargetFileStream.DirtyLimit:= FCache.DirtyLimit
-              else
-                FCache.Device:= QWord(Info.st_dev);
-            end;
           end;
+        end;
+      end;
+      if TargetFileStream.AutoSync then
+      begin
+        if (fpFStat(TargetFileStream.Handle, Info) = 0) then
+        begin
+          if FCache.Device = QWord(Info.st_dev) then
+            TargetFileStream.DirtyLimit:= FCache.DirtyLimit
+          else
+            FCache.Device:= QWord(Info.st_dev);
         end;
       end;
 {$ENDIF}
@@ -816,8 +839,7 @@ begin
                 on E: EWriteError do
                   begin
                     { Check disk free space }
-                    GetDiskFreeSpace(ExtractFilePath(TargetFileName), iFreeDiskSize, iTotalDiskSize);
-                    if BytesRead > iFreeDiskSize then
+                    if GetDiskFreeSpace(ExtractFilePath(TargetFileName), iFreeDiskSize, iTotalDiskSize) and (BytesRead > iFreeDiskSize) then
                       begin
                         case AskQuestion(rsMsgNoFreeSpaceRetry, '',
                                          [fsourYes, fsourNo, fsourSkip],
@@ -946,7 +968,7 @@ procedure TFileSystemOperationHelper.CopyProperties(SourceFile: TFile;
 var
   Msg: String = '';
   ACopyTime: Boolean;
-  CreationTime, LastAccessTime: TFileTime;
+  CreationTime, LastAccessTime: TFileTimeEx;
   CopyAttrResult: TCopyAttributesOptions = [];
   ACopyAttributesOptions: TCopyAttributesOptions;
 begin
@@ -964,18 +986,18 @@ begin
       if not (caoCopyTimeEx in CopyAttributesOptionEx) then
       begin
         if fpCreationTime in SourceFile.AssignedProperties then
-          CreationTime:= DateTimeToFileTime(SourceFile.CreationTime)
+          CreationTime:= DateTimeToFileTimeEx(SourceFile.CreationTime)
         else begin
-          CreationTime:= 0;
+          CreationTime:= TFileTimeExNull;
         end;
-        LastAccessTime:= DateTimeToFileTime(SourceFile.LastAccessTime);
+        LastAccessTime:= DateTimeToFileTimeEx(SourceFile.LastAccessTime);
       end
       else begin
-        CreationTime:= 0;
-        LastAccessTime:= 0;
+        CreationTime:= TFileTimeExNull;
+        LastAccessTime:= TFileTimeExNull;
       end;
       // Copy time from properties because move operation change time of original folder
-      if not FileSetTimeUAC(TargetFileName, DateTimeToFileTime(SourceFile.ModificationTime),
+      if not FileSetTimeUAC(TargetFileName, DateTimeToFileTimeEx(SourceFile.ModificationTime),
                                             CreationTime, LastAccessTime) then
         CopyAttrResult += [caoCopyTime];
     except
@@ -1076,9 +1098,9 @@ begin
     if FRenamingRootDir and (aFile = FRootDir) then
       TargetName := CurrentTargetPath + FRenameMask
     else if FRenamingFiles then
-      TargetName := CurrentTargetPath + ApplyRenameMask(aFile, FRenameNameMask, FRenameExtMask)
+      TargetName := CurrentTargetPath + ApplyRenameMask(FFileSource, aFile, FRenameNameMask, FRenameExtMask)
     else
-      TargetName := CurrentTargetPath + aFile.Name;
+      TargetName := CurrentTargetPath + FFileSource.GetFileName(aFile);
 
     with FStatistics do
     begin
@@ -1095,9 +1117,15 @@ begin
     begin
       if (FMode = fsohmCopy) and FAutoRenameItSelf then
         TargetName := GetNextCopyName(TargetName, aFile.IsDirectory or aFile.IsLinkToDirectory)
-      else
-        case AskQuestion(Format(rsMsgCanNotCopyMoveItSelf, [TargetName]), '',
-                         [fsourAbort, fsourSkip], fsourAbort, fsourSkip) of
+      else begin
+        if FSkipAllCopyItSelf then
+          AskResult:= fsourSkip
+        else begin
+          AskResult:= AskQuestion(Format(rsMsgCanNotCopyMoveItSelf, [TargetName]), '',
+                                  [fsourAbort, fsourSkip, fsourSkipAll], fsourAbort, fsourSkip);
+          FSkipAllCopyItSelf:= (AskResult = fsourSkipAll);
+        end;
+        case AskResult of
           fsourAbort:
             AbortOperation();
         else
@@ -1109,6 +1137,7 @@ begin
               Continue;
             end;
         end;
+      end;
     end;
 
     // Check MAX_PATH
@@ -1120,6 +1149,7 @@ begin
         AskResult := AskQuestion(Format(rsMsgFilePathOverMaxPath,
                          [UTF8Length(TargetName), MAX_PATH - 1, LineEnding + WrapTextSimple(TargetName, 100) + LineEnding]), '',
                          [fsourIgnore, fsourSkip, fsourAbort, fsourIgnoreAll, fsourSkipAll], fsourIgnore, fsourSkip);
+        if AskResult = fsourSkipAll then FMaxPathOption := fsourSkip;
       end;
       case AskResult of
         fsourAbort: AbortOperation();
@@ -1127,7 +1157,6 @@ begin
         fsourSkipAll:
           begin
             Result := False;
-            FMaxPathOption := fsourSkip;
             SkipStatistics(CurrentSubNode);
             AppProcessMessages;
             CheckOperationState;
@@ -1326,14 +1355,27 @@ begin
                 LinkTarget := CorrectedLink;
             end;
 
-            if CreateSymbolicLinkUAC(LinkTarget, AbsoluteTargetFileName) then
+            if CreateSymbolicLinkUAC(LinkTarget, AbsoluteTargetFileName, aFile.Attributes) then
             begin
               CopyProperties(aFile, AbsoluteTargetFileName);
               if (FMode = fsohmMove) then Result:= DeleteFile(aFile);
             end
             else
             begin
-              ShowError(rsMsgLogError + Format(rsMsgLogSymLink, [AbsoluteTargetFileName]));
+              if not FSkipCreateSymLinkError then
+              begin
+                case AskQuestion(rsSymErrCreate.TrimRight(['.']) + ' ' +
+                                 WrapTextSimple(AbsoluteTargetFileName, 64) +
+                                 LineEnding + LineEnding + mbSysErrorMessage, '',
+                                 [fsourSkip, fsourSkipAll, fsourAbort],
+                                 fsourSkip, fsourAbort) of
+                  fsourAbort:
+                    AbortOperation;
+                  fsourSkip: ; // Do nothing
+                  fsourSkipAll:
+                    FSkipCreateSymLinkError := True;
+                end;
+              end;
               Result := False;
             end;
           end
@@ -1350,6 +1392,16 @@ begin
 
     else
       raise Exception.Create('Invalid TargetExists result');
+  end;
+
+  if Result = True then
+  begin
+    LogMessage(Format(rsMsgLogSuccess + rsMsgLogSymLink, [aNode.TheFile.FullPath + ' -> ' + AbsoluteTargetFileName]),
+               [log_cp_mv_ln], lmtSuccess);
+  end
+  else begin
+    LogMessage(Format(rsMsgLogError + rsMsgLogSymLink, [aNode.TheFile.FullPath + ' -> ' + AbsoluteTargetFileName]),
+               [log_cp_mv_ln], lmtError);
   end;
 
   Inc(FStatistics.DoneFiles);
@@ -1393,7 +1445,7 @@ begin
 {$ENDIF}
 
     if (aNode.TheFile.Size > GetDiskMaxFileSize(ExtractFileDir(AbsoluteTargetFileName))) then
-      case AskQuestion('', Format(rsMsgFileSizeTooBig, [aNode.TheFile.Name]),
+      case AskQuestion('', Format(rsMsgFileSizeTooBig, [FFileSource.GetFileName(aNode.TheFile)]),
                        [fsourSkip, fsourAbort],
                        fsourSkip, fsourAbort) of
         fsourSkip:
@@ -1712,7 +1764,7 @@ var
 
   function OverwriteOlder: TFileSourceOperationOptionFileExists;
   begin
-    if aFile.ModificationTime > FileTimeToDateTime(mbFileAge(AbsoluteTargetFileName)) then
+    if CompareDateTime(aFile.ModificationTime, FileTimeToDateTimeEx(mbFileGetTime(AbsoluteTargetFileName))) = GreaterThanValue then
       Result := fsoofeOverwrite
     else
       Result := fsoofeSkip;

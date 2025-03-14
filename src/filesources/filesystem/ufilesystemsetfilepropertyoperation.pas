@@ -199,7 +199,7 @@ begin
         if (aTemplateProperty as TFileModificationDateTimeProperty).Value <>
            (aFile.Properties[fpModificationTime] as TFileModificationDateTimeProperty).Value then
         begin
-          if not FileSetTimeExUAC(
+          if not FileSetTimeUAC(
             aFile.FullPath,
             DateTimeToFileTimeEx((aTemplateProperty as TFileModificationDateTimeProperty).Value),
             TFileTimeExNull,
@@ -215,7 +215,7 @@ begin
         if (aTemplateProperty as TFileCreationDateTimeProperty).Value <>
            (aFile.Properties[fpCreationTime] as TFileCreationDateTimeProperty).Value then
         begin
-          if not FileSetTimeExUAC(
+          if not FileSetTimeUAC(
             aFile.FullPath,
             TFileTimeExNull,
             DateTimeToFileTimeEx((aTemplateProperty as TFileCreationDateTimeProperty).Value),
@@ -231,7 +231,7 @@ begin
         if (aTemplateProperty as TFileLastAccessDateTimeProperty).Value <>
            (aFile.Properties[fpLastAccessTime] as TFileLastAccessDateTimeProperty).Value then
         begin
-          if not FileSetTimeExUAC(
+          if not FileSetTimeUAC(
             aFile.FullPath,
             TFileTimeExNull,
             TFileTimeExNull,
@@ -430,7 +430,7 @@ begin
        (OldAttr.FindData.st_dev = NewAttr.FindData.st_dev) and
        // Check number of links, if it is 1 then source and target names most
        // probably differ only by case on a case-insensitive filesystem.
-       ((NewAttr.FindData.st_nlink = 1) {$IFNDEF DARWIN}or fpS_ISDIR(NewAttr.FindData.st_mode){$ENDIF}) then
+       ((NewAttr.FindData.st_nlink = 1) or fpS_ISDIR(NewAttr.FindData.st_mode)) then
     begin
       // File names differ only by case on a case-insensitive filesystem.
     end

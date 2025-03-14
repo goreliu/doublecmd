@@ -9,7 +9,7 @@ object frmCopyDlg: TfrmCopyDlg
   VertScrollBar.Range = 186
   ActiveControl = edtDst
   AutoSize = True
-  BorderIcons = [biSystemMenu, biMaximize]
+  BorderIcons = [biSystemMenu]
   Caption = 'Copy file(s)'
   ChildSizing.LeftRightSpacing = 6
   ChildSizing.TopBottomSpacing = 6
@@ -71,8 +71,6 @@ object frmCopyDlg: TfrmCopyDlg
     AutoSize = True
     BorderSpacing.Top = 8
     BevelOuter = bvNone
-    Color = clForm
-    ParentColor = False
     TabOrder = 1
   end
   object pnlButtons: TPanel
@@ -91,8 +89,6 @@ object frmCopyDlg: TfrmCopyDlg
     BevelOuter = bvNone
     ClientHeight = 36
     ClientWidth = 596
-    Color = clForm
-    ParentColor = False
     TabOrder = 2
     object btnOptions: TButton
       Left = 0
@@ -259,8 +255,6 @@ object frmCopyDlg: TfrmCopyDlg
     BevelOuter = bvNone
     ClientHeight = 39
     ClientWidth = 596
-    Color = clForm
-    ParentColor = False
     TabOrder = 3
     OnResize = pnlOptionsResize
     object grpOptions: TGroupBox

@@ -297,7 +297,7 @@ begin
   ParseLineToList(rsOptAddFromMainPanel, rgWhereToAdd.Items);
   ParseLineToList(rsHotDirForceSortingOrderChoices, cbSortHotDirPath.Items);
   ParseLineToList(rsHotDirForceSortingOrderChoices, cbSortHotDirTarget.Items);
-  OpenDialog.Filter := ParseLineToFileFilter([rsFilterDirectoryHotListFiles, '*.hotlist', rsFilterXmlConfigFiles, '*.xml', rsFilterAnyFiles, '*.*']);
+  OpenDialog.Filter := ParseLineToFileFilter([rsFilterDirectoryHotListFiles, '*.hotlist', rsFilterXmlConfigFiles, '*.xml', rsFilterAnyFiles, AllFilesMask]);
   SaveDialog.Filter := ParseLineToFileFilter([rsFilterDirectoryHotListFiles, '*.hotlist']);
 end;
 
@@ -793,7 +793,7 @@ var
 
   function ReplaceIfNecessary(sWorkingText: string): string;
   begin
-    Result := StringReplace(sWorkingText, sSearchText, sReplaceText, ReplaceFlags);
+    Result := UTF8StringReplace(sWorkingText, sSearchText, sReplaceText, ReplaceFlags);
     if Result <> sWorkingText then Inc(NbOfReplacement);
   end;
 
@@ -801,6 +801,7 @@ var
   Index, ActionDispatcher: integer;
   EditSearchOptionToOffer: TEditSearchDialogOption;
   EditSearchOptionReturned: TEditSearchDialogOption = [];
+  CaseSensitive: array[Boolean] of TEditSearchDialogOption = ([eswoCaseSensitiveUnchecked], [eswoCaseSensitiveChecked]);
 begin
   with Sender as TComponent do ActionDispatcher := tag;
 
@@ -809,12 +810,7 @@ begin
   else sSearchText := '';
   sReplaceText := sSearchText;
 
-  EditSearchOptionToOffer := [];
-  {$IFDEF MSWINDOWS}
-  EditSearchOptionToOffer := EditSearchOptionToOffer + [eswoCaseSensitiveUnchecked];
-  {$ELSE}
-  EditSearchOptionToOffer := EditSearchOptionToOffer + [eswoCaseSensitiveChecked];
-  {$ENDIF}
+  EditSearchOptionToOffer := CaseSensitive[FileNameCaseSensitive];
 
   if GetSimpleSearchAndReplaceString(self, EditSearchOptionToOffer, sSearchText, sReplaceText, EditSearchOptionReturned, glsSearchPathHistory, glsReplacePathHistory) then
   begin

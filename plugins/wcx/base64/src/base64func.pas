@@ -3,7 +3,7 @@
   -------------------------------------------------------------------------
   Base64 archiver plugin
 
-  Copyright (C) 2022 Alexander Koblov (alexx2000@mail.ru)
+  Copyright (C) 2022-2024 Alexander Koblov (alexx2000@mail.ru)
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -30,17 +30,17 @@ uses
   Classes, WcxPlugin;
 
 { Mandatory functions }
-function OpenArchiveW(var ArchiveData: TOpenArchiveDataW): TArcHandle; dcpcall;
-function ReadHeaderExW(hArcData: TArcHandle; var HeaderData: THeaderDataExW): Integer; dcpcall;
-function ProcessFileW(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PWideChar): Integer; dcpcall;
-function CloseArchive (hArcData: TArcHandle): Integer; dcpcall;
-procedure SetChangeVolProcW(hArcData: TArcHandle; pChangeVolProc: TChangeVolProcW); dcpcall;
-procedure SetProcessDataProcW(hArcData: TArcHandle; pProcessDataProc: TProcessDataProcW); dcpcall;
+function OpenArchiveW(var ArchiveData: TOpenArchiveDataW): TArcHandle; dcpcall; export;
+function ReadHeaderExW(hArcData: TArcHandle; var HeaderData: THeaderDataExW): Integer; dcpcall; export;
+function ProcessFileW(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PWideChar): Integer; dcpcall; export;
+function CloseArchive (hArcData: TArcHandle): Integer; dcpcall; export;
+procedure SetChangeVolProcW(hArcData: TArcHandle; pChangeVolProc: TChangeVolProcW); dcpcall; export;
+procedure SetProcessDataProcW(hArcData: TArcHandle; pProcessDataProc: TProcessDataProcW); dcpcall; export;
 
 { Optional functions }
-function PackFilesW(PackedFile: PWideChar; SubPath: PWideChar; SrcPath: PWideChar; AddList: PWideChar; Flags: Integer): Integer; dcpcall;
-function GetBackgroundFlags: Integer; dcpcall;
-function GetPackerCaps: Integer; dcpcall;
+function PackFilesW(PackedFile: PWideChar; SubPath: PWideChar; SrcPath: PWideChar; AddList: PWideChar; Flags: Integer): Integer; dcpcall; export;
+function GetBackgroundFlags: Integer; dcpcall; export;
+function GetPackerCaps: Integer; dcpcall; export;
 
 implementation
 
@@ -126,7 +126,7 @@ end;
 
 { Mandatory functions }
 
-function OpenArchiveW(var ArchiveData: TOpenArchiveDataW): TArcHandle; dcpcall;
+function OpenArchiveW(var ArchiveData: TOpenArchiveDataW): TArcHandle; dcpcall; export;
 var
   AHandle: TRecord absolute Result;
 begin
@@ -152,8 +152,9 @@ begin
   end;
 end;
 
-function ReadHeaderExW(hArcData: TArcHandle; var HeaderData: THeaderDataExW): Integer; dcpcall;
+function ReadHeaderExW(hArcData: TArcHandle; var HeaderData: THeaderDataExW): Integer; dcpcall; export;
 var
+  PackSize: Int64;
   FileName: UnicodeString;
   AHandle: TRecord absolute hArcData;
 begin
@@ -163,11 +164,16 @@ begin
     Result := E_SUCCESS;
     FileName:= CeUtf8ToUtf16(AHandle.FileName);
     FillChar(HeaderData, SizeOf(AHandle.Count), 0);
+    HeaderData.UnpSize:= $FFFFFFFE;
+    HeaderData.UnpSizeHigh:= $FFFFFFFF;
+    PackSize:= AHandle.Stream.Size - AHandle.Stream.Position;
+    HeaderData.PackSize:= Int64Rec(PackSize).Lo;
+    HeaderData.PackSizeHigh:= Int64Rec(PackSize).Hi;
     StrPLCopy(HeaderData.FileName, FileName, SizeOf(HeaderData.FileName) - 1);
   end;
 end;
 
-function ProcessFileW(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PWideChar) : Integer; dcpcall;
+function ProcessFileW(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PWideChar) : Integer; dcpcall; export;
 var
   ARead: Integer;
   ABuffer: TBytes;
@@ -228,7 +234,7 @@ begin
   Result:= E_SUCCESS;
 end;
 
-function CloseArchive (hArcData: TArcHandle): Integer; dcpcall;
+function CloseArchive (hArcData: TArcHandle): Integer; dcpcall; export;
 var
   AHandle: TRecord absolute hArcData;
 begin
@@ -237,12 +243,12 @@ begin
   AHandle.Free;
 end;
 
-procedure SetChangeVolProcW(hArcData: TArcHandle; pChangeVolProc: TChangeVolProcW); dcpcall;
+procedure SetChangeVolProcW(hArcData: TArcHandle; pChangeVolProc: TChangeVolProcW); dcpcall; export;
 begin
 
 end;
 
-procedure SetProcessDataProcW(hArcData: TArcHandle; pProcessDataProc: TProcessDataProcW); dcpcall;
+procedure SetProcessDataProcW(hArcData: TArcHandle; pProcessDataProc: TProcessDataProcW); dcpcall; export;
 var
   AHandle: TRecord absolute hArcData;
 begin
@@ -255,7 +261,7 @@ end;
 
 { Optional functions }
 
-function PackFilesW(PackedFile: PWideChar; SubPath: PWideChar; SrcPath: PWideChar; AddList: PWideChar; Flags: Integer): Integer; dcpcall;
+function PackFilesW(PackedFile: PWideChar; SubPath: PWideChar; SrcPath: PWideChar; AddList: PWideChar; Flags: Integer): Integer; dcpcall; export;
 var
   ARead: Integer;
   ABuffer: TBytes;
@@ -320,12 +326,12 @@ begin
   Result:= E_SUCCESS;
 end;
 
-function GetBackgroundFlags: Integer; dcpcall;
+function GetBackgroundFlags: Integer; dcpcall; export;
 begin
   Result:= BACKGROUND_UNPACK or BACKGROUND_PACK;
 end;
 
-function GetPackerCaps: Integer; dcpcall;
+function GetPackerCaps: Integer; dcpcall; export;
 begin
   Result := PK_CAPS_NEW;
 end;

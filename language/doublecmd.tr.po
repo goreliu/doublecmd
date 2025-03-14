@@ -381,11 +381,27 @@ msgstr ""
 msgid "C&reate separate checksum file for each file"
 msgstr "Her dosya için ayrı bir sağlama toplamı dosyası oluştur"
 
+#: tfrmchecksumcalc.cbseparatefolder.caption
+msgid "Create separate checksum file for each &directory"
+msgstr ""
+
+#: tfrmchecksumcalc.lblfileformat.caption
+msgid "File &format"
+msgstr ""
+
 #: tfrmchecksumcalc.lblsaveto.caption
 #, fuzzy
 #| msgid "&Save check sum file(s) to:"
 msgid "&Save checksum file(s) to:"
 msgstr "Sağlama toplamı dosya(lar)ını kaydet:"
+
+#: tfrmchecksumcalc.rbunix.caption
+msgid "Unix"
+msgstr ""
+
+#: tfrmchecksumcalc.rbwindows.caption
+msgid "Windows"
+msgstr ""
 
 #: tfrmchecksumverify.btnclose.caption
 msgctxt "TFRMCHECKSUMVERIFY.BTNCLOSE.CAPTION"
@@ -1084,6 +1100,10 @@ msgctxt "tfrmeditor.acteditselectall.hint"
 msgid "Select All"
 msgstr "Tümünü Seç"
 
+#: tfrmeditor.actedittimedate.caption
+msgid "Time/Date"
+msgstr ""
+
 #: tfrmeditor.acteditundo.caption
 msgctxt "TFRMEDITOR.ACTEDITUNDO.CAPTION"
 msgid "Undo"
@@ -1158,14 +1178,6 @@ msgstr "Farklı &Kaydet..."
 #: tfrmeditor.actfilesaveas.hint
 msgid "Save As"
 msgstr "Farklı Kaydet..."
-
-#: tfrmeditor.actsaveall.caption
-msgid "Sa&ve All"
-msgstr "&Tümünü Kaydet"
-
-#: tfrmeditor.actsaveall.hint
-msgid "Save All"
-msgstr ""
 
 #: tfrmeditor.caption
 msgctxt "TFRMEDITOR.CAPTION"
@@ -1875,28 +1887,6 @@ msgstr ""
 #: tfrmfinddlg.cmbfindfilemask.hint
 msgid "Enter files names separated with \";\""
 msgstr ""
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[0].text
-#, fuzzy
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[0].text"
-msgid "Plugin"
-msgstr "Eklenti"
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[1].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[1].text"
-msgid "Field"
-msgstr ""
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[2].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[2].text"
-msgid "Operator"
-msgstr ""
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[3].text
-#, fuzzy
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[3].text"
-msgid "Value"
-msgstr "Değer"
 
 #: tfrmfinddlg.gbdirectories.caption
 msgctxt "tfrmfinddlg.gbdirectories.caption"
@@ -2674,6 +2664,10 @@ msgstr ""
 msgid "Create &Directory"
 msgstr "Yeni Dizin F7"
 
+#: tfrmmain.actmapnetworkdrive.caption
+msgid "Map Network Drive..."
+msgstr ""
+
 #: tfrmmain.actmarkcurrentextension.caption
 msgid "Select All with the Same E&xtension"
 msgstr "Ayni uzantıya &sahip olanların tümünü seç"
@@ -3001,6 +2995,14 @@ msgstr "Menü F9"
 msgctxt "TFRMMAIN.ACTSHOWSYSFILES.CAPTION"
 msgid "Show &Hidden/System Files"
 msgstr "Gizli/sistem &dosyalarını göster"
+
+#: tfrmmain.actshowtabslist.caption
+msgid "Show Tabs List"
+msgstr ""
+
+#: tfrmmain.actshowtabslist.hint
+msgid "Show list of all open tabs"
+msgstr ""
 
 #: tfrmmain.actsortbyattr.caption
 msgid "Sort by &Attributes"
@@ -3366,7 +3368,7 @@ msgid "C&onfiguration"
 msgstr "&Yapılandır"
 
 #: tfrmmain.mnufavoritetabs.caption
-msgid "Favorites"
+msgid "F&avorites"
 msgstr ""
 
 #: tfrmmain.mnufiles.caption
@@ -3384,7 +3386,7 @@ msgstr "&İşaretle"
 
 #: tfrmmain.mnunetwork.caption
 msgctxt "TFRMMAIN.MNUNETWORK.CAPTION"
-msgid "Network"
+msgid "&Network"
 msgstr "Ağ"
 
 #: tfrmmain.mnushow.caption
@@ -4189,6 +4191,10 @@ msgstr ""
 
 #: tfrmoptionsarchivers.chkfilenameonlylist.caption
 msgid "Use archive name without extension as list"
+msgstr ""
+
+#: tfrmoptionsarchivers.chkhide.caption
+msgid "Show as normal files"
 msgstr ""
 
 #: tfrmoptionsarchivers.ckbarchiverunixfileattributes.caption
@@ -5607,6 +5613,14 @@ msgstr ""
 msgid "Allows to indent the caret, when new line is created with <Enter>, with the same amount of leading white space as the preceding line"
 msgstr ""
 
+#: tfrmoptionseditor.chkgroupundo.caption
+msgid "Group Undo"
+msgstr ""
+
+#: tfrmoptionseditor.chkgroupundo.hint
+msgid "All continuous changes of the same type will be processed in one call instead of undoing/redoing each one"
+msgstr ""
+
 #: tfrmoptionseditor.chkrightedge.caption
 msgid "Right margin:"
 msgstr ""
@@ -5694,11 +5708,6 @@ msgstr ""
 #: tfrmoptionseditorcolors.btnresetmask.hint
 msgid "Reset"
 msgstr ""
-
-#: tfrmoptionseditorcolors.btnsavemask.hint
-msgctxt "tfrmoptionseditorcolors.btnsavemask.hint"
-msgid "Save"
-msgstr "Kaydet"
 
 #: tfrmoptionseditorcolors.bvlattributesection.caption
 msgid "Element Attributes"
@@ -6728,11 +6737,6 @@ msgctxt "tfrmoptionsfiletypescolors.btnaddcategory.caption"
 msgid "A&dd"
 msgstr "Ekle"
 
-#: tfrmoptionsfiletypescolors.btnapplycategory.caption
-msgctxt "tfrmoptionsfiletypescolors.btnapplycategory.caption"
-msgid "A&pply"
-msgstr "Uygula"
-
 #: tfrmoptionsfiletypescolors.btndeletecategory.caption
 msgctxt "tfrmoptionsfiletypescolors.btndeletecategory.caption"
 msgid "D&elete"
@@ -6898,6 +6902,16 @@ msgstr "Değişkenler"
 
 #: tfrmoptionshotkeys.stghotkeys.columns[2].title.caption
 msgid "Controls"
+msgstr ""
+
+#: tfrmoptionsicloud.appslistview.columns[0].caption
+msgctxt "tfrmoptionsicloud.appslistview.columns[0].caption"
+msgid "Applications"
+msgstr ""
+
+#: tfrmoptionsicloud.appslistview.columns[1].caption
+msgctxt "tfrmoptionsicloud.appslistview.columns[1].caption"
+msgid "Count of Contents"
 msgstr ""
 
 #: tfrmoptionsicons.cbiconsexclude.caption
@@ -7558,8 +7572,10 @@ msgid "File name"
 msgstr "Dosya adı"
 
 #: tfrmoptionspluginswfx.lblplugindescription.caption
+#, fuzzy
+#| msgid "Fi&le system plugins allow access to disks inaccessible by operating system or to external devices like Palm/PocketPC."
 msgctxt "tfrmoptionspluginswfx.lblplugindescription.caption"
-msgid "Fi&le system plugins allow access to disks inaccessible by operating system or to external devices like Palm/PocketPC."
+msgid "Fi&le system plugins allow access to disks inaccessible by operating system or to external devices like smartphones."
 msgstr "Dosya sistemi eklentileri işletim sistemi tarafından ulaşılmaz disklere veya allow one to displaygibi harici cihazlara erişim sağlar"
 
 #: tfrmoptionspluginswfx.stgplugins.columns[0].title.caption
@@ -8319,6 +8335,10 @@ msgctxt "tfrmoptionstoolbarbase.misubtoolbarpriorcurrent.caption"
 msgid "just prior current selection"
 msgstr ""
 
+#: tfrmoptionstoolbarbase.rblinebreak.caption
+msgid "Line break"
+msgstr ""
+
 #: tfrmoptionstoolbarbase.rbseparator.caption
 msgid "Separator"
 msgstr ""
@@ -8861,23 +8881,23 @@ msgstr ""
 msgid "Use &content plugins, combine with:"
 msgstr ""
 
-#: tfrmsearchplugin.headercontrol.sections[0].text
-msgctxt "tfrmsearchplugin.headercontrol.sections[0].text"
-msgid "Plugin"
-msgstr "Eklenti"
-
-#: tfrmsearchplugin.headercontrol.sections[1].text
-msgctxt "tfrmsearchplugin.headercontrol.sections[1].text"
+#: tfrmsearchplugin.lblfield.caption
+msgctxt "tfrmsearchplugin.lblfield.caption"
 msgid "Field"
 msgstr ""
 
-#: tfrmsearchplugin.headercontrol.sections[2].text
-msgctxt "tfrmsearchplugin.headercontrol.sections[2].text"
+#: tfrmsearchplugin.lbloperator.caption
+msgctxt "tfrmsearchplugin.lbloperator.caption"
 msgid "Operator"
 msgstr ""
 
-#: tfrmsearchplugin.headercontrol.sections[3].text
-msgctxt "tfrmsearchplugin.headercontrol.sections[3].text"
+#: tfrmsearchplugin.lblplugin.caption
+msgctxt "tfrmsearchplugin.lblplugin.caption"
+msgid "Plugin"
+msgstr "Eklenti"
+
+#: tfrmsearchplugin.lblvalue.caption
+msgctxt "tfrmsearchplugin.lblvalue.caption"
 msgid "Value"
 msgstr "Değer"
 
@@ -10236,6 +10256,11 @@ msgctxt "TFRMVIEWER.MIVIEW.CAPTION"
 msgid "&View"
 msgstr "&Göster"
 
+#: tfrmviewer.mnuplugins.caption
+msgctxt "tfrmviewer.mnuplugins.caption"
+msgid "Plugins"
+msgstr "Eklentiler"
+
 #: tfrmviewoperations.btnstartpause.caption
 #, fuzzy
 #| msgid "Start"
@@ -10948,6 +10973,22 @@ msgctxt "ulng.rseditgotolinetitle"
 msgid "Goto Line"
 msgstr ""
 
+#: ulng.rsedithintcursorpos
+msgid "Cursor Position"
+msgstr ""
+
+#: ulng.rsedithintinsertmode
+msgid "Insert Mode"
+msgstr ""
+
+#: ulng.rsedithintmodified
+msgid "Modified"
+msgstr ""
+
+#: ulng.rsedithintselectionmode
+msgid "Selection Mode"
+msgstr ""
+
 #: ulng.rseditnewfile
 msgid "new.txt"
 msgstr "Yeni.txt"
@@ -10977,6 +11018,26 @@ msgstr "&İleri"
 msgctxt "ulng.rseditsearchreplace"
 msgid "Replace"
 msgstr "Değiştir"
+
+#: ulng.rseditstatinsertmodeins
+msgid "INS"
+msgstr ""
+
+#: ulng.rseditstatinsertmodeovr
+msgid "OVR"
+msgstr ""
+
+#: ulng.rseditstatselmodecol
+msgid "COL"
+msgstr ""
+
+#: ulng.rseditstatselmodeline
+msgid "LINE"
+msgstr ""
+
+#: ulng.rseditstatselmodenorm
+msgid "NORM"
+msgstr ""
 
 #: ulng.rseditwithexternaleditor
 msgid "with external editor"
@@ -11387,6 +11448,14 @@ msgstr ""
 msgid "By command name;By shortcut key (grouped);By shortcut key (one per row)"
 msgstr ""
 
+#: ulng.rsiclouddrivercopyseedfileconfirmdlgmessage
+msgid "It is recommended to download the files first. Otherwise, what is copied is not the content of the files, but the corresponding placeholder files, which will result in hidden files with the .iCloud extension."
+msgstr ""
+
+#: ulng.rsiclouddrivercopyseedfileconfirmdlgtitle
+msgid "The operation may contain files that were not downloaded, continue anyway?"
+msgstr ""
+
 #: ulng.rsimporttoolbarproblem
 msgid "Cannot find reference to default bar file"
 msgstr ""
@@ -11414,6 +11483,11 @@ msgstr ""
 
 #: ulng.rslistoffindfileswindows
 msgid "List of \"Find files\" windows"
+msgstr ""
+
+#: ulng.rsmacosassignfindertagstomultiitems
+#, object-pascal-format
+msgid "Assign tags to %d items"
 msgstr ""
 
 #: ulng.rsmarkminus
@@ -11444,8 +11518,226 @@ msgstr "Özel sütunları yapılandır"
 msgid "Enter new custom columns name"
 msgstr ""
 
-#: ulng.rsmenumacosservices
-msgid "Services"
+#: ulng.rsmenumacosaddfindertag
+#, object-pascal-format
+msgid "Add \"%s\""
+msgstr ""
+
+#: ulng.rsmenumacoseditfindertags
+msgctxt "ulng.rsmenumacoseditfindertags"
+msgid "Edit Finder Tags..."
+msgstr ""
+
+#: ulng.rsmenumacosgrantpermissiontosupportfindertags
+msgid "Grant \"Full Disk Access\" permission to support Finder Tags..."
+msgstr ""
+
+#: ulng.rsmenumacosremovefindertag
+#, object-pascal-format
+msgid "Remove \"%s\""
+msgstr ""
+
+#: ulng.rsmenumacosshare
+msgid "Share..."
+msgstr ""
+
+#: ulng.rsmfstbiairdroptips
+msgctxt "ulng.rsmfstbiairdroptips"
+msgid "AirDrop"
+msgstr ""
+
+#: ulng.rsmfstbiairdroptitle
+msgctxt "ulng.rsmfstbiairdroptitle"
+msgid "AirDrop"
+msgstr ""
+
+#: ulng.rsmfstbicommandmenudirectoryhotlist
+#, fuzzy
+msgctxt "ulng.rsmfstbicommandmenudirectoryhotlist"
+msgid "Directory Hotlist"
+msgstr "Önemli Liste Dizini"
+
+#: ulng.rsmfstbicommandmenufavoritetabs
+msgctxt "ulng.rsmfstbicommandmenufavoritetabs"
+msgid "Favorite Tabs"
+msgstr ""
+
+#: ulng.rsmfstbicommandmenuquicklook
+msgid "macOS QuickLook"
+msgstr ""
+
+#: ulng.rsmfstbicommandtitle
+msgctxt "ulng.rsmfstbicommandtitle"
+msgid "Command"
+msgstr ""
+
+#: ulng.rsmfstbicomparetips
+msgid "Compare by Contents..."
+msgstr ""
+
+#: ulng.rsmfstbicomparetitle
+#, fuzzy
+msgctxt "ulng.rsmfstbicomparetitle"
+msgid "Compare"
+msgstr "Karşılaştır"
+
+#: ulng.rsmfstbieditfindertagtips
+msgctxt "ulng.rsmfstbieditfindertagtips"
+msgid "Edit Finder Tags..."
+msgstr ""
+
+#: ulng.rsmfstbieditfindertagtitle
+msgid "EditTag"
+msgstr ""
+
+#: ulng.rsmfstbiedittips
+msgid "Edit..."
+msgstr ""
+
+#: ulng.rsmfstbiedittitle
+#, fuzzy
+msgctxt "ulng.rsmfstbiedittitle"
+msgid "Edit"
+msgstr "Düzenle"
+
+#: ulng.rsmfstbifinderrevealtips
+msgid "Reveal in Finder"
+msgstr ""
+
+#: ulng.rsmfstbifinderrevealtitle
+msgid "Finder"
+msgstr ""
+
+#: ulng.rsmfstbigotips
+msgctxt "ulng.rsmfstbigotips"
+msgid "Go"
+msgstr ""
+
+#: ulng.rsmfstbigotitle
+msgctxt "ulng.rsmfstbigotitle"
+msgid "Go"
+msgstr ""
+
+#: ulng.rsmfstbihorzsplittips
+msgid "Toggle Horizontal Split Mode"
+msgstr ""
+
+#: ulng.rsmfstbihorzsplittitle
+msgid "HorzSplit"
+msgstr ""
+
+#: ulng.rsmfstbiiclouddrivertips
+msgctxt "ulng.rsmfstbiiclouddrivertips"
+msgid "iCloud Driver"
+msgstr ""
+
+#: ulng.rsmfstbiiclouddrivertitle
+msgctxt "ulng.rsmfstbiiclouddrivertitle"
+msgid "iCloud Driver"
+msgstr ""
+
+#: ulng.rsmfstbiprivilegetips
+msgid "As a file manager, Double Command requires full disk access permissions. Clicking this button will pop up the macOS system settings page. Please add \"Double Commander.app\" to the \"Full Disk Access\" list to complete the authorization."
+msgstr ""
+
+#: ulng.rsmfstbiprivilegetitle
+msgid "Privilege"
+msgstr ""
+
+#: ulng.rsmfstbiquicklooktips
+msgid "macOS Quick Look Panel"
+msgstr ""
+
+#: ulng.rsmfstbiquicklooktitle
+msgid "QuickLook"
+msgstr ""
+
+#: ulng.rsmfstbirefreshtips
+msgid "Refresh File List"
+msgstr ""
+
+#: ulng.rsmfstbirefreshtitle
+msgid "Refresh"
+msgstr ""
+
+#: ulng.rsmfstbisearchcombinedtags
+msgid "Search for combined tags..."
+msgstr ""
+
+#: ulng.rsmfstbisearchtips
+msgid "Search Files..."
+msgstr ""
+
+#: ulng.rsmfstbisearchtitle
+#, fuzzy
+msgctxt "ulng.rsmfstbisearchtitle"
+msgid "Search"
+msgstr "Ara"
+
+#: ulng.rsmfstbisharetitle
+msgid "Share"
+msgstr ""
+
+#: ulng.rsmfstbishowbrieftitle
+msgid "as Brief"
+msgstr ""
+
+#: ulng.rsmfstbishowfulltitle
+msgid "as Full"
+msgstr ""
+
+#: ulng.rsmfstbishowinfotips
+msgid "Show Info in Finder"
+msgstr ""
+
+#: ulng.rsmfstbishowinfotitle
+msgid "ShowInfo"
+msgstr ""
+
+#: ulng.rsmfstbishowmodetips
+msgid "Show as Brief, Full or Thumbnails"
+msgstr ""
+
+#: ulng.rsmfstbishowmodetitle
+msgid "ShowMode"
+msgstr ""
+
+#: ulng.rsmfstbishowthumbnailstitle
+msgid "as Thumbnails"
+msgstr ""
+
+#: ulng.rsmfstbiswappanelstips
+msgid "Swap Panels"
+msgstr ""
+
+#: ulng.rsmfstbiswappanelstitle
+msgid "SwapPanels"
+msgstr ""
+
+#: ulng.rsmfstbisynctips
+msgid "Synchronize Dirs..."
+msgstr ""
+
+#: ulng.rsmfstbisynctitle
+msgid "Sync"
+msgstr ""
+
+#: ulng.rsmfstbiterminaltips
+msgid "Open in Terminal"
+msgstr ""
+
+#: ulng.rsmfstbiterminaltitle
+#, fuzzy
+msgctxt "ulng.rsmfstbiterminaltitle"
+msgid "Terminal"
+msgstr "Komut İstemi F9"
+
+#: ulng.rsmfstbitreeviewtips
+msgid "Show Tree View Panel"
+msgstr ""
+
+#: ulng.rsmfstbitreeviewtitle
+msgid "TreeView"
 msgstr ""
 
 #: ulng.rsmnuactions
@@ -11482,8 +11774,12 @@ msgstr "Çıkar"
 msgid "Extract here..."
 msgstr ""
 
-#: ulng.rsmnumapnetworkdrive
-msgid "Map Network Drive..."
+#: ulng.rsmnuiclouddriverdownloadnow
+msgid "Download Now"
+msgstr ""
+
+#: ulng.rsmnuiclouddriverremovedownload
+msgid "Remove Download"
 msgstr ""
 
 #: ulng.rsmnumount
@@ -11494,6 +11790,10 @@ msgstr "Monte et"
 msgctxt "ulng.rsmnunew"
 msgid "New"
 msgstr "Yeni"
+
+#: ulng.rsmnunewwindow
+msgid "New Window"
+msgstr ""
 
 #: ulng.rsmnunomedia
 msgid "No media available"
@@ -11539,6 +11839,19 @@ msgstr "Kaldır"
 msgctxt "ulng.rsmnuview"
 msgid "View"
 msgstr "Göster"
+
+#: ulng.rsmountedfilesourcecopymultifilestowcxdlgmessage
+msgid ""
+"Some virtual filesystem contain specific directory structures. When copying from it to a compressed archive, only one directory can be selected at a time, unless the actual locations of the selected directories are all located under the same parent directory.\n"
+"\n"
+"For example, for iCloud Drive, when copying directory from the root to a compressed archive, maybe only one directory should be selected.\n"
+"\n"
+"It is recommended that you follow your usual practice and try to select only one directory when you receive this prompt."
+msgstr ""
+
+#: ulng.rsmountedfilesourcecopymultifilestowcxdlgtitle
+msgid "The operation is not supported"
+msgstr ""
 
 #: ulng.rsmsgaccount
 msgid "Account:"
@@ -13015,6 +13328,10 @@ msgctxt "ulng.rsopenwithgraphics"
 msgid "Graphics"
 msgstr "Teknik çizim"
 
+#: ulng.rsopenwithmacosfilter
+msgid "Applications (*.app)|*.app|All files (*)|*"
+msgstr ""
+
 #: ulng.rsopenwithmultimedia
 msgid "Multimedia"
 msgstr ""
@@ -13635,6 +13952,7 @@ msgid "Drives list button"
 msgstr ""
 
 #: ulng.rsoptionseditorfavoritetabs
+msgctxt "ulng.rsoptionseditorfavoritetabs"
 msgid "Favorite Tabs"
 msgstr ""
 
@@ -13760,6 +14078,26 @@ msgstr ""
 msgctxt "ulng.rsoptionseditorplugins"
 msgid "Plugins"
 msgstr "Eklentiler"
+
+#: ulng.rsoptionseditorpluginsdsx
+msgid "Search plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswcx
+msgid "Packer plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswdx
+msgid "Content plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswfx
+msgid "File system plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswlx
+msgid "Viewer plugins"
+msgstr ""
 
 #: ulng.rsoptionseditorquicksearch
 msgctxt "ulng.rsoptionseditorquicksearch"

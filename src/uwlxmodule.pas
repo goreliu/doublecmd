@@ -4,7 +4,7 @@
    WLX-API implementation (TC WLX-API v2.0).
 
    Copyright (C) 2008  Dmitry Kolomiets (B4rr4cuda@rambler.ru)
-   Copyright (C) 2009-2020 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2009-2023 Alexander Koblov (alexx2000@mail.ru)
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -88,8 +88,10 @@ type
     FModuleHandle: TLibHandle;  // Handle to .DLL or .so
     FParser: TParserControl;
     FPluginWindow: HWND;
+    function GetCanCommand: Boolean;
     function GetCanPreview: Boolean;
     function GetCanPrint: Boolean;
+    function GetCanSearch: Boolean;
     function GetDetectStr: String;
     function GIsLoaded: Boolean;
     procedure SetDetectStr(const AValue: String);
@@ -128,7 +130,9 @@ type
     property DetectStr: String read GetDetectStr write SetDetectStr;
     property ModuleHandle: TLibHandle read FModuleHandle write FModuleHandle;
     property CanPreview: Boolean read GetCanPreview;
+    property CanCommand: Boolean read GetCanCommand;
     property PluginWindow: HWND read FPluginWindow;
+    property CanSearch: Boolean read GetCanSearch;
     property CanPrint: Boolean read GetCanPrint;
   end;
 
@@ -213,7 +217,7 @@ begin
   if Assigned(WindowProc) then
     Result := CallWindowProc(WindowProc, hWnd, Msg, wParam, lParam)
   else begin
-    Result := DefWindowProc(hWnd, Msg, wParam, lParam);
+    Result := DefWindowProcW(hWnd, Msg, wParam, lParam);
   end;
   if (Result = 0) and (Msg = WM_COMMAND) and (lParam <> 0) then
   begin
@@ -256,6 +260,11 @@ begin
   Result := Assigned(ListPrint) or Assigned(ListPrintW);
 end;
 
+function TWlxModule.GetCanSearch: Boolean;
+begin
+  Result:= Assigned(ListSearchText) or Assigned(ListSearchDialog) or Assigned(ListSearchTextW);
+end;
+
 function TWlxModule.GetDetectStr: String;
 begin
   Result:= FParser.DetectStr;
@@ -264,6 +273,11 @@ end;
 function TWlxModule.GetCanPreview: Boolean;
 begin
   Result:= Assigned(ListGetPreviewBitmap) or Assigned(ListGetPreviewBitmapW);
+end;
+
+function TWlxModule.GetCanCommand: Boolean;
+begin
+  Result := Assigned(ListSendCommand);
 end;
 
 constructor TWlxModule.Create;
@@ -287,6 +301,7 @@ end;
 function TWlxModule.LoadModule: Boolean;
 begin
   // DCDebug('WLXM LoadModule entered');
+  if (FModuleHandle <> NilHandle) then Exit(True);
   FModuleHandle := mbLoadLibrary(mbExpandFileName(Self.FileName));
   Result := (FModuleHandle <> NilHandle);
   if FModuleHandle = NilHandle then Exit;
@@ -368,7 +383,7 @@ begin
   if FPluginWindow <> 0 then
   begin
     // Subclass viewer window to catch WM_COMMAND message.
-    Result:= HWND(SetWindowLongPtr(ParentWin, GWL_WNDPROC, LONG_PTR(@ListerProc)));
+    Result:= HWND(SetWindowLongPtrW(ParentWin, GWL_WNDPROC, LONG_PTR(@ListerProc)));
     Windows.SetPropW(ParentWin, WindowProcAtom, Result);
     // Subclass plugin window to catch some hotkeys like 'n' or 'p'.
     Result := HWND(SetWindowLongPtr(FPluginWindow, GWL_WNDPROC, LONG_PTR(@PluginProc)));
@@ -389,9 +404,13 @@ function TWlxModule.CallListLoadNext(ParentWin: HWND; FileToLoad: String; ShowFl
 begin
   WlxPrepareContainer(ParentWin);
 
-{$IF DEFINED(MSWINDOWS) and DEFINED(LCLQT5)}
+{$IF DEFINED(MSWINDOWS) and (DEFINED(LCLQT5) or DEFINED(DARKWIN))}
   if g_darkModeEnabled then
-    ShowFlags:= ShowFlags or lcp_darkmode or lcp_darkmodenative;
+  begin
+    ShowFlags:= ShowFlags or lcp_darkmode;
+    if g_darkModeSupported then
+      ShowFlags:= ShowFlags or lcp_darkmodenative;
+  end;
 {$ENDIF}
 
   if Assigned(ListLoadNextW) then
@@ -408,7 +427,7 @@ begin
   try
 {$IF DEFINED(LCLWIN32)}
     SetWindowLongPtr(FPluginWindow, GWL_WNDPROC, LONG_PTR(RemovePropW(FPluginWindow, WindowProcAtom)));
-    SetWindowLongPtr(GetParent(FPluginWindow), GWL_WNDPROC, LONG_PTR(RemovePropW(GetParent(FPluginWindow), WindowProcAtom)));
+    SetWindowLongPtrW(GetParent(FPluginWindow), GWL_WNDPROC, LONG_PTR(RemovePropW(GetParent(FPluginWindow), WindowProcAtom)));
 {$ENDIF}
     if Assigned(ListCloseWindow) then
       ListCloseWindow(FPluginWindow)
@@ -421,6 +440,10 @@ begin
 {$ENDIF}
   finally
     FPluginWindow := 0;
+{$IF DEFINED(MSWINDOWS)}
+    // Reset current directory
+    SetCurrentDirectoryW(PWideChar(CeUtf8ToUtf16(gpExePath)));
+{$ENDIF}
   end;
   //  DCDebug('Call ListCloseWindow success');
 end;
@@ -472,8 +495,8 @@ function TWlxModule.FileParamVSDetectStr(AFileName: String; bForce: Boolean): Bo
 begin
   if not Enabled then Exit(False);
   FParser.IsForce:= bForce;
-  DCDebug('DetectStr = ' + FParser.DetectStr);
-  DCDebug('AFileName = ' + AFileName);
+  // DCDebug('DetectStr = ' + FParser.DetectStr);
+  // DCDebug('AFileName = ' + AFileName);
   Result := FParser.TestFileResult(AFileName);
 end;
 

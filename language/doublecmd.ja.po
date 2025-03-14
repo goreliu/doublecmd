@@ -341,9 +341,25 @@ msgstr "作業完了後にチェックサムファイルを開く"
 msgid "C&reate separate checksum file for each file"
 msgstr "ファイルごとに個別のチェックサム ファイルを作成(&r)"
 
+#: tfrmchecksumcalc.cbseparatefolder.caption
+msgid "Create separate checksum file for each &directory"
+msgstr ""
+
+#: tfrmchecksumcalc.lblfileformat.caption
+msgid "File &format"
+msgstr ""
+
 #: tfrmchecksumcalc.lblsaveto.caption
 msgid "&Save checksum file(s) to:"
 msgstr "チェックサム ファイルを保存(&S)："
+
+#: tfrmchecksumcalc.rbunix.caption
+msgid "Unix"
+msgstr ""
+
+#: tfrmchecksumcalc.rbwindows.caption
+msgid "Windows"
+msgstr ""
 
 #: tfrmchecksumverify.btnclose.caption
 msgctxt "TFRMCHECKSUMVERIFY.BTNCLOSE.CAPTION"
@@ -1010,6 +1026,10 @@ msgctxt "TFRMEDITOR.ACTEDITSELECTALL.HINT"
 msgid "Select All"
 msgstr "すべて選択"
 
+#: tfrmeditor.actedittimedate.caption
+msgid "Time/Date"
+msgstr ""
+
 #: tfrmeditor.acteditundo.caption
 msgctxt "TFRMEDITOR.ACTEDITUNDO.CAPTION"
 msgid "Undo"
@@ -1081,14 +1101,6 @@ msgstr "名前を付けて保存(&A)…"
 #: tfrmeditor.actfilesaveas.hint
 msgid "Save As"
 msgstr "名前を付けて保存"
-
-#: tfrmeditor.actsaveall.caption
-msgid "Sa&ve All"
-msgstr "全て保存(&v)"
-
-#: tfrmeditor.actsaveall.hint
-msgid "Save All"
-msgstr "全て保存"
 
 #: tfrmeditor.caption
 msgctxt "TFRMEDITOR.CAPTION"
@@ -1763,26 +1775,6 @@ msgstr "検索対象から除外すべきファイル名を”;”で区切っ�
 #: tfrmfinddlg.cmbfindfilemask.hint
 msgid "Enter files names separated with \";\""
 msgstr "ファイル名を”;”で区切って入力"
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[0].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[0].text"
-msgid "Plugin"
-msgstr "プラグイン"
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[1].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[1].text"
-msgid "Field"
-msgstr "フィールド"
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[2].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[2].text"
-msgid "Operator"
-msgstr "演算子"
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[3].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[3].text"
-msgid "Value"
-msgstr "値"
 
 #: tfrmfinddlg.gbdirectories.caption
 msgctxt "TFRMFINDDLG.GBDIRECTORIES.CAPTION"
@@ -2522,6 +2514,10 @@ msgstr "ファイルからタブを読み込む(&L)"
 msgid "Create &Directory"
 msgstr "ディレクトリを作成(&D)"
 
+#: tfrmmain.actmapnetworkdrive.caption
+msgid "Map Network Drive..."
+msgstr "ネットワークドライブの割り当て…"
+
 #: tfrmmain.actmarkcurrentextension.caption
 msgid "Select All with the Same E&xtension"
 msgstr "同じ拡張子の項目を全て選択(&x)"
@@ -2843,6 +2839,14 @@ msgstr "メニュー"
 msgctxt "TFRMMAIN.ACTSHOWSYSFILES.CAPTION"
 msgid "Show &Hidden/System Files"
 msgstr "システムファイルの表示/非表示(&H)"
+
+#: tfrmmain.actshowtabslist.caption
+msgid "Show Tabs List"
+msgstr ""
+
+#: tfrmmain.actshowtabslist.hint
+msgid "Show list of all open tabs"
+msgstr ""
 
 #: tfrmmain.actsortbyattr.caption
 msgid "Sort by &Attributes"
@@ -3200,7 +3204,7 @@ msgid "C&onfiguration"
 msgstr "構成設定(&o)"
 
 #: tfrmmain.mnufavoritetabs.caption
-msgid "Favorites"
+msgid "F&avorites"
 msgstr "お気に入り"
 
 #: tfrmmain.mnufiles.caption
@@ -3218,7 +3222,7 @@ msgstr "マーク(&M)"
 
 #: tfrmmain.mnunetwork.caption
 msgctxt "TFRMMAIN.MNUNETWORK.CAPTION"
-msgid "Network"
+msgid "&Network"
 msgstr "ネットワーク(&N)"
 
 #: tfrmmain.mnushow.caption
@@ -3998,6 +4002,10 @@ msgstr "コンソール出力を表示(&h)"
 #: tfrmoptionsarchivers.chkfilenameonlylist.caption
 msgid "Use archive name without extension as list"
 msgstr "拡張子のないアーカイブ名をリストとして使用"
+
+#: tfrmoptionsarchivers.chkhide.caption
+msgid "Show as normal files"
+msgstr ""
 
 #: tfrmoptionsarchivers.ckbarchiverunixfileattributes.caption
 msgid "Uni&x file attributes"
@@ -5365,6 +5373,14 @@ msgstr "自動インデント"
 msgid "Allows to indent the caret, when new line is created with <Enter>, with the same amount of leading white space as the preceding line"
 msgstr "Enterで新しい行が作成されたとき,前の行と同じ行頭の空白文字数分だけキャレットをインデントする"
 
+#: tfrmoptionseditor.chkgroupundo.caption
+msgid "Group Undo"
+msgstr ""
+
+#: tfrmoptionseditor.chkgroupundo.hint
+msgid "All continuous changes of the same type will be processed in one call instead of undoing/redoing each one"
+msgstr ""
+
 #: tfrmoptionseditor.chkrightedge.caption
 msgid "Right margin:"
 msgstr "右マージン:"
@@ -5452,11 +5468,6 @@ msgstr "背景"
 #: tfrmoptionseditorcolors.btnresetmask.hint
 msgid "Reset"
 msgstr "リセット"
-
-#: tfrmoptionseditorcolors.btnsavemask.hint
-msgctxt "TFRMOPTIONSEDITORCOLORS.BTNSAVEMASK.HINT"
-msgid "Save"
-msgstr "保存"
 
 #: tfrmoptionseditorcolors.bvlattributesection.caption
 msgid "Element Attributes"
@@ -6471,11 +6482,6 @@ msgctxt "TFRMOPTIONSFILETYPESCOLORS.BTNADDCATEGORY.CAPTION"
 msgid "A&dd"
 msgstr "追加(&d)"
 
-#: tfrmoptionsfiletypescolors.btnapplycategory.caption
-msgctxt "TFRMOPTIONSFILETYPESCOLORS.BTNAPPLYCATEGORY.CAPTION"
-msgid "A&pply"
-msgstr "適用(&p)"
-
 #: tfrmoptionsfiletypescolors.btndeletecategory.caption
 msgctxt "TFRMOPTIONSFILETYPESCOLORS.BTNDELETECATEGORY.CAPTION"
 msgid "D&elete"
@@ -6640,6 +6646,16 @@ msgstr "パラメータ"
 #: tfrmoptionshotkeys.stghotkeys.columns[2].title.caption
 msgid "Controls"
 msgstr "コントロール"
+
+#: tfrmoptionsicloud.appslistview.columns[0].caption
+msgctxt "tfrmoptionsicloud.appslistview.columns[0].caption"
+msgid "Applications"
+msgstr ""
+
+#: tfrmoptionsicloud.appslistview.columns[1].caption
+msgctxt "tfrmoptionsicloud.appslistview.columns[1].caption"
+msgid "Count of Contents"
+msgstr ""
 
 #: tfrmoptionsicons.cbiconsexclude.caption
 msgctxt "TFRMOPTIONSICONS.CBICONSEXCLUDE.CAPTION"
@@ -7310,8 +7326,10 @@ msgid "File name"
 msgstr "ファイル名"
 
 #: tfrmoptionspluginswfx.lblplugindescription.caption
+#, fuzzy
+#| msgid "Fi&le system plugins allow access to disks inaccessible by operating system or to external devices like Palm/PocketPC."
 msgctxt "tfrmoptionspluginswfx.lblplugindescription.caption"
-msgid "Fi&le system plugins allow access to disks inaccessible by operating system or to external devices like Palm/PocketPC."
+msgid "Fi&le system plugins allow access to disks inaccessible by operating system or to external devices like smartphones."
 msgstr "ファイルシステム・プラグインは,OSによってアクセスを禁止されているディスクやPalm/PocketPCのような外部デバイスへのアクセスを可能にします(&l)."
 
 #: tfrmoptionspluginswfx.stgplugins.columns[0].title.caption
@@ -8027,6 +8045,10 @@ msgctxt "tfrmoptionstoolbarbase.MISUBTOOLBARPRIORCURRENT.CAPTION"
 msgid "just prior current selection"
 msgstr "現在の選択の直前に"
 
+#: tfrmoptionstoolbarbase.rblinebreak.caption
+msgid "Line break"
+msgstr ""
+
 #: tfrmoptionstoolbarbase.rbseparator.caption
 msgid "Separator"
 msgstr "区切り"
@@ -8551,23 +8573,23 @@ msgstr "ルールの削減(&e)"
 msgid "Use &content plugins, combine with:"
 msgstr "コンテンツプラグインを使用.組み合わせ(&c)："
 
-#: tfrmsearchplugin.headercontrol.sections[0].text
-msgctxt "TFRMSEARCHPLUGIN.HEADERCONTROL.SECTIONS[0].TEXT"
-msgid "Plugin"
-msgstr "プラグイン"
-
-#: tfrmsearchplugin.headercontrol.sections[1].text
-msgctxt "tfrmsearchplugin.headercontrol.sections[1].text"
+#: tfrmsearchplugin.lblfield.caption
+msgctxt "tfrmsearchplugin.lblfield.caption"
 msgid "Field"
 msgstr "フィールド"
 
-#: tfrmsearchplugin.headercontrol.sections[2].text
-msgctxt "tfrmsearchplugin.headercontrol.sections[2].text"
+#: tfrmsearchplugin.lbloperator.caption
+msgctxt "tfrmsearchplugin.lbloperator.caption"
 msgid "Operator"
 msgstr "演算子"
 
-#: tfrmsearchplugin.headercontrol.sections[3].text
-msgctxt "TFRMSEARCHPLUGIN.HEADERCONTROL.SECTIONS[3].TEXT"
+#: tfrmsearchplugin.lblplugin.caption
+msgctxt "tfrmsearchplugin.lblplugin.caption"
+msgid "Plugin"
+msgstr "プラグイン"
+
+#: tfrmsearchplugin.lblvalue.caption
+msgctxt "tfrmsearchplugin.lblvalue.caption"
 msgid "Value"
 msgstr "値"
 
@@ -9821,6 +9843,11 @@ msgctxt "TFRMVIEWER.MIVIEW.CAPTION"
 msgid "&View"
 msgstr "表示(&V)"
 
+#: tfrmviewer.mnuplugins.caption
+msgctxt "tfrmviewer.mnuplugins.caption"
+msgid "Plugins"
+msgstr "プラグイン"
+
 #: tfrmviewoperations.btnstartpause.caption
 msgctxt "tfrmviewoperations.btnstartpause.caption"
 msgid "&Start"
@@ -10517,6 +10544,22 @@ msgctxt "ulng.rseditgotolinetitle"
 msgid "Goto Line"
 msgstr "指定行へ移動"
 
+#: ulng.rsedithintcursorpos
+msgid "Cursor Position"
+msgstr ""
+
+#: ulng.rsedithintinsertmode
+msgid "Insert Mode"
+msgstr ""
+
+#: ulng.rsedithintmodified
+msgid "Modified"
+msgstr ""
+
+#: ulng.rsedithintselectionmode
+msgid "Selection Mode"
+msgstr ""
+
 #: ulng.rseditnewfile
 msgid "new.txt"
 msgstr "new.txt"
@@ -10546,6 +10589,26 @@ msgstr "前方へ(&F)"
 msgctxt "ulng.rseditsearchreplace"
 msgid "Replace"
 msgstr "置換"
+
+#: ulng.rseditstatinsertmodeins
+msgid "INS"
+msgstr ""
+
+#: ulng.rseditstatinsertmodeovr
+msgid "OVR"
+msgstr ""
+
+#: ulng.rseditstatselmodecol
+msgid "COL"
+msgstr ""
+
+#: ulng.rseditstatselmodeline
+msgid "LINE"
+msgstr ""
+
+#: ulng.rseditstatselmodenorm
+msgid "NORM"
+msgstr ""
 
 #: ulng.rseditwithexternaleditor
 msgid "with external editor"
@@ -10968,6 +11031,14 @@ msgstr "\"ENTER\"に対するショートカットはありません"
 msgid "By command name;By shortcut key (grouped);By shortcut key (one per row)"
 msgstr "コマンド名;ショートカットキー（グループ化して）;ショートカット（１行に1つ）"
 
+#: ulng.rsiclouddrivercopyseedfileconfirmdlgmessage
+msgid "It is recommended to download the files first. Otherwise, what is copied is not the content of the files, but the corresponding placeholder files, which will result in hidden files with the .iCloud extension."
+msgstr ""
+
+#: ulng.rsiclouddrivercopyseedfileconfirmdlgtitle
+msgid "The operation may contain files that were not downloaded, continue anyway?"
+msgstr ""
+
 #: ulng.rsimporttoolbarproblem
 msgid "Cannot find reference to default bar file"
 msgstr "デフォルトのバーファイルへの参照を見つけることができません"
@@ -10997,6 +11068,11 @@ msgstr "B"
 msgid "List of \"Find files\" windows"
 msgstr "”ファイル検索”ウィンドウのリスト"
 
+#: ulng.rsmacosassignfindertagstomultiitems
+#, object-pascal-format
+msgid "Assign tags to %d items"
+msgstr ""
+
 #: ulng.rsmarkminus
 msgid "Unselect mask"
 msgstr "選択解除マスク"
@@ -11025,9 +11101,229 @@ msgstr "カスタム列の構成"
 msgid "Enter new custom columns name"
 msgstr "新しいカスタムカラム名を入力"
 
-#: ulng.rsmenumacosservices
-msgid "Services"
-msgstr "サービス"
+#: ulng.rsmenumacosaddfindertag
+#, object-pascal-format
+msgid "Add \"%s\""
+msgstr ""
+
+#: ulng.rsmenumacoseditfindertags
+msgctxt "ulng.rsmenumacoseditfindertags"
+msgid "Edit Finder Tags..."
+msgstr ""
+
+#: ulng.rsmenumacosgrantpermissiontosupportfindertags
+msgid "Grant \"Full Disk Access\" permission to support Finder Tags..."
+msgstr ""
+
+#: ulng.rsmenumacosremovefindertag
+#, object-pascal-format
+msgid "Remove \"%s\""
+msgstr ""
+
+#: ulng.rsmenumacosshare
+msgid "Share..."
+msgstr "共有..."
+
+#: ulng.rsmfstbiairdroptips
+msgctxt "ulng.rsmfstbiairdroptips"
+msgid "AirDrop"
+msgstr ""
+
+#: ulng.rsmfstbiairdroptitle
+msgctxt "ulng.rsmfstbiairdroptitle"
+msgid "AirDrop"
+msgstr ""
+
+#: ulng.rsmfstbicommandmenudirectoryhotlist
+#, fuzzy
+msgctxt "ulng.rsmfstbicommandmenudirectoryhotlist"
+msgid "Directory Hotlist"
+msgstr "ディレクトリ・ホットリスト"
+
+#: ulng.rsmfstbicommandmenufavoritetabs
+#, fuzzy
+msgctxt "ulng.rsmfstbicommandmenufavoritetabs"
+msgid "Favorite Tabs"
+msgstr "お気に入りのタブ"
+
+#: ulng.rsmfstbicommandmenuquicklook
+msgid "macOS QuickLook"
+msgstr ""
+
+#: ulng.rsmfstbicommandtitle
+#, fuzzy
+msgctxt "ulng.rsmfstbicommandtitle"
+msgid "Command"
+msgstr "コマンド"
+
+#: ulng.rsmfstbicomparetips
+msgid "Compare by Contents..."
+msgstr ""
+
+#: ulng.rsmfstbicomparetitle
+#, fuzzy
+msgctxt "ulng.rsmfstbicomparetitle"
+msgid "Compare"
+msgstr "比較"
+
+#: ulng.rsmfstbieditfindertagtips
+msgctxt "ulng.rsmfstbieditfindertagtips"
+msgid "Edit Finder Tags..."
+msgstr ""
+
+#: ulng.rsmfstbieditfindertagtitle
+msgid "EditTag"
+msgstr ""
+
+#: ulng.rsmfstbiedittips
+msgid "Edit..."
+msgstr ""
+
+#: ulng.rsmfstbiedittitle
+#, fuzzy
+msgctxt "ulng.rsmfstbiedittitle"
+msgid "Edit"
+msgstr "編集"
+
+#: ulng.rsmfstbifinderrevealtips
+msgid "Reveal in Finder"
+msgstr ""
+
+#: ulng.rsmfstbifinderrevealtitle
+msgid "Finder"
+msgstr ""
+
+#: ulng.rsmfstbigotips
+msgctxt "ulng.rsmfstbigotips"
+msgid "Go"
+msgstr ""
+
+#: ulng.rsmfstbigotitle
+msgctxt "ulng.rsmfstbigotitle"
+msgid "Go"
+msgstr ""
+
+#: ulng.rsmfstbihorzsplittips
+msgid "Toggle Horizontal Split Mode"
+msgstr ""
+
+#: ulng.rsmfstbihorzsplittitle
+msgid "HorzSplit"
+msgstr ""
+
+#: ulng.rsmfstbiiclouddrivertips
+msgctxt "ulng.rsmfstbiiclouddrivertips"
+msgid "iCloud Driver"
+msgstr ""
+
+#: ulng.rsmfstbiiclouddrivertitle
+msgctxt "ulng.rsmfstbiiclouddrivertitle"
+msgid "iCloud Driver"
+msgstr ""
+
+#: ulng.rsmfstbiprivilegetips
+msgid "As a file manager, Double Command requires full disk access permissions. Clicking this button will pop up the macOS system settings page. Please add \"Double Commander.app\" to the \"Full Disk Access\" list to complete the authorization."
+msgstr ""
+
+#: ulng.rsmfstbiprivilegetitle
+msgid "Privilege"
+msgstr ""
+
+#: ulng.rsmfstbiquicklooktips
+msgid "macOS Quick Look Panel"
+msgstr ""
+
+#: ulng.rsmfstbiquicklooktitle
+msgid "QuickLook"
+msgstr ""
+
+#: ulng.rsmfstbirefreshtips
+msgid "Refresh File List"
+msgstr ""
+
+#: ulng.rsmfstbirefreshtitle
+msgid "Refresh"
+msgstr ""
+
+#: ulng.rsmfstbisearchcombinedtags
+msgid "Search for combined tags..."
+msgstr ""
+
+#: ulng.rsmfstbisearchtips
+msgid "Search Files..."
+msgstr ""
+
+#: ulng.rsmfstbisearchtitle
+#, fuzzy
+msgctxt "ulng.rsmfstbisearchtitle"
+msgid "Search"
+msgstr "検索"
+
+#: ulng.rsmfstbisharetitle
+msgid "Share"
+msgstr ""
+
+#: ulng.rsmfstbishowbrieftitle
+msgid "as Brief"
+msgstr ""
+
+#: ulng.rsmfstbishowfulltitle
+msgid "as Full"
+msgstr ""
+
+#: ulng.rsmfstbishowinfotips
+msgid "Show Info in Finder"
+msgstr ""
+
+#: ulng.rsmfstbishowinfotitle
+msgid "ShowInfo"
+msgstr ""
+
+#: ulng.rsmfstbishowmodetips
+msgid "Show as Brief, Full or Thumbnails"
+msgstr ""
+
+#: ulng.rsmfstbishowmodetitle
+msgid "ShowMode"
+msgstr ""
+
+#: ulng.rsmfstbishowthumbnailstitle
+msgid "as Thumbnails"
+msgstr ""
+
+#: ulng.rsmfstbiswappanelstips
+msgid "Swap Panels"
+msgstr ""
+
+#: ulng.rsmfstbiswappanelstitle
+msgid "SwapPanels"
+msgstr ""
+
+#: ulng.rsmfstbisynctips
+msgid "Synchronize Dirs..."
+msgstr ""
+
+#: ulng.rsmfstbisynctitle
+msgid "Sync"
+msgstr ""
+
+#: ulng.rsmfstbiterminaltips
+msgid "Open in Terminal"
+msgstr ""
+
+#: ulng.rsmfstbiterminaltitle
+#, fuzzy
+msgctxt "ulng.rsmfstbiterminaltitle"
+msgid "Terminal"
+msgstr "端末"
+
+#: ulng.rsmfstbitreeviewtips
+msgid "Show Tree View Panel"
+msgstr ""
+
+#: ulng.rsmfstbitreeviewtitle
+msgid "TreeView"
+msgstr ""
 
 #: ulng.rsmnuactions
 msgctxt "ulng.rsmnuactions"
@@ -11063,9 +11359,13 @@ msgstr "取り出し"
 msgid "Extract here..."
 msgstr "ここに抽出…"
 
-#: ulng.rsmnumapnetworkdrive
-msgid "Map Network Drive..."
-msgstr "ネットワークドライブの割り当て…"
+#: ulng.rsmnuiclouddriverdownloadnow
+msgid "Download Now"
+msgstr ""
+
+#: ulng.rsmnuiclouddriverremovedownload
+msgid "Remove Download"
+msgstr ""
 
 #: ulng.rsmnumount
 msgid "Mount"
@@ -11075,6 +11375,10 @@ msgstr "マウント"
 msgctxt "ulng.rsmnunew"
 msgid "New"
 msgstr "新規"
+
+#: ulng.rsmnunewwindow
+msgid "New Window"
+msgstr "新しい窓"
 
 #: ulng.rsmnunomedia
 msgid "No media available"
@@ -11117,6 +11421,19 @@ msgstr "アンマウント"
 msgctxt "ulng.rsmnuview"
 msgid "View"
 msgstr "ビュー"
+
+#: ulng.rsmountedfilesourcecopymultifilestowcxdlgmessage
+msgid ""
+"Some virtual filesystem contain specific directory structures. When copying from it to a compressed archive, only one directory can be selected at a time, unless the actual locations of the selected directories are all located under the same parent directory.\n"
+"\n"
+"For example, for iCloud Drive, when copying directory from the root to a compressed archive, maybe only one directory should be selected.\n"
+"\n"
+"It is recommended that you follow your usual practice and try to select only one directory when you receive this prompt."
+msgstr ""
+
+#: ulng.rsmountedfilesourcecopymultifilestowcxdlgtitle
+msgid "The operation is not supported"
+msgstr ""
 
 #: ulng.rsmsgaccount
 msgid "Account:"
@@ -12622,6 +12939,10 @@ msgctxt "ulng.rsopenwithgraphics"
 msgid "Graphics"
 msgstr "グラフィックス"
 
+#: ulng.rsopenwithmacosfilter
+msgid "Applications (*.app)|*.app|All files (*)|*"
+msgstr "アプリ (*.app)|*.app|すべてのファイル (*)|*"
+
 #: ulng.rsopenwithmultimedia
 msgid "Multimedia"
 msgstr "マルチ メディア"
@@ -13241,6 +13562,7 @@ msgid "Drives list button"
 msgstr "ドライブリストボタン"
 
 #: ulng.rsoptionseditorfavoritetabs
+msgctxt "ulng.rsoptionseditorfavoritetabs"
 msgid "Favorite Tabs"
 msgstr "お気に入りのタブ"
 
@@ -13367,6 +13689,26 @@ msgstr ""
 msgctxt "ulng.rsoptionseditorplugins"
 msgid "Plugins"
 msgstr "プラグイン"
+
+#: ulng.rsoptionseditorpluginsdsx
+msgid "Search plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswcx
+msgid "Packer plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswdx
+msgid "Content plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswfx
+msgid "File system plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswlx
+msgid "Viewer plugins"
+msgstr ""
 
 #: ulng.rsoptionseditorquicksearch
 msgctxt "ulng.rsoptionseditorquicksearch"

@@ -41,7 +41,7 @@ type
       function GetFreeSpace(Path: String; out FreeSize, TotalSize : Int64) : Boolean; override;
 
       class function CreateFile(const APath: String): TFile; override;
-      class function CreateFile(const APath: String; AFolder: PGFile; AFileInfo: PGFileInfo): TFile;
+      class function CreateFile(const APath: String; AFolder: PGFile; AFileInfo: PGFileInfo): TFile; virtual;
 
       procedure Reload(const PathsToReload: TPathsArray); override;
       function GetParentDir(sPath : String): String; override;
@@ -110,17 +110,26 @@ end;
 class function TGioFileSource.CreateFile(const APath: String; AFolder: PGFile;
   AFileInfo: PGFileInfo): TFile;
 var
+  Addr: TURI;
   AFile: PGFile;
   ATarget: Pgchar;
   AFileType: TGFileType;
+  AFileTime: TFileTimeEx;
   ASymlinkInfo: PGFileInfo;
 begin
   Result:= CreateFile(APath);
   Result.Name:= g_file_info_get_name(AFileInfo);
-  Result.Size:= g_file_info_get_size (AFileInfo);
-  Result.Attributes:= g_file_info_get_attribute_uint32 (AFileInfo, FILE_ATTRIBUTE_UNIX_MODE);
-  Result.ModificationTime:= UnixFileTimeToDateTime(g_file_info_get_attribute_uint64 (AFileInfo, FILE_ATTRIBUTE_TIME_MODIFIED));
-  Result.LinkProperty := TFileLinkProperty.Create;
+  Result.Attributes:= g_file_info_get_attribute_uint32(AFileInfo, FILE_ATTRIBUTE_UNIX_MODE);
+  AFileTime.sec:= Int64(g_file_info_get_attribute_uint64(AFileInfo, FILE_ATTRIBUTE_TIME_MODIFIED));
+  AFileTime.nanosec:= Int64(g_file_info_get_attribute_uint32(AFileInfo, FILE_ATTRIBUTE_TIME_MODIFIED_USEC)) * 1000;
+
+  Result.ModificationTime:= UnixFileTimeToDateTimeEx(AFileTime);
+
+  if g_file_info_has_attribute(AFileInfo, FILE_ATTRIBUTE_STANDARD_SIZE) then
+    Result.Size:= g_file_info_get_size(AFileInfo)
+  else begin
+    Result.SizeProperty.IsValid:= False;
+  end;
 
   // Get a file's type (whether it is a regular file, symlink, etc).
   AFileType:= g_file_info_get_file_type (AFileInfo);
@@ -136,30 +145,49 @@ begin
       Result.LinkProperty.IsValid := Assigned(ATarget);
       if Assigned(ATarget) then
       begin
-        AFile:= g_file_get_child(AFolder, ATarget);
-
-        ASymlinkInfo := g_file_query_info (AFile, FILE_ATTRIBUTE_STANDARD_TYPE,
-                                           G_FILE_QUERY_INFO_NONE, nil, nil);
-
         Result.LinkProperty.LinkTo := ATarget;
-        Result.LinkProperty.IsValid := Assigned(ASymlinkInfo);
 
-        if (Result.LinkProperty.IsValid) then
+        AFile:= g_file_get_child(AFolder, ATarget);
+        Result.LinkProperty.IsValid:= Assigned(AFile);
+
+        if Result.LinkProperty.IsValid then
         begin
-          AFileType:= g_file_info_get_file_type(ASymlinkInfo);
-          Result.LinkProperty.IsLinkToDirectory := (AFileType = G_FILE_TYPE_DIRECTORY);
-          if Result.LinkProperty.IsLinkToDirectory then Result.Size := 0;
-          g_object_unref(ASymlinkInfo);
+          ASymlinkInfo := g_file_query_info (AFile, FILE_ATTRIBUTE_STANDARD_TYPE,
+                                             G_FILE_QUERY_INFO_NONE, nil, nil);
+
+          Result.LinkProperty.IsValid := Assigned(ASymlinkInfo);
+
+          if (Result.LinkProperty.IsValid) then
+          begin
+            AFileType:= g_file_info_get_file_type(ASymlinkInfo);
+            Result.LinkProperty.IsLinkToDirectory := (AFileType = G_FILE_TYPE_DIRECTORY);
+            if Result.LinkProperty.IsLinkToDirectory then Result.Size := 0;
+            g_object_unref(ASymlinkInfo);
+          end;
+          g_object_unref(PGObject(AFile));
         end;
-        g_object_unref(PGObject(AFile));
       end;
     end
   else if AFileType in [G_FILE_TYPE_SHORTCUT, G_FILE_TYPE_MOUNTABLE] then
   begin
     Result.Attributes:= Result.Attributes or S_IFLNK or S_IFDIR;
+    Result.ModificationTimeProperty.IsValid:= g_file_info_has_attribute(AFileInfo, FILE_ATTRIBUTE_TIME_MODIFIED);
+
     ATarget:= g_file_info_get_attribute_string(AFileInfo, FILE_ATTRIBUTE_STANDARD_TARGET_URI);
     Result.LinkProperty.IsValid := Length(ATarget) > 0;
     Result.LinkProperty.LinkTo := ATarget;
+
+    // Remove a standard port from address
+    Addr:= ParseURI(Result.LinkProperty.LinkTo);
+    if Addr.Port > 0 then
+    begin
+      case Addr.Port of
+          22: if (Addr.Protocol = 'sftp') then Addr.Port:= 0;
+         445: if (Addr.Protocol = 'smb')  then Addr.Port:= 0;
+        2049: if (Addr.Protocol = 'nfs')  then Addr.Port:= 0;
+      end;
+      if Addr.Port = 0 then Result.LinkProperty.LinkTo:= EncodeURI(Addr);
+    end;
   end;
 end;
 
@@ -178,7 +206,7 @@ end;
 
 function TGioFileSource.SetCurrentWorkingDirectory(NewDir: String): Boolean;
 begin
-  Result:= TRue; //inherited SetCurrentWorkingDirectory(NewDir);
+  Result:= True;
 end;
 
 procedure ask_password_cb (op: PGMountOperation;
@@ -272,7 +300,7 @@ begin
 
   DCDebug('  (II) Spawning callback_ask_question...');
   // At this moment, only SFTP uses ask_question and the second button is cancellation
-  choice:= MsgChoiceBox(nil, message, buttons);
+  choice:= MsgChoiceBox(nil, message, buttons, -1, -1);
   g_print('    (II) Received choice = %d\n', [choice]);
 
   if (choice < 0) then
@@ -527,4 +555,3 @@ begin
 end;
 
 end.
-

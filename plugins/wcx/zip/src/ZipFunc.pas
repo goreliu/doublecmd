@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    WCX plugin for working with *.zip, *.gz, *.tar, *.tgz archives
 
-   Copyright (C) 2007-2023 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2007-2024 Alexander Koblov (alexx2000@mail.ru)
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -40,10 +40,14 @@ type
 
   TAbZipKitEx = class (TAbZipKit)
   private
+    FItemProgress: Byte;
+    FItem: TAbArchiveItem;
     FNeedPassword: Boolean;
     FOperationResult: LongInt;
     FChangeVolProcW: TChangeVolProcW;
     FProcessDataProcW : TProcessDataProcW;
+    procedure AbOneItemProgressEvent(Sender : TObject; Item : TAbArchiveItem; Progress : Byte;
+                                     var Abort : Boolean);
     procedure AbArchiveItemProgressEvent(Sender : TObject; Item : TAbArchiveItem; Progress : Byte;
                                          var Abort : Boolean);
     procedure AbArchiveProgressEvent (Sender : TObject; Progress : Byte; var Abort : Boolean);
@@ -57,26 +61,26 @@ type
   end;
 
 {Mandatory functions}
-function OpenArchive (var ArchiveData : tOpenArchiveData) : TArcHandle;dcpcall;
-function OpenArchiveW(var ArchiveData : tOpenArchiveDataW) : TArcHandle;dcpcall;
-function ReadHeader(hArcData : TArcHandle; var HeaderData: THeaderData) : Integer;dcpcall;
-function ReadHeaderExW(hArcData : TArcHandle; var HeaderData: THeaderDataExW) : Integer;dcpcall;
-function ProcessFile (hArcData : TArcHandle; Operation : Integer; DestPath, DestName : PChar) : Integer;dcpcall;
-function ProcessFileW(hArcData : TArcHandle; Operation : Integer; DestPath, DestName : PWideChar) : Integer;dcpcall;
-function CloseArchive (hArcData : TArcHandle) : Integer;dcpcall;
-procedure SetChangeVolProc (hArcData : TArcHandle; pChangeVolProc : PChangeVolProc);dcpcall;
-procedure SetChangeVolProcW(hArcData : TArcHandle; pChangeVolProc : TChangeVolProcW);dcpcall;
-procedure SetProcessDataProc (hArcData : TArcHandle; pProcessDataProc : TProcessDataProc);dcpcall;
-procedure SetProcessDataProcW(hArcData : TArcHandle; pProcessDataProc : TProcessDataProcW);dcpcall;
+function OpenArchive (var ArchiveData : tOpenArchiveData) : TArcHandle;dcpcall; export;
+function OpenArchiveW(var ArchiveData : tOpenArchiveDataW) : TArcHandle;dcpcall; export;
+function ReadHeader(hArcData : TArcHandle; var HeaderData: THeaderData) : Integer;dcpcall; export;
+function ReadHeaderExW(hArcData : TArcHandle; var HeaderData: THeaderDataExW) : Integer;dcpcall; export;
+function ProcessFile (hArcData : TArcHandle; Operation : Integer; DestPath, DestName : PChar) : Integer;dcpcall; export;
+function ProcessFileW(hArcData : TArcHandle; Operation : Integer; DestPath, DestName : PWideChar) : Integer;dcpcall; export;
+function CloseArchive (hArcData : TArcHandle) : Integer;dcpcall; export;
+procedure SetChangeVolProc (hArcData : TArcHandle; pChangeVolProc : PChangeVolProc);dcpcall; export;
+procedure SetChangeVolProcW(hArcData : TArcHandle; pChangeVolProc : TChangeVolProcW);dcpcall; export;
+procedure SetProcessDataProc (hArcData : TArcHandle; pProcessDataProc : TProcessDataProc);dcpcall; export;
+procedure SetProcessDataProcW(hArcData : TArcHandle; pProcessDataProc : TProcessDataProcW);dcpcall; export;
 {Optional functions}
-function PackFilesW(PackedFile: PWideChar;  SubPath: PWideChar;  SrcPath: PWideChar;  AddList: PWideChar;  Flags: Integer): Integer;dcpcall;
-function DeleteFilesW(PackedFile, DeleteList : PWideChar) : Integer;dcpcall;
-function GetPackerCaps : Integer;dcpcall;
-function GetBackgroundFlags: Integer; dcpcall;
-procedure ConfigurePacker (Parent: HWND;  DllInstance: THandle);dcpcall;
-function CanYouHandleThisFileW(FileName: PWideChar): Boolean; dcpcall;
+function PackFilesW(PackedFile: PWideChar;  SubPath: PWideChar;  SrcPath: PWideChar;  AddList: PWideChar;  Flags: Integer): Integer;dcpcall; export;
+function DeleteFilesW(PackedFile, DeleteList : PWideChar) : Integer;dcpcall; export;
+function GetPackerCaps : Integer;dcpcall; export;
+function GetBackgroundFlags: Integer; dcpcall; export;
+procedure ConfigurePacker (Parent: HWND;  DllInstance: THandle);dcpcall; export;
+function CanYouHandleThisFileW(FileName: PWideChar): Boolean; dcpcall; export;
 {Extension API}
-procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall;
+procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall; export;
 
 const
   IniFileName = 'zip.ini';
@@ -89,7 +93,7 @@ implementation
 
 uses
   SysUtils, LazUTF8, ZipConfDlg, AbBrowse, DCConvertEncoding, DCOSUtils, ZipOpt,
-  ZipLng, ZipCache;
+  ZipLng, ZipCache, DCDateTimeUtils;
 
 var
   PasswordCache: TPasswordCache;
@@ -136,6 +140,16 @@ begin
     Result := E_UNKNOWN;
 end;
 
+function CheckError(E: Exception): Integer;
+begin
+  Result:= GetArchiveError(E);
+  if (Result = E_UNKNOWN) then
+  begin
+    Result := E_HANDLED;
+    gStartupInfo.MessageBox(PAnsiChar(E.Message), nil, MB_OK or MB_ICONERROR);
+  end;
+end;
+
 procedure CheckError(Arc: TAbZipKitEx; E: Exception; const FileName: String);
 var
   AMessage: String;
@@ -153,62 +167,76 @@ end;
 
 // -- Exported functions ------------------------------------------------------
 
-function OpenArchive (var ArchiveData : tOpenArchiveData) : TArcHandle;dcpcall;
+function OpenArchive (var ArchiveData : tOpenArchiveData) : TArcHandle;dcpcall; export;
 begin
   Result := 0;
   ArchiveData.OpenResult := E_NOT_SUPPORTED;
 end;
 
-function OpenArchiveW(var ArchiveData : tOpenArchiveDataW) : TArcHandle;dcpcall;
+function OpenArchiveW(var ArchiveData : tOpenArchiveDataW) : TArcHandle;dcpcall; export;
 var
-  Arc : TAbZipKitEx;
+  Arc : TAbZipKitEx absolute Result;
 begin
-  Result := 0;
   Arc := TAbZipKitEx.Create(nil);
   try
-    Arc.OnArchiveItemProgress := @Arc.AbArchiveItemProgressEvent;
     Arc.OnArchiveProgress := @Arc.AbArchiveProgressEvent;
     Arc.OnProcessItemFailure := @Arc.AbProcessItemFailureEvent;
     Arc.OnNeedPassword:= @Arc.AbNeedPasswordEvent;
     Arc.OnRequestImage:= @Arc.AbRequestImageEvent;
 
+    case ArchiveData.OpenMode of
+      PK_OM_LIST: Arc.OpenMode := opList;
+      PK_OM_EXTRACT: Arc.OpenMode := opExtract;
+    end;
     Arc.TarAutoHandle := gTarAutoHandle;
     Arc.OpenArchive(UTF16ToUTF8(UnicodeString(ArchiveData.ArcName)));
+
+    if Arc.ArchiveType in [atGzip, atBzip2, atXz, atLzma, atZstd] then
+      Arc.OnArchiveItemProgress := @Arc.AbOneItemProgressEvent
+    else begin
+      Arc.OnArchiveItemProgress := @Arc.AbArchiveItemProgressEvent;
+    end;
+
     Arc.Password := PasswordCache.GetPassword(Arc.FileName);
     Arc.Tag := 0;
-    Result := TArcHandle(Arc);
   except
     on E: Exception do
     begin
-      Arc.Free;
-      ArchiveData.OpenResult := GetArchiveError(E);
-      if (ArchiveData.OpenResult = E_UNKNOWN) then
-      begin
-        ArchiveData.OpenResult := E_HANDLED;
-        gStartupInfo.MessageBox(PAnsiChar(E.Message), nil, MB_OK or MB_ICONERROR);
-      end;
+      FreeAndNil(Arc);
+      ArchiveData.OpenResult := CheckError(E);
     end;
   end;
 end;
 
-function ReadHeader(hArcData : TArcHandle; var HeaderData: THeaderData) : Integer;dcpcall;
+function ReadHeader(hArcData : TArcHandle; var HeaderData: THeaderData) : Integer;dcpcall; export;
 begin
   Result := E_NOT_SUPPORTED;
 end;
 
-function ReadHeaderExW(hArcData : TArcHandle; var HeaderData: THeaderDataExW) : Integer;dcpcall;
+function ReadHeaderExW(hArcData : TArcHandle; var HeaderData: THeaderDataExW) : Integer;dcpcall; export;
 var
   sFileName : String;
+  Item : TAbArchiveItem;
   Arc : TAbZipKitEx absolute hArcData;
 begin
-  if Arc.Tag > Arc.Count - 1 then
-    Exit(E_END_ARCHIVE);
+  if Arc.ZipArchive.StreamMode then
+  try
+    if not Arc.ZipArchive.StreamFindNext(Item) then
+      Exit(E_END_ARCHIVE);
+  except
+    on E: Exception do Exit(CheckError(E));
+  end
+  else begin
+    if Arc.Tag > Arc.Count - 1 then
+      Exit(E_END_ARCHIVE);
+    Item:= Arc.Items[Arc.Tag];
+  end;
 
-  sFileName := Arc.GetFileName(Arc.Tag);
+  sFileName := Arc.GetFileName(Item);
 
   StringToArrayW(CeUtf8ToUtf16(sFileName), @HeaderData.FileName, SizeOf(HeaderData.FileName));
 
-  with Arc.Items[Arc.Tag] do
+  with Item do
     begin
       HeaderData.PackSize     := Lo(CompressedSize);
       HeaderData.PackSizeHigh := Hi(CompressedSize);
@@ -217,6 +245,7 @@ begin
       HeaderData.FileCRC      := CRC32;
       HeaderData.FileTime     := NativeLastModFileTime;
       HeaderData.FileAttr     := NativeFileAttributes;
+      HeaderData.MfileTime    := DateTimeToWinFileTime(LastModTimeAsDateTime);
 
       if IsEncrypted then begin
         HeaderData.Flags      := RHDF_ENCRYPTED;
@@ -230,13 +259,14 @@ begin
   Result := E_SUCCESS;
 end;
 
-function ProcessFile (hArcData : TArcHandle; Operation : Integer; DestPath, DestName : PChar) : Integer;dcpcall;
+function ProcessFile (hArcData : TArcHandle; Operation : Integer; DestPath, DestName : PChar) : Integer;dcpcall; export;
 begin
   Result := E_NOT_SUPPORTED;
 end;
 
-function ProcessFileW(hArcData : TArcHandle; Operation : Integer; DestPath, DestName : PWideChar) : Integer;dcpcall;
+function ProcessFileW(hArcData : TArcHandle; Operation : Integer; DestPath, DestName : PWideChar) : Integer;dcpcall; export;
 var
+  Abort: Boolean;
   DestNameUtf8: String;
   Arc : TAbZipKitEx absolute hArcData;
 begin
@@ -257,8 +287,9 @@ begin
         // Show progress and ask if aborting.
         if Assigned(Arc.FProcessDataProcW) then
         begin
-          if Arc.FProcessDataProcW(PWideChar(CeUtf8ToUtf16(Arc.Items[Arc.Tag].FileName)), -1100) = 0 then
-            Arc.FOperationResult := E_EABORTED;
+          Abort := False;
+          Arc.OnArchiveItemProgress(Arc, Arc.Items[Arc.Tag], 100, Abort);
+          if Abort then Arc.FOperationResult := E_EABORTED;
         end;
       end;
 
@@ -284,8 +315,9 @@ begin
         // Show progress and ask if aborting.
         if Assigned(Arc.FProcessDataProcW) then
         begin
-          if Arc.FProcessDataProcW(PWideChar(CeUtf8ToUtf16(Arc.Items[Arc.Tag].FileName)), -1100) = 0 then
-            Arc.FOperationResult := E_EABORTED;
+          Abort := False;
+          Arc.OnArchiveItemProgress(Arc, Arc.Items[Arc.Tag], 100, Abort);
+          if Abort then Arc.FOperationResult := E_EABORTED;
         end;
       end;
 
@@ -294,6 +326,11 @@ begin
 
       end;
     end; {case}
+
+    if Arc.ZipArchive.StreamMode then
+    begin
+      Arc.ZipArchive.StreamSeekNext(Operation <> PK_SKIP);
+    end
 
   except
     on E: Exception do
@@ -307,7 +344,7 @@ begin
   Arc.Tag := Arc.Tag + 1;
 end;
 
-function CloseArchive (hArcData : TArcHandle) : Integer;dcpcall;
+function CloseArchive (hArcData : TArcHandle) : Integer;dcpcall; export;
 var
   Arc : TAbZipKitEx absolute hArcData;
 begin
@@ -316,11 +353,11 @@ begin
   Result := E_SUCCESS;
 end;
 
-procedure SetChangeVolProc (hArcData : TArcHandle; pChangeVolProc : PChangeVolProc);dcpcall;
+procedure SetChangeVolProc (hArcData : TArcHandle; pChangeVolProc : PChangeVolProc);dcpcall; export;
 begin
 end;
 
-procedure SetChangeVolProcW(hArcData : TArcHandle; pChangeVolProc : TChangeVolProcW);dcpcall;
+procedure SetChangeVolProcW(hArcData : TArcHandle; pChangeVolProc : TChangeVolProcW);dcpcall; export;
 var
  Arc : TAbZipKitEx absolute hArcData;
 begin
@@ -330,11 +367,11 @@ begin
   end;
 end;
 
-procedure SetProcessDataProc (hArcData : TArcHandle; pProcessDataProc : TProcessDataProc);dcpcall;
+procedure SetProcessDataProc (hArcData : TArcHandle; pProcessDataProc : TProcessDataProc);dcpcall; export;
 begin
 end;
 
-procedure SetProcessDataProcW(hArcData : TArcHandle; pProcessDataProc : TProcessDataProcW);dcpcall;
+procedure SetProcessDataProcW(hArcData : TArcHandle; pProcessDataProc : TProcessDataProcW);dcpcall; export;
 var
   Arc : TAbZipKitEx absolute hArcData;
 begin
@@ -347,7 +384,7 @@ end;
 
 {Optional functions}
 
-function PackFilesW(PackedFile: PWideChar;  SubPath: PWideChar;  SrcPath: PWideChar;  AddList: PWideChar;  Flags: Integer): Integer;dcpcall;
+function PackFilesW(PackedFile: PWideChar;  SubPath: PWideChar;  SrcPath: PWideChar;  AddList: PWideChar;  Flags: Integer): Integer;dcpcall; export;
 var
   FileExt: String;
   FilePath: String;
@@ -364,6 +401,7 @@ begin
   Arc := TAbZipKitEx.Create(nil);
   try
     Arc.AutoSave := False;
+    Arc.OpenMode := opModify;
     Arc.TarAutoHandle:= True;
     Arc.FProcessDataProcW := gProcessDataProcW;
     Arc.OnProcessItemFailure := @Arc.AbProcessItemFailureEvent;
@@ -409,7 +447,6 @@ begin
       Arc.ZipArchive.CompressionLevel:= PluginConfig[ArchiveFormat].Level;
       Arc.ZipArchive.CompressionMethod:= PluginConfig[ArchiveFormat].Method;
 
-      Arc.OnArchiveItemProgress := @Arc.AbArchiveItemProgressEvent;
       Arc.OnArchiveProgress := @Arc.AbArchiveProgressEvent;
       Arc.StoreOptions := Arc.StoreOptions + [soReplace];
 
@@ -423,6 +460,18 @@ begin
         if (AddList + Length(FileName) + 1)^ = #0 then
           Break;
         Inc(AddList, Length(FileName) + 1);
+      end;
+
+      if Arc.ArchiveType in [atGzip, atBzip2, atXz, atLzma, atZstd] then
+      begin
+        with Arc.Archive.ItemList[0] do
+        begin
+          UncompressedSize := mbFileSize(DiskFileName);
+        end;
+        Arc.OnArchiveItemProgress := @Arc.AbOneItemProgressEvent
+      end
+      else begin
+        Arc.OnArchiveItemProgress := @Arc.AbArchiveItemProgressEvent;
       end;
 
       Arc.Save;
@@ -440,15 +489,17 @@ begin
   end;
 end;
 
-function DeleteFilesW(PackedFile, DeleteList : PWideChar) : Integer;dcpcall;
+function DeleteFilesW(PackedFile, DeleteList : PWideChar) : Integer;dcpcall; export;
 var
  Arc : TAbZipKitEx;
+ FileNameUTF8 : String;
  pFileName : PWideChar;
  FileName : UnicodeString;
- FileNameUTF8 : String;
+ ArchiveFormat: TArchiveFormat;
 begin
   Arc := TAbZipKitEx.Create(nil);
   try
+    Arc.OpenMode := opModify;
     Arc.TarAutoHandle:= True;
     Arc.FProcessDataProcW := gProcessDataProcW;
     Arc.OnProcessItemFailure := @Arc.AbProcessItemFailureEvent;
@@ -456,6 +507,10 @@ begin
 
     try
       Arc.OpenArchive(UTF16ToUTF8(UnicodeString(PackedFile)));
+
+      ArchiveFormat:= ARCHIVE_FORMAT[Arc.ArchiveType];
+
+      Arc.ZipArchive.CompressionLevel:= PluginConfig[ArchiveFormat].Level;
 
       // Set this after opening archive, to get only progress of deleting.
       Arc.OnArchiveItemProgress := @Arc.AbArchiveItemProgressEvent;
@@ -497,24 +552,24 @@ begin
   end;
 end;
 
-function GetPackerCaps : Integer;dcpcall;
+function GetPackerCaps : Integer;dcpcall; export;
 begin
   Result := PK_CAPS_NEW      or PK_CAPS_DELETE  or PK_CAPS_MODIFY
          or PK_CAPS_MULTIPLE or PK_CAPS_OPTIONS or PK_CAPS_BY_CONTENT
          or PK_CAPS_ENCRYPT;
 end;
 
-function GetBackgroundFlags: Integer; dcpcall;
+function GetBackgroundFlags: Integer; dcpcall; export;
 begin
   Result:= BACKGROUND_UNPACK or BACKGROUND_PACK;
 end;
 
-procedure ConfigurePacker(Parent: HWND; DllInstance: THandle);dcpcall;
+procedure ConfigurePacker(Parent: HWND; DllInstance: THandle);dcpcall; export;
 begin
   CreateZipConfDlg;
 end;
 
-function CanYouHandleThisFileW(FileName: PWideChar): Boolean; dcpcall;
+function CanYouHandleThisFileW(FileName: PWideChar): Boolean; dcpcall; export;
 begin
   try
     Result:= (AbDetermineArcType(UTF16ToUTF8(UnicodeString(FileName)), atUnknown) <> atUnknown);
@@ -523,7 +578,7 @@ begin
   end;
 end;
 
-procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall;
+procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall; export;
 begin
   gStartupInfo:= StartupInfo^;
   // Load configuration from ini file
@@ -631,19 +686,58 @@ begin
   end;
 end;
 
+procedure TAbZipKitEx.AbOneItemProgressEvent(Sender: TObject;
+  Item: TAbArchiveItem; Progress: Byte; var Abort: Boolean);
+var
+  ASize: Int64;
+begin
+  if Assigned(FProcessDataProcW) then
+  begin
+    ASize := Item.UncompressedSize;
+    if ASize = 0 then
+      ASize := -Progress
+    else if FItemProgress = Progress then
+      ASize := 0
+    else begin
+      ASize := (Int64(Progress) - Int64(FItemProgress)) * ASize div 100;
+      if ASize > High(Int32) then ASize := -Progress;
+      FItemProgress := Progress;
+    end;
+    Abort := (FProcessDataProcW(PWideChar(CeUtf8ToUtf16(Item.FileName)), ASize) = 0);
+  end;
+end;
+
 procedure TAbZipKitEx.AbArchiveItemProgressEvent(Sender: TObject;
   Item: TAbArchiveItem; Progress: Byte; var Abort: Boolean);
+var
+  ASize: Int64;
 begin
-  try
-    if Assigned(FProcessDataProcW) then
-    begin
-      if Assigned(Item) then
-        Abort := (FProcessDataProcW(PWideChar(CeUtf8ToUtf16(Item.FileName)), -(Progress + 1000)) = 0)
-      else
-        Abort := (FProcessDataProcW(nil, -(Progress + 1000)) = 0);
+  if Assigned(FProcessDataProcW) then
+  begin
+    if (Item = nil) then
+      Abort := (FProcessDataProcW(nil, -(Progress + 1000)) = 0)
+    else begin
+      if Item.IsDirectory then
+        ASize:= 0
+      else if Item.UncompressedSize = 0 then
+        ASize:= -(Progress + 1000)
+      else begin
+        if FItem <> Item then
+        begin
+          FItem := Item;
+          FItemProgress := 0;
+        end;
+        if FItemProgress = Progress then
+          ASize := 0
+        else begin
+          ASize := Item.UncompressedSize;
+          ASize := (Int64(Progress) - Int64(FItemProgress)) * ASize div 100;
+          if ASize > High(Int32) then ASize := -(Progress + 1000);
+          FItemProgress := Progress;
+        end;
+      end;
+      Abort := (FProcessDataProcW(PWideChar(CeUtf8ToUtf16(Item.FileName)), ASize) = 0)
     end;
-  except
-    Abort := True;
   end;
 end;
 

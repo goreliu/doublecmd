@@ -54,6 +54,7 @@ type
     AutoTLS: Boolean;
     FullSSL: Boolean;
     OpenSSH: Boolean;
+    AgentSSH: Boolean;
     UseAllocate: Boolean;
     Encoding: AnsiString;
     Fingerprint: AnsiString;
@@ -67,43 +68,43 @@ type
   end;
 
 function FsInitW(PluginNr: Integer; pProgressProc: TProgressProcW;
-  pLogProc: TLogProcW; pRequestProc: TRequestProcW): Integer; dcpcall;
+  pLogProc: TLogProcW; pRequestProc: TRequestProcW): Integer; dcpcall; export;
 
-function FsFindFirstW(Path: PWideChar; var FindData: TWin32FindDataW): THandle; dcpcall;
-function FsFindNextW(Hdl: THandle; var FindData: TWin32FindDataW): BOOL; dcpcall;
-function FsFindClose(Hdl: THandle): Integer; dcpcall;
+function FsFindFirstW(Path: PWideChar; var FindData: TWin32FindDataW): THandle; dcpcall; export;
+function FsFindNextW(Hdl: THandle; var FindData: TWin32FindDataW): BOOL; dcpcall; export;
+function FsFindClose(Hdl: THandle): Integer; dcpcall; export;
 
-function FsExecuteFileW(MainWin: THandle; RemoteName, Verb: PWideChar): Integer; dcpcall;
+function FsExecuteFileW(MainWin: THandle; RemoteName, Verb: PWideChar): Integer; dcpcall; export;
 function FsRenMovFileW(OldName, NewName: PWideChar; Move, OverWrite: BOOL;
-  RemoteInfo: pRemoteInfo): Integer; dcpcall;
+  RemoteInfo: pRemoteInfo): Integer; dcpcall; export;
 function FsGetFileW(RemoteName, LocalName: PWideChar; CopyFlags: Integer;
-  RemoteInfo: pRemoteInfo): Integer; dcpcall;
+  RemoteInfo: pRemoteInfo): Integer; dcpcall; export;
 function FsPutFileW(LocalName, RemoteName: PWideChar; CopyFlags: Integer)
-  : Integer; dcpcall;
-function FsDeleteFileW(RemoteName: PWideChar): BOOL; dcpcall;
+  : Integer; dcpcall; export;
+function FsDeleteFileW(RemoteName: PWideChar): BOOL; dcpcall; export;
 
-function FsMkDirW(RemoteDir: PWideChar): BOOL; dcpcall;
-function FsRemoveDirW(RemoteName: PWideChar): BOOL; dcpcall;
+function FsMkDirW(RemoteDir: PWideChar): BOOL; dcpcall; export;
+function FsRemoveDirW(RemoteName: PWideChar): BOOL; dcpcall; export;
 
 function FsSetTimeW(RemoteName: PWideChar; CreationTime, LastAccessTime,
-                    LastWriteTime: PFileTime): BOOL; dcpcall;
+                    LastWriteTime: PFileTime): BOOL; dcpcall; export;
 
-function FsDisconnectW(DisconnectRoot: PWideChar): BOOL; dcpcall;
+function FsDisconnectW(DisconnectRoot: PWideChar): BOOL; dcpcall; export;
 
-procedure FsSetCryptCallbackW(pCryptProc: TCryptProcW; CryptoNr, Flags: Integer); dcpcall;
-procedure FsGetDefRootName(DefRootName: PAnsiChar; MaxLen: Integer); dcpcall;
-procedure FsSetDefaultParams(dps: pFsDefaultParamStruct); dcpcall;
-procedure FsStatusInfoW(RemoteDir: PWideChar; InfoStartEnd, InfoOperation: Integer); dcpcall;
-function FsGetBackgroundFlags: Integer; dcpcall;
+procedure FsSetCryptCallbackW(pCryptProc: TCryptProcW; CryptoNr, Flags: Integer); dcpcall; export;
+procedure FsGetDefRootName(DefRootName: PAnsiChar; MaxLen: Integer); dcpcall; export;
+procedure FsSetDefaultParams(dps: pFsDefaultParamStruct); dcpcall; export;
+procedure FsStatusInfoW(RemoteDir: PWideChar; InfoStartEnd, InfoOperation: Integer); dcpcall; export;
+function FsGetBackgroundFlags: Integer; dcpcall; export;
 { Network API }
 {
-procedure FsNetworkGetSupportedProtocols(Protocols: PAnsiChar; MaxLen: LongInt); dcpcall;
-function FsNetworkGetConnection(Index: LongInt; Connection: PAnsiChar; MaxLen: LongInt): LongBool; dcpcall;
-function FsNetworkManageConnection(MainWin: HWND; Connection: PAnsiChar; Action: LongInt; MaxLen: LongInt): LongBool; dcpcall;
-function FsNetworkOpenConnection(Connection: PAnsiChar; RootDir, RemotePath: PAnsiChar; MaxLen: LongInt): LongBool; dcpcall;
+procedure FsNetworkGetSupportedProtocols(Protocols: PAnsiChar; MaxLen: LongInt); dcpcall; export;
+function FsNetworkGetConnection(Index: LongInt; Connection: PAnsiChar; MaxLen: LongInt): LongBool; dcpcall; export;
+function FsNetworkManageConnection(MainWin: HWND; Connection: PAnsiChar; Action: LongInt; MaxLen: LongInt): LongBool; dcpcall; export;
+function FsNetworkOpenConnection(Connection: PAnsiChar; RootDir, RemotePath: PAnsiChar; MaxLen: LongInt): LongBool; dcpcall; export;
 }
 { Extension API }
-procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall;
+procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall; export;
 
 function ReadPassword(ConnectionName: AnsiString; out Password: AnsiString): Boolean;
 function DeletePassword(ConnectionName: AnsiString): Boolean;
@@ -123,7 +124,8 @@ implementation
 
 uses
   IniFiles, StrUtils, FtpAdv, FtpUtils, FtpConfDlg, syncobjs, LazFileUtils,
-  LazUTF8, DCClassesUtf8, DCConvertEncoding, SftpSend, ScpSend, FtpProxy;
+  LazUTF8, DCClassesUtf8, DCConvertEncoding, SftpSend, ScpSend, FtpProxy,
+  FtpPropDlg, DCFileAttributes;
 
 var
   DefaultIniName: String;
@@ -177,6 +179,7 @@ begin
     Connection.OpenSSH:= IniFile.ReadBool('FTP', 'Connection' + sIndex + 'OpenSSH', False);
     Connection.OnlySCP:= IniFile.ReadBool('FTP', 'Connection' + sIndex + 'OnlySCP', False);
     Connection.CopySCP:= IniFile.ReadBool('FTP', 'Connection' + sIndex + 'CopySCP', False);
+    Connection.AgentSSH:= IniFile.ReadBool('FTP', 'Connection' + sIndex + 'AgentSSH', False);
     Connection.UseAllocate:= IniFile.ReadBool('FTP', 'Connection' + sIndex + 'UseAllocate', False);
     Connection.PublicKey := IniFile.ReadString('FTP', 'Connection' + sIndex + 'PublicKey', EmptyStr);
     Connection.PrivateKey := IniFile.ReadString('FTP', 'Connection' + sIndex + 'PrivateKey', EmptyStr);
@@ -221,6 +224,7 @@ begin
     IniFile.WriteBool('FTP', 'Connection' + sIndex + 'OpenSSH', Connection.OpenSSH);
     IniFile.WriteBool('FTP', 'Connection' + sIndex + 'OnlySCP', Connection.OnlySCP);
     IniFile.WriteBool('FTP', 'Connection' + sIndex + 'CopySCP', Connection.CopySCP);
+    IniFile.WriteBool('FTP', 'Connection' + sIndex + 'AgentSSH', Connection.AgentSSH);
     IniFile.WriteBool('FTP', 'Connection' + sIndex + 'UseAllocate', Connection.UseAllocate);
     IniFile.WriteString('FTP', 'Connection' + sIndex + 'PublicKey', Connection.PublicKey);
     IniFile.WriteString('FTP', 'Connection' + sIndex + 'PrivateKey', Connection.PrivateKey);
@@ -352,6 +356,7 @@ begin
           end;
           FtpSend.PublicKey:= Connection.PublicKey;
           FtpSend.PrivateKey:= Connection.PrivateKey;
+          TScpSend(FtpSend).Agent:= Connection.AgentSSH;
           TScpSend(FtpSend).Fingerprint:= Connection.Fingerprint;
         end
         else begin
@@ -377,7 +382,7 @@ begin
             ZeroPassword(Connection.Password);
         end;
         // if no saved password then ask it
-        if Connection.OpenSSH and (Connection.PrivateKey <> '') and (Connection.PublicKey <> '') then
+        if Connection.OpenSSH and (Connection.AgentSSH or ((Connection.PrivateKey <> '') and (Connection.PublicKey <> ''))) then
           APassword:= EmptyStr
         else if Length(Connection.Password) > 0 then
           APassword:= Connection.Password
@@ -415,15 +420,16 @@ begin
     end;
 end;
 
-function QuickConnection: Boolean;
+function QuickConnection(out FtpSend: TFTPSendEx): Boolean;
 var
   Index: Integer;
-  FtpSend: TFTPSendEx;
   Connection: TConnection;
 begin
-  Result:= ActiveConnectionList.IndexOf(cQuickConnection) >= 0;
-  if not Result then
-  begin
+  Index:= ActiveConnectionList.IndexOf(cQuickConnection);
+  Result:= (Index >= 0);
+  if Result then
+    FtpSend:= TFTPSendEx(ActiveConnectionList.Objects[Index])
+  else begin
     Connection := TConnection.Create;
     Connection.ConnectionName:= cQuickConnection;
     if ShowFtpConfDlg(Connection) then
@@ -617,7 +623,7 @@ begin
   begin
     Connection := TConnection(ConnectionList.Objects[I - RootCount]);
     StrPCopy(FindData.cFileName, CeUtf8ToUtf16(Connection.ConnectionName));
-    FindData.dwFileAttributes := FILE_ATTRIBUTE_NORMAL;
+    FindData.dwFileAttributes := FILE_ATTRIBUTE_VOLUME;
     Inc(ListRec^.Index);
     Result := True;
   end;
@@ -631,7 +637,7 @@ begin
 end;
 
 function FsInitW(PluginNr: Integer; pProgressProc: TProgressProcW;
-  pLogProc: TLogProcW; pRequestProc: TRequestProcW): Integer; dcpcall;
+  pLogProc: TLogProcW; pRequestProc: TRequestProcW): Integer; dcpcall; export;
 begin
   ProgressProc := pProgressProc;
   LogProc := pLogProc;
@@ -641,7 +647,7 @@ begin
   Result := 0;
 end;
 
-function FsFindFirstW(Path: PWideChar; var FindData: TWin32FindDataW): THandle; dcpcall;
+function FsFindFirstW(Path: PWideChar; var FindData: TWin32FindDataW): THandle; dcpcall; export;
 var
   ListRec: PListRec;
   sPath: AnsiString;
@@ -681,7 +687,7 @@ begin
     end;
 end;
 
-function FsFindNextW(Hdl: THandle; var FindData: TWin32FindDataW): BOOL; dcpcall;
+function FsFindNextW(Hdl: THandle; var FindData: TWin32FindDataW): BOOL; dcpcall; export;
 var
   ListRec: PListRec absolute Hdl;
 begin
@@ -691,7 +697,7 @@ begin
     Result := ListRec^.FtpSend.FsFindNextW(ListRec.FtpList, FindData);
 end;
 
-function FsFindClose(Hdl: THandle): Integer; dcpcall;
+function FsFindClose(Hdl: THandle): Integer; dcpcall; export;
 var
   ListRec: PListRec absolute Hdl;
 begin
@@ -705,9 +711,10 @@ begin
   end;
 end;
 
-function FsExecuteFileW(MainWin: THandle; RemoteName, Verb: PWideChar): Integer; dcpcall;
+function FsExecuteFileW(MainWin: THandle; RemoteName, Verb: PWideChar): Integer; dcpcall; export;
 var
   FtpSend: TFTPSendEx;
+  RemoteDir: AnsiString;
   asFileName: AnsiString;
   wsFileName: UnicodeString;
 begin
@@ -723,13 +730,9 @@ begin
           begin
             if not FtpConnect(asFileName, FtpSend) then
               Result := FS_EXEC_OK
-            else
-              begin
-                wsFileName := FtpSend.ServerToClient(FtpSend.GetCurrentDir);
-                wsFileName := SetDirSeparators(RemoteName + wsFileName);
-                StrPLCopy(RemoteName, wsFileName, MAX_PATH);
-                Result := FS_EXEC_SYMLINK;
-              end;
+            else begin
+              Result := FS_EXEC_SYMLINK;
+            end;
           end
         else  // special item
           begin
@@ -740,11 +743,18 @@ begin
               end
             else if asFileName = cQuickConnection then
               begin
-                if QuickConnection then
-                  Result := FS_EXEC_SYMLINK
-                else
-                  Result := FS_EXEC_OK;
+                if not QuickConnection(FtpSend) then
+                  Result := FS_EXEC_OK
+                else begin
+                  Result := FS_EXEC_SYMLINK;
+                end;
               end;
+          end;
+          if (Result = FS_EXEC_SYMLINK) then
+          begin
+            wsFileName := FtpSend.ServerToClient(FtpSend.GetCurrentDir);
+            wsFileName := SetDirSeparators(RemoteName + wsFileName);
+            StrPLCopy(RemoteName, wsFileName, MAX_PATH);
           end;
       end; // root path
     end // Verb = open
@@ -760,10 +770,10 @@ begin
     end
   else if Pos('quote', UnicodeString(Verb)) = 1 then
     begin
-      if GetConnectionByPath(RemoteName, FtpSend, asFileName) then
+      if GetConnectionByPath(RemoteName, FtpSend, RemoteDir) then
       begin
         asFileName:= FtpSend.ClientToServer(Verb);
-        if FtpSend.ExecuteCommand(Copy(asFileName, 7, MaxInt)) then
+        if FtpSend.ExecuteCommand(Copy(asFileName, 7, MaxInt), RemoteDir) then
           Result := FS_EXEC_OK
         else
           Result := FS_EXEC_ERROR;
@@ -774,13 +784,24 @@ begin
       if (ExtractFileDir(RemoteName) = PathDelim) and not (RemoteName[1] in [#0, '<']) then // connection
       begin
         EditConnection(UTF16ToUTF8(RemoteName + 1));
+      end
+      else if (ExtractFileDir(RemoteName) <> PathDelim) then
+      begin
+        if GetConnectionByPath(RemoteName, FtpSend, asFileName) then
+        begin
+          if FtpSend.FileProperties(asFileName) then
+          begin
+            wsFileName:= FtpSend.ServerToClient(FtpSend.FullResult.Text);
+            ShowPropertiesDlg(PAnsiChar(UTF8Encode(wsFileName)));
+          end
+        end;
       end;
       Result:= FS_EXEC_OK;
     end;
 end;
 
 function FsRenMovFileW(OldName, NewName: PWideChar; Move, OverWrite: BOOL;
-  RemoteInfo: pRemoteInfo): Integer; dcpcall;
+  RemoteInfo: pRemoteInfo): Integer; dcpcall; export;
 var
   O, N: Integer;
   FtpSend: TFTPSendEx;
@@ -816,6 +837,24 @@ begin
         WriteConnectionList;
         Result:= FS_FILE_OK;
       end;
+    end
+    else if GetConnectionByPath(OldName, FtpSend, sOldName) then
+    begin
+      if FtpSend is TScpSend then
+      begin
+        sNewName := FtpSend.ClientToServer(NewName);
+        sNewName := ExtractRemoteFileName(sNewName);
+        ProgressProc(PluginNumber, OldName, NewName, 0);
+        if (not OverWrite) and (FtpSend.FileExists(sNewName)) then
+        begin
+          Exit(FS_FILE_EXISTS);
+        end;
+        if FtpSend.CopyFile(sOldName, sNewName) then
+        begin
+          ProgressProc(PluginNumber, OldName, NewName, 100);
+          Result := FS_FILE_OK;
+        end;
+      end;
     end;
     Exit;
   end;
@@ -847,7 +886,7 @@ begin
 end;
 
 function FsGetFileW(RemoteName, LocalName: PWideChar; CopyFlags: Integer;
-  RemoteInfo: pRemoteInfo): Integer; dcpcall;
+  RemoteInfo: pRemoteInfo): Integer; dcpcall; export;
 var
   FileSize: Int64;
   FtpSend: TFTPSendEx;
@@ -880,7 +919,7 @@ begin
   end;
 end;
 
-function FsPutFileW(LocalName, RemoteName: PWideChar; CopyFlags: Integer): Integer; dcpcall;
+function FsPutFileW(LocalName, RemoteName: PWideChar; CopyFlags: Integer): Integer; dcpcall; export;
 var
   FtpSend: TFTPSendEx;
   sFileName: AnsiString;
@@ -910,7 +949,7 @@ begin
   end;
 end;
 
-function FsDeleteFileW(RemoteName: PWideChar): BOOL; dcpcall;
+function FsDeleteFileW(RemoteName: PWideChar): BOOL; dcpcall; export;
 var
   FtpSend: TFTPSendEx;
   sFileName: AnsiString;
@@ -923,7 +962,7 @@ begin
     Result := FtpSend.DeleteFile(sFileName);
 end;
 
-function FsMkDirW(RemoteDir: PWideChar): BOOL; dcpcall;
+function FsMkDirW(RemoteDir: PWideChar): BOOL; dcpcall; export;
 var
   sPath: AnsiString;
   FtpSend: TFTPSendEx;
@@ -933,7 +972,7 @@ begin
     Result := FtpSend.CreateDir(sPath);
 end;
 
-function FsRemoveDirW(RemoteName: PWideChar): BOOL; dcpcall;
+function FsRemoveDirW(RemoteName: PWideChar): BOOL; dcpcall; export;
 var
   sPath: AnsiString;
   FtpSend: TFTPSendEx;
@@ -944,7 +983,7 @@ begin
 end;
 
 function FsSetTimeW(RemoteName: PWideChar; CreationTime, LastAccessTime,
-  LastWriteTime: PFileTime): BOOL; dcpcall;
+  LastWriteTime: PFileTime): BOOL; dcpcall; export;
 var
   sPath: AnsiString;
   FtpSend: TFTPSendEx;
@@ -958,7 +997,7 @@ begin
   end;
 end;
 
-function FsDisconnectW(DisconnectRoot: PWideChar): BOOL; dcpcall;
+function FsDisconnectW(DisconnectRoot: PWideChar): BOOL; dcpcall; export;
 var
   Index: Integer;
   asTemp: AnsiString;
@@ -991,25 +1030,25 @@ begin
   end;
 end;
 
-procedure FsSetCryptCallbackW(pCryptProc: TCryptProcW; CryptoNr, Flags: Integer); dcpcall;
+procedure FsSetCryptCallbackW(pCryptProc: TCryptProcW; CryptoNr, Flags: Integer); dcpcall; export;
 begin
   CryptProc:= pCryptProc;
   CryptoNumber:= CryptoNr;
 end;
 
-procedure FsGetDefRootName(DefRootName: PAnsiChar; MaxLen: Integer); dcpcall;
+procedure FsGetDefRootName(DefRootName: PAnsiChar; MaxLen: Integer); dcpcall; export;
 begin
   StrPLCopy(DefRootName, 'FTP', MaxLen);
 end;
 
-procedure FsSetDefaultParams(dps: pFsDefaultParamStruct); dcpcall;
+procedure FsSetDefaultParams(dps: pFsDefaultParamStruct); dcpcall; export;
 begin
   ConnectionList := TStringList.Create;
   ActiveConnectionList := TStringList.Create;
   DefaultIniName:= ExtractFileName(dps.DefaultIniName);
 end;
 
-procedure FsStatusInfoW(RemoteDir: PWideChar; InfoStartEnd, InfoOperation: Integer); dcpcall;
+procedure FsStatusInfoW(RemoteDir: PWideChar; InfoStartEnd, InfoOperation: Integer); dcpcall; export;
 var
   FtpSend: TFtpSendEx;
   RemotePath: AnsiString;
@@ -1038,19 +1077,19 @@ begin
   end;
 end;
 
-function FsGetBackgroundFlags: Integer; dcpcall;
+function FsGetBackgroundFlags: Integer; dcpcall; export;
 begin
   Result:= BG_DOWNLOAD or BG_UPLOAD or BG_ASK_USER;
 end;
 
 {
-procedure FsNetworkGetSupportedProtocols(Protocols: PAnsiChar; MaxLen: LongInt); dcpcall;
+procedure FsNetworkGetSupportedProtocols(Protocols: PAnsiChar; MaxLen: LongInt); dcpcall; export;
 begin
   StrPLCopy(Protocols, ftpProtocol, MaxLen);
 end;
 
 function FsNetworkGetConnection(Index: LongInt; Connection: PAnsiChar;
-  MaxLen: LongInt): LongBool; dcpcall;
+  MaxLen: LongInt): LongBool; dcpcall; export;
 begin
   Result:= False;
   if Index >= ConnectionList.Count then Exit;
@@ -1059,7 +1098,7 @@ begin
 end;
 
 function FsNetworkManageConnection(MainWin: HWND; Connection: PAnsiChar; Action: LongInt;
-  MaxLen: LongInt): LongBool; dcpcall;
+  MaxLen: LongInt): LongBool; dcpcall; export;
 var
   I: Integer;
 begin
@@ -1092,7 +1131,7 @@ begin
 end;
 
 function FsNetworkOpenConnection(Connection: PAnsiChar; RootDir, RemotePath: PAnsiChar;
-  MaxLen: LongInt): LongBool; dcpcall;
+  MaxLen: LongInt): LongBool; dcpcall; export;
 var
   I: Integer;
   FtpSend: TFTPSendEx;
@@ -1175,6 +1214,7 @@ begin
   OpenSSH:= Connection.OpenSSH;
   CopySCP:= Connection.CopySCP;
   OnlySCP:= Connection.OnlySCP;
+  AgentSSH:= Connection.AgentSSH;
   UserName:= Connection.UserName;
   Password:= Connection.Password;
   Encoding:= Connection.Encoding;

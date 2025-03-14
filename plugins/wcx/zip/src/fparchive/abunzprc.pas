@@ -128,9 +128,6 @@ type
 implementation
 
 uses
-  {$IFDEF MSWINDOWS}
-  Windows,
-  {$ENDIF}
   SysUtils,
   {$IFDEF UnzipBzip2Support}
   AbBzip2,
@@ -152,9 +149,7 @@ uses
   {$ENDIF}
   AbBitBkt,
   AbConst,
-  AbDfBase,
   AbDfCryS,
-  AbDfDec,
   AbExcept,
   AbSpanSt,
   AbSWStm,
@@ -162,7 +157,10 @@ uses
   AbUtils,
   AbZlibPrc,
   AbWinZipAes,
-  DCClassesUtf8;
+  Inflate64Stream,
+  DCOSUtils,
+  DCClassesUtf8,
+  DCConvertEncoding;
 
 { -------------------------------------------------------------------------- }
 procedure AbReverseBits(var W : Word);
@@ -890,29 +888,28 @@ begin
     raise EAbZipInvalidPassword.Create;
   end;
 end;
-
-
 { -------------------------------------------------------------------------- }
 procedure DoInflate(Archive : TAbZipArchive; Item : TAbZipItem; InStream, OutStream : TStream);
 var
-  Hlpr  : TAbDeflateHelper;
+  InflateStream: TInflateStream;
 begin
-  Hlpr := TAbDeflateHelper.Create;
+  InflateStream := TInflateStream.Create(InStream, False);
   try
-    if Item.CompressionMethod = cmEnhancedDeflated then
-    begin
-      Hlpr.Options := Hlpr.Options or dfc_UseDeflate64;
-      Hlpr.StreamSize := Item.CompressedSize;
-
-      AbDfDec.Inflate(InStream, OutStream, Hlpr)
-    end
-    else begin
-      Hlpr.NormalSize := Item.UncompressedSize;
-
-      AbZlibPrc.Inflate(InStream, OutStream, Hlpr);
-    end;
+    OutStream.CopyFrom(InflateStream, Item.UncompressedSize);
   finally
-    Hlpr.Free;
+    InflateStream.Free;
+  end;
+end;
+{ -------------------------------------------------------------------------- }
+procedure DoInflate64(Archive : TAbZipArchive; Item : TAbZipItem; InStream, OutStream : TStream);
+var
+  Inflate64Stream: TInflate64Stream;
+begin
+  Inflate64Stream := TInflate64Stream.Create(InStream);
+  try
+    OutStream.CopyFrom(Inflate64Stream, Item.UncompressedSize);
+  finally
+    Inflate64Stream.Free;
   end;
 end;
 { -------------------------------------------------------------------------- }
@@ -972,13 +969,13 @@ end;
 {$IFDEF UnzipXzSupport}
 procedure DoExtractXz(Archive : TAbZipArchive; Item : TAbZipItem; InStream, OutStream : TStream);
 var
-  LzmaDecompression: TLzmaDecompression;
+  XzStream: TXzDecompressionStream;
 begin
-  LzmaDecompression := TLzmaDecompression.Create(InStream, OutStream);
+  XzStream := TXzDecompressionStream.Create(InStream);
   try
-    LzmaDecompression.Code(Item.UncompressedSize);
+    OutStream.CopyFrom(XzStream, Item.UncompressedSize);
   finally
-    LzmaDecompression.Free;
+    XzStream.Free;
   end;
 end;
 {$ENDIF}
@@ -1109,9 +1106,13 @@ begin
         { unstore aItem }
         OutStream.CopyFrom(aInStream, aItem.UncompressedSize);
       end;
-      cmDeflated, cmEnhancedDeflated: begin
+      cmDeflated: begin
         { inflate aItem }
         DoInflate(aZipArchive, aItem, aInStream, OutStream);
+      end;
+      cmEnhancedDeflated: begin
+        { inflate aItem }
+        DoInflate64(aZipArchive, aItem, aInStream, OutStream);
       end;
       {$IFDEF UnzipBzip2Support}
       cmBzip2: begin
@@ -1191,8 +1192,9 @@ end;
 procedure AbUnzip(Sender : TObject; Item : TAbZipItem; const UseName : string);
   {create the output filestream and pass it to DoExtract}
 var
-  InStream, OutStream : TStream;
+  LinkTarget : String;
   ZipArchive : TAbZipArchive;
+  InStream, OutStream : TStream;
 begin
   ZipArchive := TAbZipArchive(Sender);
 
@@ -1201,26 +1203,49 @@ begin
   else begin
     InStream := ExtractPrep(ZipArchive, Item);
     try
-      OutStream := TFileStreamEx.Create(UseName, fmCreate or fmShareDenyWrite);
-      try
-        try    {OutStream}
-          DoExtract(ZipArchive, Item, InStream, OutStream);
-        finally {OutStream}
-          OutStream.Free;
-        end;   {OutStream}
-      except
-        if ExceptObject is EAbUserAbort then
-          ZipArchive.FStatus := asInvalid;
-        DeleteFile(UseName);
-        raise;
+      if FPS_ISLNK(Item.NativeFileAttributes) then
+      begin
+        OutStream := TMemoryStream.Create;
+        try
+          try    {OutStream}
+            DoExtract(ZipArchive, Item, InStream, OutStream);
+            SetString(LinkTarget, TMemoryStream(OutStream).Memory, OutStream.Size);
+            LinkTarget := CeRawToUtf8(LinkTarget);
+          finally {OutStream}
+            OutStream.Free;
+          end;   {OutStream}
+          if not CreateSymLink(LinkTarget, UseName) then
+            RaiseLastOSError;
+        except
+          if ExceptObject is EAbUserAbort then
+            ZipArchive.FStatus := asInvalid;
+          raise;
+        end;
+      end
+      else begin
+        OutStream := TFileStreamEx.Create(UseName, fmCreate or fmShareDenyWrite);
+        try
+          try    {OutStream}
+            DoExtract(ZipArchive, Item, InStream, OutStream);
+          finally {OutStream}
+            OutStream.Free;
+          end;   {OutStream}
+        except
+          if ExceptObject is EAbUserAbort then
+            ZipArchive.FStatus := asInvalid;
+          DeleteFile(UseName);
+          raise;
+        end;
       end;
     finally
       InStream.Free
     end;
   end;
-
-  AbSetFileTime(UseName, Item.LastModTimeAsDateTime);
-  AbSetFileAttr(UseName, Item.NativeFileAttributes);
+  if not FPS_ISLNK(Item.NativeFileAttributes) then
+  begin
+    AbSetFileTime(UseName, Item.LastModTimeAsDateTime);
+    AbSetFileAttr(UseName, Item.NativeFileAttributes);
+  end;
 end;
 { -------------------------------------------------------------------------- }
 procedure AbTestZipItem(Sender : TObject; Item : TAbZipItem);

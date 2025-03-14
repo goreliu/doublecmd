@@ -6,17 +6,73 @@ interface
 
 uses
   Classes, SysUtils, DCStrUtils, syncobjs, LCLProc, URIParser, Menus,
-  uFileSourceOperation,
-  uFileSourceOperationTypes,
-  uFileSourceProperty,
-  uFileProperty,
-  uFile;
+  uFile, uDisplayFile, uFileProperty,
+  uFileSourceWatcher,
+  uFileSourceOperation, uFileSourceOperationTypes, uFileSourceProperty;
 
 type
 
   TFileSource = class;
   TFileSourceConnection = class;
   IFileSource = interface;
+
+  TFileSourceConsultResult = ( fscrSuccess, fscrNotImplemented, fscrNotSupported, fscrCancel );
+
+  {$scopedEnums on}
+  TFileSourceConsultPhase = ( source, target );
+
+  TFileSourceConsultParams = Record
+    handled: Boolean;
+    phase: TFileSourceConsultPhase;
+
+    operationType: TFileSourceOperationType;
+    files: TFiles;
+    targetPath: String;
+
+    sourceFS: IFileSource;
+    targetFS: IFileSource;
+
+    currentFS: IFileSource;
+    partnerFS: IFileSource;
+
+    consultResult: TFileSourceConsultResult;
+    resultOperationType: TFileSourceOperationType;
+    resultFS: IFileSource;
+    resultTargetPath: String;
+    operationTemp: Boolean;
+  end;
+
+  TFileSourceProcessor = class
+    procedure consultOperation( var params: TFileSourceConsultParams ); virtual; abstract;
+    procedure confirmOperation( var params: TFileSourceConsultParams ); virtual; abstract;
+  end;
+
+  TFileSourceUIParams = record
+    sender: TObject;
+    fs: IFileSource;
+    displayFile: TDisplayFile;
+
+    multiColumns: Boolean;   // True for ColumnsView, False for BriefView
+    col: Integer;
+    row: Integer;
+    drawingRect: TRect;
+
+    case Byte of
+      0: (
+           iconRect: TRect;
+           focused: Boolean
+         );
+      1: (
+           shift: TShiftState;
+           x: Integer;
+           y: Integer
+         );
+  end;
+
+  TFileSourceUIHandler = class
+    procedure draw( var params: TFileSourceUIParams ); virtual; abstract;
+    procedure click( var  params: TFileSourceUIParams ); virtual; abstract;
+  end;
 
   TFileSourceField = record
     Content: String;
@@ -28,20 +84,42 @@ type
 
   TFileSourceFields = array of TFileSourceField;
 
-  TPathsArray = array of string;
   TFileSourceOperationsClasses = array[TFileSourceOperationType] of TFileSourceOperationClass;
 
-  TFileSourceReloadEventNotify = procedure(const aFileSource: IFileSource;
-                                           const ReloadedPaths: TPathsArray) of object;
+  TPathsArray = array of string;
+
+  {$scopedEnums on}
+  TFileSourceEventType = ( reload, relocation, queryActive );
+
+  TFileSourceEventParams = record
+    eventType: TFileSourceEventType;
+    fs: IFileSource;
+
+    // reload input
+    paths: TPathsArray;
+
+    // relocation input
+    newPath: String;
+
+    // queryActive output
+    resultDisplayFile: TDisplayFile;
+  end;
+
+  TFileSourceEventListener = procedure(var params: TFileSourceEventParams) of object;
 
   { IFileSource }
 
   IFileSource = interface(IInterface)
     ['{B7F0C4C8-59F6-4A35-A54C-E8242F4AD809}']
 
+    function GetWatcher: TFileSourceWatcher;
+    function GetProcessor: TFileSourceProcessor;
+    function GetUIHandler: TFileSourceUIHandler;
+
     function Equals(aFileSource: IFileSource): Boolean;
     function IsInterface(InterfaceGuid: TGuid): Boolean;
     function IsClass(ClassType: TClass): Boolean;
+    function GetClass: TFileSource;
     function GetURI: TURI;
     function GetClassName: String;
     function GetRefCount: Integer;
@@ -92,13 +170,20 @@ type
                                             var theNewProperties: TFileProperties): TFileSourceOperation;
     function GetOperationClass(OperationType: TFileSourceOperationType): TFileSourceOperationClass;
 
+    function IsSystemFile(aFile: TFile): Boolean;
+    function IsHiddenFile(aFile: TFile): Boolean;
+    function GetFileName(aFile: TFile): String;
+    function GetDisplayFileName(aFile: TFile): String;
+
     function IsPathAtRoot(Path: String): Boolean;
     function GetParentDir(sPath : String): String;
     function GetRootDir(sPath : String): String; overload;
     function GetRootDir: String; overload;
     function GetPathType(sPath : String): TPathType;
     function GetFreeSpace(Path: String; out FreeSize, TotalSize : Int64) : Boolean;
+    function GetRealPath(const path: String): String;
     function GetLocalName(var aFile: TFile): Boolean;
+
     function CreateDirectory(const Path: String): Boolean;
     function FileSystemEntryExists(const Path: String): Boolean;
     function GetDefaultView(out DefaultView: TFileSourceFields): Boolean;
@@ -108,10 +193,11 @@ type
     procedure RemoveOperationFromQueue(Operation: TFileSourceOperation);
 
     procedure AddChild(AFileSource: IFileSource);
+    procedure eventNotify( var params: TFileSourceEventParams );
     procedure Reload(const PathsToReload: TPathsArray);
     procedure Reload(const PathToReload: String);
-    procedure AddReloadEventListener(FunctionToCall: TFileSourceReloadEventNotify);
-    procedure RemoveReloadEventListener(FunctionToCall: TFileSourceReloadEventNotify);
+    procedure AddEventListener(FunctionToCall: TFileSourceEventListener);
+    procedure RemoveEventListener(FunctionToCall: TFileSourceEventListener);
 
     property URI: TURI read GetURI;
     property ClassName: String read GetClassName;
@@ -128,7 +214,7 @@ type
   TFileSource = class(TInterfacedObject, IFileSource)
 
   private
-    FReloadEventListeners: TMethodList;
+    FEventListeners: TMethodList;
     {en
        File source on which this file source is dependent on
        (files that it accesses are on the parent file source).
@@ -211,9 +297,14 @@ type
     constructor Create(const URI: TURI); virtual; overload;
     destructor Destroy; override;
 
+    function GetWatcher: TFileSourceWatcher; virtual;
+    function GetProcessor: TFileSourceProcessor; virtual;
+    function GetUIHandler: TFileSourceUIHandler; virtual;
+
     function Equals(aFileSource: IFileSource): Boolean; overload;
     function IsInterface(InterfaceGuid: TGuid): Boolean;
     function IsClass(aClassType: TClass): Boolean;
+    function GetClass: TFileSource;
     function GetClassName: String; // For debugging purposes.
     function GetRefCount: Integer; // For debugging purposes.
 
@@ -274,6 +365,12 @@ type
        Returns @true if the given path is the root path of the file source,
        @false otherwise.
     }
+
+    function IsSystemFile(aFile: TFile): Boolean; virtual;
+    function IsHiddenFile(aFile: TFile): Boolean; virtual;
+    function GetDisplayFileName(aFile: TFile): String; virtual;
+    function GetFileName(aFile: TFile): String; virtual;
+
     function IsPathAtRoot(Path: String): Boolean; virtual;
 
     function GetParentDir(sPath : String): String; virtual;
@@ -287,6 +384,7 @@ type
     function GetFreeSpace(Path: String; out FreeSize, TotalSize : Int64) : Boolean; virtual;
     function QueryContextMenu(AFiles: TFiles; var AMenu: TPopupMenu): Boolean; virtual;
     function GetDefaultView(out DefaultView: TFileSourceFields): Boolean; virtual;
+    function GetRealPath(const path: String): String; virtual;
     function GetLocalName(var aFile: TFile): Boolean; virtual;
 
     function GetConnection(Operation: TFileSourceOperation): TFileSourceConnection; virtual;
@@ -303,11 +401,12 @@ type
        This is used if a file source has any internal cache or file list.
        Overwrite DoReload in descendant classes.
     }
+    procedure eventNotify( var params: TFileSourceEventParams );
     procedure Reload(const PathsToReload: TPathsArray); virtual; overload;
     procedure Reload(const PathToReload: String); overload;
 
-    procedure AddReloadEventListener(FunctionToCall: TFileSourceReloadEventNotify);
-    procedure RemoveReloadEventListener(FunctionToCall: TFileSourceReloadEventNotify);
+    procedure AddEventListener(FunctionToCall: TFileSourceEventListener);
+    procedure RemoveEventListener(FunctionToCall: TFileSourceEventListener);
 
     property CurrentAddress: String read GetCurrentAddress;
     property ParentFileSource: IFileSource read GetParentFileSource write SetParentFileSource;
@@ -349,28 +448,12 @@ type
   TFileSources = class(TInterfaceList)
   private
     function Get(I: Integer): IFileSource;
+    procedure Put(i : Integer;item : IFileSource);
 
   public
     procedure Assign(otherFileSources: TFileSources);
 
-    property Items[I: Integer]: IFileSource read Get; default;
-  end;
-
-  { TFileSourceManager }
-
-  TFileSourceManager = class
-  private
-    FFileSources: TFileSources;
-
-    // Only allow adding and removing to/from Manager by TFileSource constructor and destructor.
-    procedure Add(aFileSource: IFileSource);
-    procedure Remove(aFileSource: IFileSource);
-
-  public
-    constructor Create;
-    destructor Destroy; override;
-
-    function Find(FileSourceClass: TClass; Address: String; CaseSensitive: Boolean = True): IFileSource;
+    property Items[I: Integer]: IFileSource read Get write Put; default;
   end;
 
   EFileSourceException = class(Exception);
@@ -383,12 +466,15 @@ type
   end;
 
 var
-  FileSourceManager: TFileSourceManager;
+  defaultFileSourceProcessor: TFileSourceProcessor;
 
 implementation
 
 uses
-  uDebug, uFileSourceListOperation, uLng;
+  uDebug, uFileSourceManager, uFileSourceListOperation, uLng;
+
+var
+  defaultFileSourceWatcher: TFileSourceWatcher;
 
 { TFileSource }
 
@@ -398,7 +484,7 @@ begin
     raise Exception.Create('Cannot construct abstract class');
   inherited Create;
 
-  FReloadEventListeners := TMethodList.Create;
+  FEventListeners := TMethodList.Create;
 
   FileSourceManager.Add(Self); // Increases RefCount
 
@@ -461,9 +547,24 @@ begin
     DCDebug('Error: Cannot remove file source - manager already destroyed!');
 
   FreeAndNil(FChildrenFileSource);
-  FreeAndNil(FReloadEventListeners);
+  FreeAndNil(FEventListeners);
 
   inherited Destroy;
+end;
+
+function TFileSource.GetWatcher: TFileSourceWatcher;
+begin
+  Result:= defaultFileSourceWatcher;
+end;
+
+function TFileSource.GetProcessor: TFileSourceProcessor;
+begin
+  Result:= defaultFileSourceProcessor;
+end;
+
+function TFileSource.GetUIHandler: TFileSourceUIHandler;
+begin
+  Result:= nil;
 end;
 
 function TFileSource.Equals(aFileSource: IFileSource): Boolean;
@@ -484,6 +585,11 @@ end;
 function TFileSource.IsClass(aClassType: TClass): Boolean;
 begin
   Result := Self is aClassType;
+end;
+
+function TFileSource.GetClass: TFileSource;
+begin
+  Result := Self
 end;
 
 function TFileSource.GetClassName: String;
@@ -609,6 +715,11 @@ end;
 function TFileSource.GetDefaultView(out DefaultView: TFileSourceFields): Boolean;
 begin
   Result:= False;
+end;
+
+function TFileSource.GetRealPath(const path: String): String;
+begin
+  Result:= path;
 end;
 
 function TFileSource.GetLocalName(var aFile: TFile): Boolean;
@@ -761,6 +872,47 @@ begin
   Result:= True;
 end;
 
+function TFileSource.IsSystemFile(aFile: TFile): Boolean;
+begin
+{$IF DEFINED(MSWINDOWS)}
+  if fpAttributes in aFile.SupportedProperties then
+    Result := TFileAttributesProperty(aFile.Properties[fpAttributes]).IsSysFile
+  else
+    Result := False;
+{$ELSEIF DEFINED(DARWIN)}
+  if (Length(aFile.Name) > 1) and (aFile.Name[1] = '.') and (aFile.Name <> '..') then exit(true);
+  if aFile.Name='Icon'#$0D then exit(true);
+  exit(false);
+{$ELSE}
+  // Files beginning with '.' are treated as system/hidden files on Unix.
+  Result := (Length(aFile.Name) > 1) and (aFile.Name[1] = '.') and (aFile.Name <> '..');
+{$ENDIF}
+end;
+
+function TFileSource.IsHiddenFile(aFile: TFile): Boolean;
+begin
+  if not (fpAttributes in aFile.SupportedProperties) then
+    Result := False
+  else begin
+    if aFile.Properties[fpAttributes] is TNtfsFileAttributesProperty then
+      Result := TNtfsFileAttributesProperty(aFile.Properties[fpAttributes]).IsHidden
+    else begin
+      // Files beginning with '.' are treated as system/hidden files on Unix.
+      Result := (Length(aFile.Name) > 1) and (aFile.Name[1] = '.') and (aFile.Name <> '..');
+    end;
+  end;
+end;
+
+function TFileSource.GetDisplayFileName(aFile: TFile): String;
+begin
+  Result:= EmptyStr;
+end;
+
+function TFileSource.GetFileName(aFile: TFile): String;
+begin
+  Result:= aFile.Name;
+end;
+
 function TFileSource.GetConnection(Operation: TFileSourceOperation): TFileSourceConnection;
 begin
   // By default connections are not supported.
@@ -821,19 +973,30 @@ begin
   // Nothing by default.
 end;
 
-procedure TFileSource.Reload(const PathsToReload: TPathsArray);
+procedure TFileSource.eventNotify( var params: TFileSourceEventParams );
 var
   i: Integer;
-  FunctionToCall: TFileSourceReloadEventNotify;
+  FunctionToCall: TFileSourceEventListener;
+begin
+  if FEventListeners = nil then
+    Exit;
+
+  for i := 0 to FEventListeners.Count - 1 do begin
+    FunctionToCall:= TFileSourceEventListener(FEventListeners.Items[i]);
+    FunctionToCall( params );
+  end;
+end;
+
+procedure TFileSource.Reload(const PathsToReload: TPathsArray);
+var
+  params: TFileSourceEventParams;
 begin
   DoReload(PathsToReload);
 
-  if Assigned(FReloadEventListeners) then
-    for i := 0 to FReloadEventListeners.Count - 1 do
-    begin
-      FunctionToCall := TFileSourceReloadEventNotify(FReloadEventListeners.Items[i]);
-      FunctionToCall(Self, PathsToReload);
-    end;
+  params.fs:= Self;
+  params.eventType:= TFileSourceEventType.reload;
+  params.paths:= PathsToReload;
+  eventNotify( params );
 end;
 
 procedure TFileSource.Reload(const PathToReload: String);
@@ -845,14 +1008,14 @@ begin
   Reload(PathsToReload);
 end;
 
-procedure TFileSource.AddReloadEventListener(FunctionToCall: TFileSourceReloadEventNotify);
+procedure TFileSource.AddEventListener(FunctionToCall: TFileSourceEventListener);
 begin
-  FReloadEventListeners.Add(TMethod(FunctionToCall));
+  FEventListeners.Add(TMethod(FunctionToCall));
 end;
 
-procedure TFileSource.RemoveReloadEventListener(FunctionToCall: TFileSourceReloadEventNotify);
+procedure TFileSource.RemoveEventListener(FunctionToCall: TFileSourceEventListener);
 begin
-  FReloadEventListeners.Remove(TMethod(FunctionToCall));
+  FEventListeners.Remove(TMethod(FunctionToCall));
 end;
 
 { TFileSourceConnection }
@@ -932,6 +1095,11 @@ begin
     Result := nil;
 end;
 
+procedure TFileSources.Put(i: Integer; item: IFileSource);
+begin
+  inherited Put(i, item);
+end;
+
 procedure TFileSources.Assign(otherFileSources: TFileSources);
 var
   i: Integer;
@@ -941,74 +1109,6 @@ begin
     Add(otherFileSources.Items[i]);
 end;
 
-{ TFileSourceManager }
-
-constructor TFileSourceManager.Create;
-begin
-  FFileSources := TFileSources.Create;
-end;
-
-destructor TFileSourceManager.Destroy;
-var
-  i: Integer;
-begin
-  if FFileSources.Count > 0 then
-  begin
-    DCDebug('Warning: Destroying manager with existing file sources!');
-
-    for i := 0 to FFileSources.Count - 1 do
-    begin
-      // Restore the reference taken in TFileSource.Create before removing
-      // all file sources from the list.
-      FFileSources[i]._AddRef;
-      // Free instance.
-      FFileSources.put(i, nil);
-    end;
-  end;
-
-  FreeAndNil(FFileSources);
-
-  inherited Destroy;
-end;
-
-procedure TFileSourceManager.Add(aFileSource: IFileSource);
-begin
-  if FFileSources.IndexOf(aFileSource) < 0 then
-  begin
-    FFileSources.Add(aFileSource);
-  end
-  else
-    DCDebug('Error: File source already exists in manager!');
-end;
-
-procedure TFileSourceManager.Remove(aFileSource: IFileSource);
-begin
-  FFileSources.Remove(aFileSource);
-end;
-
-function TFileSourceManager.Find(FileSourceClass: TClass; Address: String;
-  CaseSensitive: Boolean): IFileSource;
-var
-  I: Integer;
-  StrCmp: function(const S1, S2: String): Integer;
-begin
-  if CaseSensitive then
-    StrCmp:= @CompareStr
-  else begin
-    StrCmp:= @CompareText;
-  end;
-  for I := 0 to FFileSources.Count - 1 do
-  begin
-    if (FFileSources[I].IsClass(FileSourceClass)) and
-       (StrCmp(FFileSources[I].CurrentAddress, Address) = 0) then
-    begin
-      Result := FFileSources[I];
-      Exit;
-    end;
-  end;
-  Result := nil;
-end;
-
 constructor EFileNotFound.Create(const AFilePath: string);
 begin
   FFilePath := AFilePath;
@@ -1016,10 +1116,10 @@ begin
 end;
 
 initialization
-  FileSourceManager := TFileSourceManager.Create;
+  defaultFileSourceWatcher:= TDefaultFileSourceWatcher.Create;
 
 finalization
-  FreeAndNil(FileSourceManager);
+  FreeAndNil( defaultFileSourceWatcher );
 
 end.
 

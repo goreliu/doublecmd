@@ -29,6 +29,7 @@ export lcl=cocoa
 defaults write $(pwd)/doublecmd.app/Contents/Info CFBundleVersion $DC_REVISION
 defaults write $(pwd)/doublecmd.app/Contents/Info CFBundleShortVersionString $DC_VER
 plutil -convert xml1 $(pwd)/doublecmd.app/Contents/Info.plist
+chmod 644 $(pwd)/doublecmd.app/Contents/Info.plist
 
 build_doublecmd()
 {
@@ -38,14 +39,54 @@ build_doublecmd()
   # Copy libraries
   cp -a install/darwin/lib/$CPU_TARGET/*.dylib ./
 
-  # Create *.dmg package
+  # Prepare *.dmg package
   mkdir -p $BUILD_PACK_DIR
   install/darwin/install.sh $BUILD_PACK_DIR
   pushd $BUILD_PACK_DIR
   mv doublecmd.app 'Double Commander.app'
   codesign --deep --force --verify --verbose --sign '-' 'Double Commander.app'
-  hdiutil create -anyowners -volname "Double Commander" -imagekey zlib-level=9 -format UDZO -fs HFS+ -srcfolder 'Double Commander.app' $PACK_DIR/doublecmd-$DC_VER-$DC_REVISION.$lcl.$CPU_TARGET.dmg
   popd
+
+  # Create *.dmg package
+  HDI_TRY=0
+  HDI_MAX=5
+  
+  while true; do
+
+  HDI_TRY=$((HDI_TRY+1))
+
+  echo "Try to create a package $HDI_TRY ..."
+
+  # Bug: https://github.com/actions/runner-images/issues/7522
+  echo Killing XProtect...; sudo pkill -9 XProtect >/dev/null || true;
+  echo Waiting for XProtect process...; while pgrep XProtect; do sleep 3; done;
+
+  sudo install/darwin/create-dmg/create-dmg \
+    --volname "Double Commander" \
+    --volicon "$BUILD_PACK_DIR/.VolumeIcon.icns" \
+    --background "$BUILD_PACK_DIR/.background/bg.jpg" \
+    --window-pos 200 200 \
+    --window-size 680 366 \
+    --text-size 16 \
+    --icon-size 128 \
+    --icon "Double Commander.app" 110 120 \
+    --app-drop-link 360 120 \
+    --icon "install.txt" 566 123 \
+    --icon ".background" 100 500 \
+    "$PACK_DIR/doublecmd-$DC_VER-$DC_REVISION.$lcl.$CPU_TARGET.dmg" \
+    "$BUILD_PACK_DIR/"
+
+  if [ $? -eq 0 ]; then
+    break
+  fi
+
+  if [ $HDI_TRY -eq $HDI_MAX ]; then
+    break
+  fi
+
+  sleep 10
+
+  done
 
   # Clean DC build dir
   ./clean.sh

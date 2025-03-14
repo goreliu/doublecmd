@@ -62,7 +62,6 @@ type
 
     class procedure ClearCurrentOperation;
     class function GetOptionsUIClass: TFileSourceOperationOptionsUIClass; override;
-    function GetDescription(Details: TFileSourceOperationDescriptionDetails): String; override;
 
     property PackingFlags: Integer read FPackingFlags write FPackingFlags;
     property TarBefore: Boolean read FTarBefore write SetTarBefore;
@@ -71,7 +70,7 @@ type
 implementation
 
 uses
-  LazUTF8, FileUtil, StrUtils, DCStrUtils, uDCUtils, uLng, uShowMsg,
+  LazUTF8, FileUtil, DCStrUtils, uDCUtils, uLng,
   fWcxArchiveCopyOperationOptions, uFileSystemFileSource, DCOSUtils,
   uTarWriter, uClassesEx, DCConvertEncoding, DCDateTimeUtils,
   uArchiveFileSourceUtil;
@@ -125,7 +124,8 @@ begin
         // Current file percent
         else if (Size >= -1100) and (Size <= -1000) then
         begin
-          CurrentFileTotalBytes := 100;
+          // Show only percent
+          CurrentFileTotalBytes := -100;
           CurrentFileDoneBytes := Int64(-Size) - 1000;
         end;
       end;
@@ -299,21 +299,6 @@ begin
   ClearCurrentOperation;
 end;
 
-function TWcxArchiveCopyInOperation.GetDescription(Details: TFileSourceOperationDescriptionDetails): String;
-begin
-  case Details of
-    fsoddJobAndTarget:
-    begin
-      if SourceFiles.Count = 1 then
-        Result := Format(rsOperPackingSomethingTo, [SourceFiles[0].Name, FWcxArchiveFileSource.ArchiveFileName])
-      else
-        Result := Format(rsOperPackingFromTo, [SourceFiles.Path, FWcxArchiveFileSource.ArchiveFileName]);
-    end;
-    else
-      Result := rsOperPacking;
-  end;
-end;
-
 function TWcxArchiveCopyInOperation.GetFileList(const theFiles: TFiles): String;
 var
   I: Integer;
@@ -331,6 +316,8 @@ begin
     begin
       // Filenames must be relative to the current directory.
       FileName := ExtractDirLevel(theFiles.Path, theFiles[I].FullPath);
+      if FileName = EmptyStr then
+        continue;
 
       // Special treatment of directories.
       if theFiles[i].IsDirectory then
@@ -438,7 +425,7 @@ begin
   Result:= rsMsgFileExistsOverwrite + LineEnding + aTargetHeader.FileName + LineEnding;
 
   Result:= Result + Format(rsMsgFileExistsFileInfo, [IntToStrTS(aTargetHeader.UnpSize),
-                           DateTimeToStr(WcxFileTimeToDateTime(aTargetHeader.FileTime))]) + LineEnding;
+                           DateTimeToStr(aTargetHeader.DateTime)]) + LineEnding;
 
   Result:= Result + LineEnding + rsMsgFileExistsWithFile + LineEnding + aSourceFile.FullPath + LineEnding +
            Format(rsMsgFileExistsFileInfo, [IntToStrTS(aSourceFile.Size), DateTimeToStr(aSourceFile.ModificationTime)]);
@@ -454,7 +441,7 @@ const
 
   function OverwriteOlder: TFileSourceOperationOptionFileExists;
   begin
-    if aSourceFile.ModificationTime > WcxFileTimeToDateTime(aTargetHeader.FileTime)  then
+    if aSourceFile.ModificationTime > aTargetHeader.DateTime then
       Result := fsoofeOverwrite
     else
       Result := fsoofeSkip;

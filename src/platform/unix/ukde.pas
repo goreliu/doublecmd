@@ -36,7 +36,7 @@ var
 implementation
 
 uses
-  uDCUtils, uGlobs, uOSUtils, uTrash;
+  LazLogger, uDCUtils, uGlobs, uOSUtils, uTrash;
 
 var
   KdeVersion: String;
@@ -55,7 +55,7 @@ begin
     on E: Exception do
     begin
       Result:= False;
-      WriteLn('FileTrash: ', E.Message);
+      DebugLn('FileTrash: ', E.Message);
     end;
   end;
 end;
@@ -67,7 +67,7 @@ begin
     KdeVersion:= GetEnvironmentVariable('KDE_SESSION_VERSION');
     if KdeVersion = '5' then KdeOpen:= 'kioclient5';
     HasKdeOpen:= FindExecutableInSystemPath(KdeOpen);
-    if HasKdeOpen then FileTrashUtf8:= @FileTrash;
+    // if HasKdeOpen then FileTrashUtf8:= @FileTrash;
   end;
 end;
 

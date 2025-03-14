@@ -81,3 +81,6 @@ cp -r highlighters $DC_INSTALL_DIR/
 # Copy libraries
 cp -a *.dylib             $DC_INSTALL_DIR/
 
+# Install instruction
+cp -r install/darwin/dmg/. $1
+

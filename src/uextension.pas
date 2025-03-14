@@ -74,6 +74,8 @@ begin
 end;
 
 procedure TDcxModule.InitializeExtension(StartupInfo: PExtensionStartupInfo);
+const
+  VERSION_API = 4;
 var
   Language: String;
   AFileName, APath: String;
@@ -99,6 +101,12 @@ begin
     SendDlgMsg:= @fDialogBox.SendDlgMsg;
     Translation:= FPOFile;
     TranslateString:= @Translate;
+    VersionAPI:= VERSION_API;
+    MsgChoiceBox:= @fDialogBox.MsgChoiceBox;
+    DialogBoxParam:= @fDialogBox.DialogBoxParam;
+    SetProperty:= @fDialogBox.SetProperty;
+    GetProperty:= @fDialogBox.GetProperty;
+    CreateComponent:= @fDialogBox.CreateComponent;
   end;
 end;
 

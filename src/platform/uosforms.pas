@@ -3,7 +3,7 @@
     -------------------------------------------------------------------------
     This unit contains platform depended functions.
 
-    Copyright (C) 2006-2022 Alexander Koblov (alexx2000@mail.ru)
+    Copyright (C) 2006-2024 Alexander Koblov (alexx2000@mail.ru)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@ unit uOSForms;
 interface
 
 uses
-  LCLType, Forms, Classes, SysUtils, Controls,
+  LCLType, LMessages, Forms, Classes, SysUtils, Controls,
   uGlobs, uShellContextMenu, uDrive, uFile, uFileSource;
 
 type
@@ -38,6 +38,8 @@ type
   protected
     procedure DoClose(var CloseAction: TCloseAction); override;
   {$ENDIF}
+  public
+    constructor CreateNew(AOwner: TComponent; Num: Integer = 0); override;
   end;
 
   { TModalDialog }
@@ -120,48 +122,58 @@ function GetControlHandle(AWindow: TWinControl): HWND;
 function GetWindowHandle(AWindow: TWinControl): HWND; overload;
 function GetWindowHandle(AHandle: HWND): HWND; overload;
 procedure CopyNetNamesToClip;
+procedure MapNetworkDrive;
 function DarkStyle: Boolean;
 
 implementation
 
 uses
-  ExtDlgs, LCLProc, Menus, Graphics, InterfaceBase, WSForms, LMessages, LCLIntf,
-  fMain, uConnectionManager, uShowMsg, uLng, uDCUtils
+  ExtDlgs, LCLProc, Menus, Graphics, InterfaceBase, WSForms, LCLIntf,
+  fMain, uConnectionManager, uShowMsg, uLng, uDCUtils, uDebug
   {$IF DEFINED(MSWINDOWS)}
   , LCLStrConsts, ComObj, ActiveX, DCOSUtils, uOSUtils, uFileSystemFileSource
   , uTotalCommander, FileUtil, Windows, ShlObj, uShlObjAdditional
   , uWinNetFileSource, uVfsModule, uMyWindows, DCStrUtils, uOleDragDrop
   , uDCReadRSVG, uFileSourceUtil, uGdiPlusJPEG, uListGetPreviewBitmap
-  , Dialogs, Clipbrd, uDebug, JwaDbt, uThumbnailProvider, uShellFolder
+  , Dialogs, Clipbrd, JwaDbt, uThumbnailProvider, uShellFolder
   , uRecycleBinFileSource, uWslFileSource, uDCReadHEIF, uDCReadWIC
-  , uShellFileSource
+  , uShellFileSource, uPixMapManager
     {$IF DEFINED(DARKWIN)}
     , uDarkStyle
     {$ELSEIF DEFINED(LCLQT5)}
     , qt5, qtwidgets, uDarkStyle
     {$ENDIF}
   {$ENDIF}
-  {$IFDEF UNIX}
+  {$IF DEFINED(DARWIN)}
+  , LCLStrConsts
+  , BaseUnix, Errors, fFileProperties
+  , uQuickLook, uOpenDocThumb, uMyDarwin, uDefaultTerminal
+  {$ELSEIF DEFINED(UNIX)}
   , BaseUnix, Errors, fFileProperties, uJpegThumb, uOpenDocThumb
-    {$IF DEFINED(DARWIN)}
-    , MacOSAll, uQuickLook, uMyDarwin
-    {$ELSEIF NOT DEFINED(HAIKU)}
+    {$IF NOT DEFINED(HAIKU)}
     , uDCReadRSVG, uMagickWand, uGio, uGioFileSource, uVfsModule, uVideoThumb
     , uDCReadWebP, uFolderThumb, uAudioThumb, uDefaultTerminal, uDCReadHEIF
     , uTrashFileSource, uFileManager, uFileSystemFileSource, fOpenWith
+    , uFileSourceUtil, uNetworkFileSource
     {$ENDIF}
-    {$IF DEFINED(LCLQT) and not DEFINED(DARWIN)}
+    {$IF DEFINED(LINUX)}
+    , uFlatpak
+    {$ENDIF}
+    {$IF DEFINED(LCLQT)}
     , qt4, qtwidgets
     {$ENDIF}
-    {$IF DEFINED(LCLQT5) and not DEFINED(DARWIN)}
+    {$IF DEFINED(LCLQT5)}
     , qt5, qtwidgets
     {$ENDIF}
-    {$IF DEFINED(LCLQT6) and not DEFINED(DARWIN)}
+    {$IF DEFINED(LCLQT6)}
     , qt6, qtwidgets
     {$ENDIF}
     {$IF DEFINED(LCLGTK2)}
     , Gtk2,  Glib2, Themes
     {$ENDIF}
+  {$ENDIF}
+  {$IF FPC_FULLVERSION < 30300}
+  , uDCReadPNM
   {$ENDIF}
   , uDCReadSVG, uTurboJPEG;
 
@@ -214,6 +226,15 @@ end;
 
 {$ENDIF}
 
+constructor TAloneForm.CreateNew(AOwner: TComponent; Num: Integer);
+begin
+  inherited CreateNew(AOwner, Num);
+  // https://github.com/doublecmd/doublecmd/issues/769
+  // https://github.com/doublecmd/doublecmd/issues/1358
+  Constraints.MaxWidth:= High(Int16);
+  Constraints.MaxHeight:= High(Int16);
+end;
+
 { TModalDialog }
 
 procedure TModalDialog.CloseModal;
@@ -244,7 +265,11 @@ begin
   inherited CreateParams(Params);
   if FParentWindow <> 0 then
   begin
+    // It doesn't affect anything under GTK2 and raise
+    // a range check error (LCLGTK2 bug in the function CreateWidgetInfo)
+{$IFNDEF LCLGTK2}
     Params.Style := Params.Style or WS_POPUP;
+{$ENDIF}
     Params.WndParent := FParentWindow;
   end;
 end;
@@ -298,6 +323,9 @@ function TModalDialog.ShowModal: Integer;
   end;
 
 var
+{$IF DEFINED(LCLCOCOA)}
+  DisabledList: TList;
+{$ENDIF}
   SavedFocusState: TFocusState;
   ActiveWindow: HWnd;
 begin
@@ -335,7 +363,9 @@ begin
       ModalResult := 0;
 
       try
+{$IF NOT DEFINED(LCLCOCOA)}
         EnableWindow(FParentWindow, False);
+{$ENDIF}
         // If window already created then recreate it to force
         // call CreateParams with appropriate parent window
         if HandleAllocated then
@@ -347,6 +377,12 @@ begin
           SetWindowLongPtr(Handle, GWL_HWNDPARENT, FParentWindow);
 {$ENDIF}
         end;
+{$IF DEFINED(LCLCOCOA)}
+        if WidgetSet.GetLCLCapability(lcModalWindow) = LCL_CAPABILITY_NO then
+          DisabledList := Screen.DisableForms(Self)
+        else
+          DisabledList := nil;
+{$ENDIF}
         Show;
         try
           EnableWindow(Handle, True);
@@ -366,7 +402,11 @@ begin
           if ModalResult = 0 then
             ModalResult := mrCancel;
 
+{$IF DEFINED(LCLCOCOA)}
+          Screen.EnableForms(DisabledList);
+{$ELSE}
           EnableWindow(FParentWindow, True);
+{$ENDIF}
           // Needs to be called only in ShowModal
           Perform(CM_DEACTIVATE, 0, 0);
           Exclude(FFormState, fsModal);
@@ -388,6 +428,9 @@ var
 
 {$IFDEF MSWINDOWS}
 
+const
+  WM_USER_ASSOCCHANGED = WM_USER + 201;
+
 var
   OldWProc: WNDPROC;
 
@@ -403,6 +446,12 @@ begin
   begin
     Screen.UpdateMonitors; // Refresh monitor list
     DCDebug('WM_DEVICECHANGE:DBT_DEVNODES_CHANGED');
+  end;
+
+  if (uiMsg = WM_USER_ASSOCCHANGED) then
+  begin
+    PixMapManager.ClearSystemCache;
+    DCDebug('WM_USER_ASSOCCHANGED');
   end;
 
   Result := CallWindowProc(OldWProc, hWnd, uiMsg, wParam, lParam);
@@ -449,32 +498,11 @@ end;
 procedure MenuHandler(Self, Sender: TObject);
 var
   Ret: DWORD;
-  Res: TNetResourceA;
-  CDS: TConnectDlgStruct;
 begin
-  if (Sender as TMenuItem).Tag = 0 then
-  begin
-    ZeroMemory(@Res, SizeOf(TNetResourceA));
-    Res.dwType := RESOURCETYPE_DISK;
-    CDS.cbStructure := SizeOf(TConnectDlgStruct);
-    CDS.hwndOwner := frmMain.Handle;
-    CDS.lpConnRes := @Res;
-    CDS.dwFlags := 0;
-    Ret:= WNetConnectionDialog1(CDS);
-    if Ret = NO_ERROR then
-    begin
-      SetFileSystemPath(frmMain.ActiveFrame, AnsiChar(Int64(CDS.dwDevNum) + Ord('a') - 1) + ':\');
-    end
-    else if Ret <> DWORD(-1) then begin
-      MessageDlg(mbSysErrorMessage(Ret), mtError, [mbOK], 0);
-    end;
-  end
-  else begin
-    Ret:= WNetDisconnectDialog(fmain.frmMain.Handle, RESOURCETYPE_DISK);
-    case Ret of
-      NO_ERROR, DWORD(-1): ;
-      else MessageDlg(mbSysErrorMessage(Ret), mtError, [mbOK], 0);
-    end;
+  Ret:= WNetDisconnectDialog(fmain.frmMain.Handle, RESOURCETYPE_DISK);
+  case Ret of
+    NO_ERROR, DWORD(-1): ;
+    else MessageDlg(mbSysErrorMessage(Ret), mtError, [mbOK], 0);
   end;
 end;
 
@@ -539,17 +567,7 @@ end;
 
 {$ENDIF}
 
-{$IF DEFINED(DARWIN)}
-
-procedure MenuHandler(Self, Sender: TObject);
-var
-  Address: String = '';
-begin
-  if ShowInputQuery(Application.Title, rsMsgURL, False, Address) then
-    MountNetworkDrive(Address);
-end;
-
-{$ELSEIF DEFINED(LCLGTK2)}
+{$IF DEFINED(LCLGTK2)}
 
 procedure OnThemeChange; cdecl;
 begin
@@ -560,9 +578,13 @@ end;
 
 procedure MainFormCreate(MainForm : TCustomForm);
 {$IFDEF MSWINDOWS}
+const
+  SHCNRF_ShellLevel = $0002;
 var
+  Handle: HWND;
   Handler: TMethod;
   MenuItem: TMenuItem;
+  AEntries: TSHChangeNotifyEntry;
 begin
 {$IF DEFINED(LCLWIN32)}
   Handler.Code:= @ActivateHandler;
@@ -605,10 +627,17 @@ begin
       StaticTitle:= StaticTitle + ' - Administrator';
   end;
 
+  Handle:= GetWindowHandle(Application.MainForm);
   // Add main window message handler
   {$PUSH}{$HINTS OFF}
-  OldWProc := WNDPROC(SetWindowLongPtr(GetWindowHandle(Application.MainForm), GWL_WNDPROC, LONG_PTR(@MyWndProc)));
+  OldWProc := WNDPROC(SetWindowLongPtr(Handle, GWL_WNDPROC, LONG_PTR(@MyWndProc)));
   {$POP}
+
+  if Succeeded(SHGetFolderLocation(Handle, CSIDL_DRIVES, 0, 0, AEntries.pidl)) then
+  begin
+    AEntries.fRecursive:= False;
+    SHChangeNotifyRegister(Handle, SHCNRF_ShellLevel, SHCNE_ASSOCCHANGED, WM_USER_ASSOCCHANGED, 1, @AEntries);
+  end;
 
   with frmMain do
   begin
@@ -620,14 +649,11 @@ begin
     mnuNetwork.Add(MenuItem);
 
     MenuItem:= TMenuItem.Create(mnuMain);
-    MenuItem.Caption:= rsMnuMapNetworkDrive;
-    MenuItem.Tag:= 0;
-    MenuItem.OnClick:= TNotifyEvent(Handler);
+    MenuItem.Action:= actMapNetworkDrive;
     mnuNetwork.Add(MenuItem);
 
     MenuItem:= TMenuItem.Create(mnuMain);
     MenuItem.Caption:= rsMnuDisconnectNetworkDrive;
-    MenuItem.Tag:= 1;
     MenuItem.OnClick:= TNotifyEvent(Handler);
     mnuNetwork.Add(MenuItem);
 
@@ -647,11 +673,12 @@ begin
   end;
 end;
 {$ELSE}
-{$IF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6) or DEFINED(LCLGTK2) or DEFINED(DARWIN)}
+{$IF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6) or DEFINED(LCLGTK2)}
 var
   Handler: TMethod;
 {$ENDIF}
 {$IF DEFINED(DARWIN)}
+var
   MenuItem: TMenuItem;
 {$ENDIF}
 begin
@@ -665,6 +692,8 @@ begin
   begin
     if TGioFileSource.IsSupportedPath('trash://') then
       RegisterVirtualFileSource(rsVfsRecycleBin, TTrashFileSource, True);
+    if TGioFileSource.IsSupportedPath('network://') then
+      RegisterVirtualFileSource(rsVfsNetwork, TNetworkFileSource, True);
     RegisterVirtualFileSource('GVfs', TGioFileSource, False);
   end;
   {$ENDIF}
@@ -695,16 +724,12 @@ begin
   begin
     with frmMain do
     begin
-      Handler.Code:= @MenuHandler;
-      Handler.Data:= MainForm;
-
       MenuItem:= TMenuItem.Create(mnuMain);
       MenuItem.Caption:= '-';
       mnuNetwork.Add(MenuItem);
 
       MenuItem:= TMenuItem.Create(mnuMain);
-      MenuItem.Caption:= rsMnuMapNetworkDrive;
-      MenuItem.OnClick:= TNotifyEvent(Handler);
+      MenuItem.Action:= actMapNetworkDrive;
       mnuNetwork.Add(MenuItem);
     end;
   end;
@@ -714,7 +739,7 @@ end;
 
 procedure ShowContextMenu(Parent: TWinControl; var Files : TFiles; X, Y : Integer;
                           Background: Boolean; CloseEvent: TNotifyEvent; UserWishForContextMenu:TUserWishForContextMenu = uwcmComplete);
-{$IFDEF MSWINDOWS}
+{$IF DEFINED(MSWINDOWS)}
 begin
   if Assigned(Files) and (Files.Count = 0) then
   begin
@@ -733,6 +758,41 @@ begin
     FreeAndNil(ShellContextMenu);
   end;
 end;
+{$ELSEIF DEFINED(DARWIN)}
+  function getFilePaths( contextFiles: TFiles ): TStringArray;
+  var
+    i: Integer;
+    count: Integer;
+  begin
+    count:= contextFiles.Count;
+    SetLength( Result, count );
+    for i:=0 to count-1 do begin
+      Result[i]:= contextFiles[i].FullPath;
+    end;
+  end;
+
+var
+  contextFiles: TFiles;
+begin
+  if Files.Count = 0 then
+  begin
+    FreeAndNil(Files);
+    Exit;
+  end;
+
+  try
+    // Create new context menu
+    contextFiles:= Files;
+    ShellContextMenu:= TShellContextMenu.Create(nil, Files, Background, UserWishForContextMenu);
+    ShellContextMenu.OnClose := CloseEvent;
+    frmMain.ActiveFrame.FileSource.QueryContextMenu(contextFiles, TPopupMenu(ShellContextMenu));
+    // Show context menu
+    MacosServiceMenuHelper.PopUp( ShellContextMenu, rsMacOSMenuServices, getFilepaths(contextFiles) );
+  finally
+    // Free created menu
+    FreeAndNil(ShellContextMenu);
+  end;
+end;
 {$ELSE}
 begin
   if Files.Count = 0 then
@@ -746,12 +806,7 @@ begin
   // Create new context menu
   ShellContextMenu:= TShellContextMenu.Create(nil, Files, Background, UserWishForContextMenu);
   ShellContextMenu.OnClose := CloseEvent;
-  // Show context menu
-  {$IF DEFINED(DARWIN)}
-  MacosServiceMenuHelper.PopUp( ShellContextMenu, uLng.rsMenuMacOsServices );
-  {$ELSE}
   ShellContextMenu.PopUp(X, Y);
-  {$ENDIF}
 end;
 {$ENDIF}
 
@@ -766,8 +821,15 @@ begin
     ShowVirtualDriveMenu(ADrive, X, Y, CloseEvent)
   else begin
     aFile := TFileSystemFileSource.CreateFile(EmptyStr);
-    aFile.FullPath := ADrive^.Path;
-    aFile.Attributes := faFolder;
+    if ADrive^.DriveType = dtSpecial then
+    begin
+      aFile.LinkProperty.LinkTo := ADrive^.DeviceId;
+      aFile.Attributes := FILE_ATTRIBUTE_DEVICE;
+    end
+    else begin
+      aFile.FullPath := ADrive^.Path;
+      aFile.Attributes := faFolder or FILE_ATTRIBUTE_DEVICE;
+    end;
     Files:= TFiles.Create(EmptyStr); // free in ShowContextMenu
     Files.Add(aFile);
     ShowContextMenu(Parent, Files, X, Y, False, CloseEvent);
@@ -980,6 +1042,47 @@ begin
 end;
 {$ENDIF}
 
+procedure MapNetworkDrive;
+{$IF DEFINED(MSWINDOWS)}
+var
+  Ret: DWORD;
+  Res: TNetResourceA;
+  CDS: TConnectDlgStruct;
+begin
+  ZeroMemory(@Res, SizeOf(TNetResourceA));
+  Res.dwType := RESOURCETYPE_DISK;
+  CDS.cbStructure := SizeOf(TConnectDlgStruct);
+  CDS.hwndOwner := frmMain.Handle;
+  CDS.lpConnRes := @Res;
+  CDS.dwFlags := 0;
+  Ret:= WNetConnectionDialog1(CDS);
+  if Ret = NO_ERROR then
+  begin
+    SetFileSystemPath(frmMain.ActiveFrame, AnsiChar(Int64(CDS.dwDevNum) + Ord('a') - 1) + ':\');
+  end
+  else if Ret <> DWORD(-1) then begin
+    MessageDlg(mbSysErrorMessage(Ret), mtError, [mbOK], 0);
+  end;
+end;
+{$ELSEIF DEFINED(UNIX) AND NOT DEFINED(HAIKU)}
+var
+  Address: String = '';
+begin
+  if ShowInputQuery(Application.Title, rsMsgURL, False, Address) then
+  begin
+  {$IF DEFINED(DARWIN)}
+    MountNetworkDrive(Address);
+  {$ELSE}
+    ChooseFileSource(frmMain.ActiveFrame, Address);
+  {$ENDIF}
+  end;
+end;
+{$ELSE}
+begin
+  msgWarning(rsMsgErrNotSupported);
+end;
+{$ENDIF}
+
 function DarkStyle: Boolean;
 {$IF DEFINED(DARKWIN)}
 begin
@@ -1001,7 +1104,7 @@ end;
 {$IF DEFINED(UNIX)}
 procedure handle_sigterm(signal: longint); cdecl;
 begin
-  WriteLn('SIGTERM');
+  DCDebug('SIGTERM');
   frmMain.Close;
 end;
 

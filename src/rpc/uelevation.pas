@@ -33,16 +33,15 @@ type
     function ProcessObject(ACommand: UInt32; const OldName, NewName: String): LongBool;
     function ProcessObject(ACommand: UInt32; const ObjectName: String; Attr: UInt32): LongBool;
     function ProcessObject(ACommand: UInt32; const ObjectName: String; Mode: Integer): THandle;
+    function ProcessObject(ACommand: UInt32; const OldName, NewName: String; Attr: UInt32): LongBool;
   public
     function Terminate: Boolean;
     function FileExists(const FileName: String): LongBool; inline;
     function FileGetAttr(const FileName: String; FollowLink: LongBool): TFileAttrs; inline;
     function FileGetAttr(const FileName: String; out Attr: TFileAttributeData): LongBool;
     function FileSetAttr(const FileName: String; Attr: TFileAttrs): LongBool; inline;
-    function FileSetTime(const FileName: String;
-                            ModificationTime: DCBasicTypes.TFileTime;
-                            CreationTime    : DCBasicTypes.TFileTime;
-                            LastAccessTime  : DCBasicTypes.TFileTime): LongBool;
+    function FileSetTime(const FileName: String; ModificationTime: TFileTimeEx;
+                         CreationTime: TFileTimeEx; LastAccessTime: TFileTimeEx): LongBool;
     function FileSetReadOnly(const FileName: String; ReadOnly: Boolean): LongBool; inline;
     function FileCopyAttr(const sSrc, sDst: String;
                           Options: TCopyAttributesOptions): TCopyAttributesOptions;
@@ -56,7 +55,7 @@ type
     function FindNext(var SearchRec: TSearchRecEx): Integer;
     procedure FindClose(var SearchRec: TSearchRecEx);
     function CreateHardLink(const Path, LinkName: String): LongBool; inline;
-    function CreateSymbolicLink(const Path, LinkName: String): LongBool; inline;
+    function CreateSymbolicLink(const Path, LinkName: String; Attr: UInt32): LongBool; inline;
     function CreateDirectory(const Directory: String): LongBool; inline;
     function RemoveDirectory(const Directory: String): LongBool; inline;
     function DirectoryExists(const Directory: String): LongBool; inline;
@@ -296,6 +295,7 @@ end;
 function TWorkerProxy.ProcessObject(ACommand: UInt32; const ObjectName: String;
   Mode: Integer): THandle;
 var
+  LastError: Integer;
   Stream: TMemoryStream;
 begin
   Result:= feInvalidHandle;
@@ -314,7 +314,46 @@ begin
       // Send command
       FClient.WriteBuffer(Stream.Memory^, Stream.Size);
       // Receive command result
-      FClient.ReadHandle(Result);
+      FClient.ReadBuffer(LastError, SizeOf(LastError));
+      if (LastError = 0) then
+        FClient.ReadHandle(Result)
+      else begin
+        SetLastOSError(LastError);
+      end;
+    finally
+      Stream.Free;
+    end;
+  except
+    on E: Exception do DCDebug(E.Message);
+  end;
+end;
+
+function TWorkerProxy.ProcessObject(ACommand: UInt32; const OldName,
+  NewName: String; Attr: UInt32): LongBool;
+var
+  LastError: Integer;
+  Stream: TMemoryStream;
+begin
+  Result:= False;
+  try
+    Stream:= TMemoryStream.Create;
+    try
+      // Write header
+      Stream.WriteDWord(ACommand);
+      Stream.Seek(SizeOf(UInt32), soFromCurrent);
+      // Write arguments
+      Stream.WriteAnsiString(OldName);
+      Stream.WriteAnsiString(NewName);
+      Stream.WriteDWord(Attr);
+      // Write data size
+      Stream.Seek(SizeOf(UInt32), soFromBeginning);
+      Stream.WriteDWord(Stream.Size - SizeOf(UInt32) * 2);
+      // Send command
+      FClient.WriteBuffer(Stream.Memory^, Stream.Size);
+      // Receive command result
+      FClient.ReadBuffer(Result, SizeOf(Result));
+      FClient.ReadBuffer(LastError, SizeOf(LastError));
+      SetLastOSError(LastError);
     finally
       Stream.Free;
     end;
@@ -397,10 +436,8 @@ begin
   Result:= ProcessObject(RPC_FileSetAttr, FileName, Attr);
 end;
 
-function TWorkerProxy.FileSetTime(const FileName: String;
-  ModificationTime: DCBasicTypes.TFileTime;
-  CreationTime: DCBasicTypes.TFileTime; LastAccessTime: DCBasicTypes.TFileTime
-  ): LongBool;
+function TWorkerProxy.FileSetTime(const FileName: String; ModificationTime: TFileTimeEx;
+                                  CreationTime: TFileTimeEx; LastAccessTime: TFileTimeEx): LongBool;
 var
   LastError: Integer;
   Stream: TMemoryStream;
@@ -414,9 +451,9 @@ begin
       Stream.Seek(SizeOf(UInt32), soFromCurrent);
       // Write arguments
       Stream.WriteAnsiString(FileName);
-      Stream.WriteQWord(ModificationTime);
-      Stream.WriteQWord(CreationTime);
-      Stream.WriteQWord(LastAccessTime);
+      Stream.WriteBuffer(ModificationTime, SizeOf(TFileTimeEx));
+      Stream.WriteBuffer(CreationTime, SizeOf(TFileTimeEx));
+      Stream.WriteBuffer(LastAccessTime, SizeOf(TFileTimeEx));
       // Write data size
       Stream.Seek(SizeOf(UInt32), soFromBeginning);
       Stream.WriteDWord(Stream.Size - SizeOf(UInt32) * 2);
@@ -651,9 +688,9 @@ begin
   Result:= ProcessObject(RPC_CreateHardLink, Path, LinkName);
 end;
 
-function TWorkerProxy.CreateSymbolicLink(const Path, LinkName: String): LongBool;
+function TWorkerProxy.CreateSymbolicLink(const Path, LinkName: String; Attr: UInt32): LongBool;
 begin
-  Result:= ProcessObject(RPC_CreateSymbolicLink, Path, LinkName);
+  Result:= ProcessObject(RPC_CreateSymbolicLink, Path, LinkName, Attr);
 end;
 
 function TWorkerProxy.CreateDirectory(const Directory: String): LongBool;

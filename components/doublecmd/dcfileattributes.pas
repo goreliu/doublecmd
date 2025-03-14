@@ -34,8 +34,10 @@ const
   FILE_ATTRIBUTE_READONLY              = $0001;
   FILE_ATTRIBUTE_HIDDEN                = $0002;
   FILE_ATTRIBUTE_SYSTEM                = $0004;
+  FILE_ATTRIBUTE_VOLUME                = $0008;
   FILE_ATTRIBUTE_DIRECTORY             = $0010;
   FILE_ATTRIBUTE_ARCHIVE               = $0020;
+  FILE_ATTRIBUTE_DEVICE                = $0040;
   FILE_ATTRIBUTE_NORMAL                = $0080;
   FILE_ATTRIBUTE_TEMPORARY             = $0100;
   FILE_ATTRIBUTE_SPARSE_FILE           = $0200;
@@ -99,6 +101,7 @@ const
   function WinToUnixFileAttr(Attr: TFileAttrs): TFileAttrs;
   function UnixToWinFileAttr(Attr: TFileAttrs): TFileAttrs;
   function UnixToWcxFileAttr(Attr: TFileAttrs): TFileAttrs;
+  function WinToWcxFileAttr(Attr: TFileAttrs): TFileAttrs;
   function UnixToWinFileAttr(const FileName: String; Attr: TFileAttrs): TFileAttrs;
 
   function SingleStrToFileAttr(sAttr: String): TFileAttrs;
@@ -186,13 +189,14 @@ function WinToUnixFileAttr(Attr: TFileAttrs): TFileAttrs;
 begin
   Result := S_IRUSR or S_IRGRP or S_IROTH;
 
-  if (Attr and faReadOnly) = 0 then
-    Result := Result or S_IWUSR;
-
   if (Attr and faDirectory) <> 0 then
-    Result := Result or S_IFDIR or S_IXUGO
-  else
+    Result := Result or S_IFDIR or S_IXUGO or S_IWUSR
+  else begin
     Result := Result or S_IFREG;
+
+    if (Attr and faReadOnly) = 0 then
+      Result := Result or S_IWUSR;
+  end;
 end;
 
 function UnixToWinFileAttr(Attr: TFileAttrs): TFileAttrs;
@@ -221,6 +225,17 @@ begin
 {$IF DEFINED(MSWINDOWS)}
   Result := UnixToWinFileAttr(Attr);
 {$ELSEIF DEFINED(UNIX)}
+  Result := Attr;
+{$ELSE}
+  Result := 0;
+{$ENDIF}
+end;
+
+function WinToWcxFileAttr(Attr: TFileAttrs): TFileAttrs;
+begin
+{$IF DEFINED(UNIX)}
+  Result := WinToUnixFileAttr(Attr);
+{$ELSEIF DEFINED(MSWINDOWS)}
   Result := Attr;
 {$ELSE}
   Result := 0;

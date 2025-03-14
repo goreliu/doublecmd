@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    Graphic functions
 
-   Copyright (C) 2013-2019 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2013-2023 Alexander Koblov (alexx2000@mail.ru)
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -27,33 +27,42 @@ unit uGraphics;
 interface
 
 uses
-  Classes, SysUtils, Graphics, IntfGraphics;
+  Classes, SysUtils, Graphics, IntfGraphics, LCLVersion;
 
 procedure BitmapConvert(Bitmap: TRasterImage);
 procedure BitmapAssign(Bitmap, Image: TRasterImage);
+procedure BitmapConvert(ASource, ATarget: TRasterImage);
 procedure BitmapAlpha(var ABitmap: TBitmap; APercent: Single);
 procedure BitmapAssign(Bitmap: TRasterImage; Image: TLazIntfImage);
 procedure BitmapCenter(var Bitmap: TBitmap; Width, Height: Integer);
+procedure BitmapMerge(ALow, AHigh: TLazIntfImage; const ADestX, ADestY: Integer);
 
 implementation
 
 uses
-  GraphType, FPimage;
+  Math, GraphType, FPimage;
 
 type
   TRawAccess = class(TRasterImage) end;
 
 procedure BitmapConvert(Bitmap: TRasterImage);
+begin
+  BitmapConvert(Bitmap, Bitmap);
+end;
+
+procedure BitmapConvert(ASource, ATarget: TRasterImage);
 var
   Source, Target: TLazIntfImage;
 begin
-  Source:= TLazIntfImage.Create(Bitmap.RawImage, False);
+  Source:= TLazIntfImage.Create(ASource.RawImage, False);
   try
-    Target:= TLazIntfImage.Create(Bitmap.Width, Bitmap.Height, [riqfRGB, riqfAlpha]);
+    Target:= TLazIntfImage.Create(ASource.Width, ASource.Height, [riqfRGB, riqfAlpha]);
     try
+{$if lcl_fullversion < 2020000}
       Target.CreateData;
+{$endif}
       Target.CopyPixels(Source);
-      BitmapAssign(Bitmap, Target);
+      BitmapAssign(ATarget, Target);
     finally
       Target.Free;
     end;
@@ -113,7 +122,9 @@ begin
     Masked:= ABitmap.RawImage.Description.MaskBitsPerPixel > 0;
     SrcIntfImage:= TLazIntfImage.Create(ABitmap.RawImage, False);
     AImage:= TLazIntfImage.Create(ABitmap.Width, ABitmap.Height, [riqfRGB, riqfAlpha]);
+{$if lcl_fullversion < 2020000}
     AImage.CreateData;
+{$endif}
     for X:= 0 to AImage.Width - 1 do
     begin
       for Y:= 0 to AImage.Height - 1 do
@@ -144,7 +155,9 @@ begin
     try
       Target:= TLazIntfImage.Create(Width, Height, [riqfRGB, riqfAlpha]);
       try
+{$if lcl_fullversion < 2020000}
         Target.CreateData;
+{$endif}
         Target.FillPixels(colTransparent);
         X:= (Width - Bitmap.Width) div 2;
         Y:= (Height - Bitmap.Height) div 2;
@@ -155,6 +168,61 @@ begin
       end;
     finally
       Source.Free;
+    end;
+  end;
+end;
+
+procedure BitmapMerge(ALow, AHigh: TLazIntfImage; const ADestX, ADestY: Integer);
+var
+  CurColor: TFPColor;
+  X, Y, CurX, CurY: Integer;
+  MaskValue, InvMaskValue: Word;
+  lDrawWidth, lDrawHeight: Integer;
+begin
+  lDrawWidth := Min(ALow.Width - ADestX, AHigh.Width);
+  lDrawHeight := Min(ALow.Height - ADestY, AHigh.Height);
+  for Y := 0 to lDrawHeight - 1 do
+  begin
+    for X := 0 to lDrawWidth - 1 do
+    begin
+      CurX := ADestX + X;
+      CurY := ADestY + Y;
+
+      if (CurX < 0) or (CurY < 0) then Continue;
+
+      MaskValue := AHigh.Colors[X, Y].Alpha;
+      InvMaskValue := $FFFF - MaskValue;
+
+      if MaskValue = $FFFF then
+      begin
+        ALow.Colors[CurX, CurY] := AHigh.Colors[X, Y];
+      end
+      else if MaskValue > $00 then
+      begin
+        CurColor := ALow.Colors[CurX, CurY];
+
+        if CurColor.Alpha = 0 then
+        begin
+          CurColor:= AHigh.Colors[X, Y];
+        end
+        else begin
+          if MaskValue > CurColor.Alpha then
+            CurColor.Alpha:= MaskValue;
+
+          CurColor.Red := Round(
+            CurColor.Red * InvMaskValue / $FFFF +
+            AHigh.Colors[X, Y].Red * MaskValue / $FFFF);
+
+          CurColor.Green := Round(
+            CurColor.Green * InvMaskValue / $FFFF +
+            AHigh.Colors[X, Y].Green * MaskValue / $FFFF);
+
+          CurColor.Blue := Round(
+            CurColor.Blue * InvMaskValue / $FFFF +
+            AHigh.Colors[X, Y].Blue * MaskValue / $FFFF);
+         end;
+        ALow.Colors[CurX, CurY] := CurColor;
+      end;
     end;
   end;
 end;

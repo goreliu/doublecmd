@@ -43,7 +43,8 @@ var
   DCVersion,   // Double Commander version
   TargetWS,    // Target WidgetSet of Lazarus
   OSVersion,   // Operating System where DC is run
-  WSVersion    // WidgetSet library version where DC is run
+  WSVersion,   // WidgetSet library version where DC is run
+  Copyright
   : String;
 
 procedure InitializeVersionInfo;
@@ -69,6 +70,9 @@ uses
   {$ENDIF}
   {$IFDEF LCLGTK2}
   , gtk2
+  {$ENDIF}
+  {$IFDEF LCLGTK3}
+  , LazGtk3
   {$ENDIF}
   {$IFDEF MSWINDOWS}
   , Windows, JwaNative, JwaNtStatus, JwaWinType, uMyWindows
@@ -318,6 +322,7 @@ begin
   with TVersionInfo.Create do
   begin
     Load(HINSTANCE);
+    Copyright:= StringFileInfo.Items[0].Values['LegalCopyright'];
     DCVersion:= Format('%d.%d.%.d', [FixedInfo.FileVersion[0],
                                      FixedInfo.FileVersion[1],
                                      FixedInfo.FileVersion[2]]);
@@ -509,17 +514,15 @@ begin
   {$ENDIF}
 
   {$IF DEFINED(LCLQT) or DEFINED(LCLQT5) or DEFINED(LCLQT6)}
-  WSVersion := 'Qt ' + QtVersion + ', libQt' + QtVersion[0] + 'Pas ';
-
-  WSVersion := WSVersion + IntToStr((QT_VERSION shr 16) and 255) + '.' +
-                           IntToStr((QT_VERSION shr  8) and 255) + '.' +
-                           IntToStr((QT_VERSION       ) and 255);
-  {$ENDIF}
-
-  {$IFDEF LCLGTK2}
+  WSVersion := 'Qt ' + QtVersion;
+  {$ELSEIF DEFINED(LCLGTK2)}
   WSVersion := 'GTK ' + IntToStr(gtk_major_version) + '.' +
                         IntToStr(gtk_minor_version) + '.' +
                         IntToStr(gtk_micro_version);
+  {$ELSEIF DEFINED(LCLGTK3)}
+  WSVersion := 'GTK ' + IntToStr(gtk_get_major_version) + '.' +
+                        IntToStr(gtk_get_minor_version) + '.' +
+                        IntToStr(gtk_get_micro_version);
   {$ENDIF}
 end;
 

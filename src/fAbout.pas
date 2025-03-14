@@ -1,15 +1,22 @@
 {
-   Seksi Commander
-   ----------------------------
-   Implementing of About dialog
+    Double Commander
+    -------------------------------------------------------------------------
+    About dialog
 
-   Licence  : GNU GPL v 2.0
-   Author   : radek.cervinka@centrum.cz
+    Copyright (C) 2006-2024 Alexander Koblov (alexx2000@mail.ru)
 
-   contributors:
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
 
-   Copyright (C) 2006-2008  Koblov Alexander (Alexx2000@mail.ru)
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see <http://www.gnu.org/licenses/>.
 }
 
 unit fAbout;
@@ -20,7 +27,7 @@ interface
 
 uses
   Graphics, Forms, Controls, StdCtrls, ExtCtrls, Buttons,
-  SysUtils, Classes, LCLType;
+  SysUtils, Classes, LCLType, LMessages;
 
 type
 
@@ -46,26 +53,29 @@ type
     memInfo: TMemo;
     pnlInfo: TPanel;
     procedure btnCopyToClipboardClick(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
     procedure lblHomePageAddressClick(Sender: TObject);
     procedure lblHomePageAddressMouseEnter(Sender: TObject);
     procedure lblHomePageAddressMouseLeave(Sender: TObject);
-    procedure OKButtonClick(Sender: TObject);
     procedure frmAboutShow(Sender: TObject);
   private
-    { Private declarations }
+    FMouseLeave, FMouseEnter: TColor;
+  protected
+    procedure UpdateStyle;
+    procedure CMThemeChanged(var Message: TLMessage); message CM_THEMECHANGED;
   public
     { Public declarations }
   end;
 
 
-procedure ShowAboutBox;
+procedure ShowAboutBox(TheOwner: TComponent);
 
 implementation
 
 {$R *.lfm}
 
 uses
-  Clipbrd, dmHelpManager, uDCVersion, uClipboard;
+  Clipbrd, dmHelpManager, uDCVersion, uClipboard, uOSForms;
 
 const
   cIndention = LineEnding + #32#32;
@@ -100,13 +110,14 @@ const
     '- Tango Icon Library (http://tango.freedesktop.org/Tango_Icon_Library)' + LineEnding +
     '- Silk icon set 1.3 by Mark James (http://www.famfamfam.com/lab/icons/silk/)' + LineEnding +
     '- Elementary icon theme 2.7.1 (https://github.com/elementary/icons)' + LineEnding +
+    '- Adwaita Icon Theme (https://gitlab.gnome.org/GNOME/adwaita-icon-theme)' + LineEnding +
     '- Farm-Fresh Web Icons (https://www.fatcow.com/free-icons)' + LineEnding +
-    '- Oxygen icon theme (http://oxygen-icons.org)' + LineEnding + LineEnding +
+    '- Oxygen icon theme (https://invent.kde.org/frameworks/oxygen-icons)' + LineEnding + LineEnding +
     'Big thanks to Lazarus and Free Pascal Team!';
 
-procedure ShowAboutBox;
+procedure ShowAboutBox(TheOwner: TComponent);
 begin
-  with TfrmAbout.Create(Application) do
+  with TfrmAbout.Create(TheOwner) do
   try
     ShowModal;
   finally
@@ -114,17 +125,12 @@ begin
   end;
 end;
 
-procedure TfrmAbout.OKButtonClick(Sender: TObject);
-begin
-  Close;
-end;
-
 procedure TfrmAbout.lblHomePageAddressMouseLeave(Sender: TObject);
 begin
   with Sender as TLabel do
   begin
     Font.Style:= [];
-    Font.Color:= clBlue;
+    Font.Color:= FMouseLeave;
     Cursor:= crDefault;
   end;
 end;
@@ -134,7 +140,7 @@ begin
   with Sender as TLabel do
   begin
     Font.Style:= [fsUnderLine];
-    Font.Color:= clRed;
+    Font.Color:= FMouseEnter;
     Cursor:= crHandPoint;
   end;
 end;
@@ -168,6 +174,13 @@ begin
   ClipboardSetText(StrInfo);
 end;
 
+procedure TfrmAbout.FormCreate(Sender: TObject);
+begin
+  UpdateStyle;
+  lblTitle.Font.Color:= FMouseEnter;
+  lblHomePageAddress.Font.Color:= FMouseLeave;
+end;
+
 procedure TfrmAbout.frmAboutShow(Sender: TObject);
 begin
   memInfo.Lines.Text         := cAboutMsg;
@@ -182,6 +195,27 @@ begin
   lblPlatform.Caption        := TargetCPU + '-' + TargetOS + '-' + TargetWS;
   lblOperatingSystem.Caption := OSVersion;
   lblWidgetsetVer.Caption    := WSVersion;
+
+  Constraints.MinHeight      := Height;
+  btnClose.Anchors           := [akLeft, akBottom];
+end;
+
+procedure TfrmAbout.UpdateStyle;
+begin
+  if DarkStyle then
+  begin
+    FMouseLeave:= RGBToColor(97, 155, 192);
+    FMouseEnter:= RGBToColor(192, 102, 97);
+  end
+  else begin
+    FMouseLeave:= clBlue;
+    FMouseEnter:= clRed;
+  end;
+end;
+
+procedure TfrmAbout.CMThemeChanged(var Message: TLMessage);
+begin
+  UpdateStyle;
 end;
 
 end.

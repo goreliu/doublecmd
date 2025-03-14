@@ -6,6 +6,7 @@
     Based on XmlConf from fcl-xml package.
 
     Copyright (C) 2010  Przemyslaw Nagay (cobines@gmail.com)
+    Copyright (C) 2013-2023 Alexander Koblov (alexx2000@mail.ru)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,6 +22,7 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 }
+
 unit DCXmlConfig;
 
 {$mode objfpc}{$H+}
@@ -117,7 +119,7 @@ type
     // ------------------------------------------------------------------------
 
     procedure GetFont(const aNode: TXmlNode; Path: TXmlPath;
-                      out Name: String; out Size: Integer; out Style, Quality: Integer;
+                      var Name: String; var Size: Integer; var Style, Quality: Integer;
                       const DefName: String; const DefSize: Integer; const DefStyle, DefQuality: Integer);
 
     procedure SetFont(const aNode: TXmlNode; Path: TXmlPath;
@@ -149,7 +151,10 @@ type
 implementation
 
 uses
-  LazLogger, DCOSUtils, DCClassesUtf8, URIParser;
+  LazLogger, DCBasicTypes, DCOSUtils, DCClassesUtf8, URIParser;
+
+const
+  XML_READER_FLAGS = [xrfAllowSpecialCharsInAttributeValue];
 
 const
   BoolStrings: array[Boolean] of DOMString = ('False', 'True');
@@ -525,7 +530,7 @@ begin
   try
     if FileStream.Size = 0 then
       raise EXmlConfigEmpty.Create('');
-    ReadXMLFile(TmpDoc, FileStream, FilenameToURI(AFilename), []);
+    ReadXMLFile(TmpDoc, FileStream, FilenameToURI(AFilename), XML_READER_FLAGS);
     if TmpDoc.DocumentElement.NodeName <> ApplicationName then
       raise EXMLReadError.Create('Root element is not <' + ApplicationName + '>.');
     FDoc.Free;
@@ -541,7 +546,7 @@ var
 begin
   if AStream.Size = 0 then
     raise EXmlConfigEmpty.Create('');
-  ReadXMLFile(TmpDoc, AStream, []);
+  ReadXMLFile(TmpDoc, AStream, XML_READER_FLAGS);
   FDoc.Free;
   FDoc := TmpDoc;
 end;
@@ -611,6 +616,8 @@ end;
 
 function TXmlConfig.Save: Boolean;
 var
+  AFileName: String;
+  dwAttr: TFileAttrs;
   bFileExists: Boolean;
   sTmpConfigFileName: String;
 begin
@@ -619,17 +626,25 @@ begin
   if FFileName = '' then
     Exit;
 
-  bFileExists := mbFileExists(FileName);
+  dwAttr := mbFileGetAttr(FileName);
+  bFileExists := (dwAttr <> faInvalidAttributes) and (not FPS_ISDIR(dwAttr));
+
+  if bFileExists and FPS_ISLNK(dwAttr) then
+    AFileName := mbReadAllLinks(FileName)
+  else begin
+    AFileName := FileName;
+  end;
+
   // Write to temporary file and if successfully written rename to proper name.
-  if (not bFileExists) or mbFileAccess(FileName, fmOpenWrite or fmShareDenyWrite) then
+  if (not bFileExists) or mbFileAccess(AFileName, fmOpenWrite or fmShareDenyWrite) then
   begin
-    sTmpConfigFileName := GetTempName(FileName);
+    sTmpConfigFileName := GetTempName(AFileName);
     try
       WriteToFile(sTmpConfigFileName);
       if bFileExists then begin
-        mbFileCopyAttr(FileName, sTmpConfigFileName, [caoCopyOwnership, caoCopyPermissions]);
+        mbFileCopyAttr(AFileName, sTmpConfigFileName, [caoCopyOwnership, caoCopyPermissions]);
       end;
-      if not mbRenameFile(sTmpConfigFileName, FileName) then
+      if not mbRenameFile(sTmpConfigFileName, AFileName) then
       begin
         mbDeleteFile(sTmpConfigFileName);
         DebugLogger.Debugln('Cannot save configuration file ', FileName);
@@ -776,8 +791,8 @@ begin
   end;
 end;
 
-procedure TXmlConfig.GetFont(const aNode: TXmlNode; Path: TXmlPath; out
-  Name: String; out Size: Integer; out Style, Quality: Integer;
+procedure TXmlConfig.GetFont(const aNode: TXmlNode; Path: TXmlPath; var
+  Name: String; var Size: Integer; var Style, Quality: Integer;
   const DefName: String; const DefSize: Integer; const DefStyle,
   DefQuality: Integer);
 begin

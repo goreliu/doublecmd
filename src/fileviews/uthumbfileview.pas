@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, Controls, Grids, Types, DCXmlConfig, uFileSource, uOrderedFileView,
   uDisplayFile, uFileViewWorker, uThumbnails, uFileView, uTypes, uFileViewWithGrid,
-  uFile;
+  uFileProperty, uFile;
 
 type
 
@@ -15,11 +15,13 @@ type
 
   TFileThumbnailsRetriever = class(TFileViewWorker)
   private
+    FIndex: Integer;
     FWorkingFile: TDisplayFile;
     FWorkingUserData: Pointer;
     FFileList: TFVWorkerFileList;
     FThumbnailManager: TThumbnailManager;
     FUpdateFileMethod: TUpdateFileMethod;
+    FAbortFileMethod: TAbortFileMethod;
     FFileSource: IFileSource;
     FBitmapList: TBitmapList;
 
@@ -37,9 +39,11 @@ type
                        AThread: TThread;
                        ABitmapList: TBitmapList;
                        AUpdateFileMethod: TUpdateFileMethod;
+                       ABreakFileMethod: TAbortFileMethod;
                        AThumbnailManager: TThumbnailManager;
                        var AFileList: TFVWorkerFileList); reintroduce;
     destructor Destroy; override;
+    procedure Abort; override;
   end;
 
   TThumbFileView = class;
@@ -76,6 +80,7 @@ type
   private
     FBitmapList: TBitmapList;
     FThumbnailManager: TThumbnailManager;
+    procedure ThumbnailsRetrieverOnAbort(AStart: Integer; AList: TFPList);
     procedure ThumbnailsRetrieverOnUpdate(const UpdatedFile: TDisplayFile; const UserData: Pointer);
   protected
     procedure CreateDefault(AOwner: TWinControl); override;
@@ -87,6 +92,7 @@ type
     procedure UpdateRenameFileEditPosition(); override;
     function GetIconRect(FileIndex: PtrInt): TRect; override;
     procedure MouseScrollTimer(Sender: TObject); override;
+    procedure DoFileChanged(ADisplayFile: TDisplayFile; APropertiesChanged: TFilePropertiesTypes); override;
   public
     constructor Create(AOwner: TWinControl; AConfig: TXmlConfig; ANode: TXmlNode; AFlags: TFileViewFlags = []); override;
     constructor Create(AOwner: TWinControl; AFileView: TFileView; AFlags: TFileViewFlags = []); override;
@@ -105,22 +111,18 @@ uses
 
 procedure TFileThumbnailsRetriever.DoUpdateFile;
 begin
-  if not Aborted and Assigned(FUpdateFileMethod) then
+  if Assigned(FUpdateFileMethod) then
     FUpdateFileMethod(FWorkingFile, FWorkingUserData);
 end;
 
 procedure TFileThumbnailsRetriever.Execute;
 var
-  I: Integer;
   Bitmap: TBitmap;
 begin
-  for I := 0 to FFileList.Count - 1 do
+  while (FIndex < FFileList.Count) and (Aborted = False) do
   begin
-    if Aborted then
-      Exit;
-
-    FWorkingFile := FFileList.Files[I];
-    FWorkingUserData := FFileList.Data[I];
+    FWorkingFile := FFileList.Files[FIndex];
+    FWorkingUserData := FFileList.Data[FIndex];
 
     try
         if FWorkingFile.Tag < 0 then
@@ -132,21 +134,19 @@ begin
           end;
         end;
 
-      if Aborted then
-        Exit;
-
       TThread.Synchronize(Thread, @DoUpdateFile);
 
     except
       on EFileNotFound do;
     end;
+    Inc(FIndex);
   end;
 end;
 
 constructor TFileThumbnailsRetriever.Create(AFileSource: IFileSource;
   AThread: TThread; ABitmapList: TBitmapList;
-  AUpdateFileMethod: TUpdateFileMethod; AThumbnailManager: TThumbnailManager;
-  var AFileList: TFVWorkerFileList);
+  AUpdateFileMethod: TUpdateFileMethod; ABreakFileMethod: TAbortFileMethod;
+  AThumbnailManager: TThumbnailManager; var AFileList: TFVWorkerFileList);
 begin
   inherited Create(AThread);
 
@@ -155,6 +155,7 @@ begin
   AFileList             := nil;
   FFileSource           := AFileSource;
   FBitmapList           := ABitmapList;
+  FAbortFileMethod      := ABreakFileMethod;
   FThumbnailManager     := AThumbnailManager;
   FUpdateFileMethod     := AUpdateFileMethod;
 end;
@@ -163,6 +164,16 @@ destructor TFileThumbnailsRetriever.Destroy;
 begin
   FFileList.Free;
   inherited Destroy;
+end;
+
+procedure TFileThumbnailsRetriever.Abort;
+begin
+  inherited Abort;
+
+  if Assigned(FAbortFileMethod) then
+  begin
+    FAbortFileMethod(FIndex, FFileList.UserData);
+  end;
 end;
 
 { TThumbDrawGrid }
@@ -550,6 +561,22 @@ end;
 
 { TThumbFileView }
 
+procedure TThumbFileView.ThumbnailsRetrieverOnAbort(AStart: Integer;
+  AList: TFPList);
+var
+  ADisplayFile: TDisplayFile;
+begin
+  while AStart < AList.Count do
+  begin
+    ADisplayFile := TDisplayFile(AList[AStart]);
+    if IsReferenceValid(ADisplayFile) then
+    begin
+      ADisplayFile.Busy:= ADisplayFile.Busy - [bsTag];
+    end;
+    Inc(AStart);
+  end;
+end;
+
 procedure TThumbFileView.ThumbnailsRetrieverOnUpdate(
   const UpdatedFile: TDisplayFile; const UserData: Pointer);
 var
@@ -558,10 +585,23 @@ begin
   if not IsReferenceValid(OrigDisplayFile) then
     Exit; // File does not exist anymore (reference is invalid).
 
-  if UpdatedFile.Tag <> -1 then
-    OrigDisplayFile.Tag := UpdatedFile.Tag;
+  OrigDisplayFile.Busy:= OrigDisplayFile.Busy - [bsTag];
 
-  DoFileUpdated(OrigDisplayFile);
+  if UpdatedFile.Tag <> -1 then
+  begin
+    if OrigDisplayFile.Tag = -1 then
+    begin
+      OrigDisplayFile.Tag := UpdatedFile.Tag;
+      RedrawFile(OrigDisplayFile);
+    end
+    // The file was changed while we creating a thumbnail
+    // so we need to request a thumbnail creation again
+    else begin
+      OrigDisplayFile.Tag:= -1;
+      FBitmapList[UpdatedFile.Tag]:= nil;
+      Notify([fvnVisibleFilePropertiesChanged]);
+    end;
+  end;
 end;
 
 procedure TThumbFileView.CreateDefault(AOwner: TWinControl);
@@ -619,11 +659,12 @@ begin
         for i := VisibleFiles.First to VisibleFiles.Last do
         begin
           AFile := FFiles[i];
-          if (AFile.Tag < 0) and AFile.FSFile.IsNameValid then
+          if (AFile.Tag < 0) and AFile.FSFile.IsNameValid and (AFile.Busy * [bsTag] = []) then
           begin
             if not Assigned(AFileList) then
               AFileList := TFVWorkerFileList.Create;
             AFileList.AddClone(AFile, AFile);
+            AFile.Busy := AFile.Busy + [bsTag];
           end;
         end;
 
@@ -634,6 +675,7 @@ begin
             WorkersThread,
             FBitmapList,
             @ThumbnailsRetrieverOnUpdate,
+            @ThumbnailsRetrieverOnAbort,
             FThumbnailManager,
             AFileList);
 
@@ -716,6 +758,26 @@ begin
   begin
     APoint := dgPanel.ScreenToClient(Mouse.CursorPos);
     TThumbDrawGrid(dgPanel).DoMouseMoveScroll(tmMouseScroll, APoint.X, APoint.Y);
+  end;
+end;
+
+procedure TThumbFileView.DoFileChanged(ADisplayFile: TDisplayFile;
+  APropertiesChanged: TFilePropertiesTypes);
+begin
+  if (APropertiesChanged * [fpSize, fpModificationTime] = []) then
+    Exit;
+
+  ADisplayFile.Busy := ADisplayFile.Busy - [bsTag];
+
+  if InRange(ADisplayFile.Tag, 0, FBitmapList.Count - 1) then
+  begin
+    FBitmapList[ADisplayFile.Tag]:= nil;
+    ADisplayFile.Tag:= -1;
+  end
+  else if ADisplayFile.Tag < 0 then
+    ADisplayFile.Tag:= ADisplayFile.Tag - 1
+  else begin
+    ADisplayFile.Tag:= -1;
   end;
 end;
 

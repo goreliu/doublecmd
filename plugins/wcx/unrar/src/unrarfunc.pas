@@ -4,7 +4,7 @@
    WCX plugin for unpacking RAR archives
    This is simple wrapper for unrar.dll or libunrar.so
 
-   Copyright (C) 2008-2022 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2008-2024 Alexander Koblov (alexx2000@mail.ru)
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -54,6 +54,7 @@ const
   UCM_NEEDPASSWORD    =  2;
   UCM_CHANGEVOLUMEW   =  3;
   UCM_NEEDPASSWORDW   =  4;
+  UCM_LARGEDICT       =  5;
 
   // Main header flags.
   MHD_VOLUME         = $0001;
@@ -103,7 +104,24 @@ type
     CmtBufSize: LongWord;
     CmtSize: LongWord;
     CmtState: LongWord;
-    Reserved: packed array [0..1023] of LongWord;
+    DictSize: LongWord;
+    HashType: LongWord;
+    Hash: array[0..31] of Byte;
+    RedirType: LongWord;
+    RedirName: PRarUnicodeChar;
+    RedirNameSize: LongWord;
+    DirTarget: LongWord;
+    MtimeLow: LongWord;
+    MtimeHigh: LongWord;
+    CtimeLow: LongWord;
+    CtimeHigh: LongWord;
+    AtimeLow: LongWord;
+    AtimeHigh: LongWord;
+    ArcNameEx: PRarUnicodeChar;
+    ArcNameExSize: LongWord;
+    FileNameEx: PRarUnicodeChar;
+    FileNameExSize: LongWord;
+    Reserved: packed array [0..981] of LongWord;
   end;
 
   {$IFDEF MSWINDOWS}{$CALLING STDCALL}{$ELSE}{$CALLING CDECL}{$ENDIF}
@@ -147,22 +165,22 @@ var
   ModuleHandle : TLibHandle = NilHandle;
 
 { Mandatory }
-function OpenArchive(var ArchiveData: TOpenArchiveData) : TArcHandle; dcpcall;
-function OpenArchiveW(var ArchiveData: tOpenArchiveDataW) : TArcHandle; dcpcall;
-function ReadHeader(hArcData: TArcHandle; var HeaderData: THeaderData) : Integer; dcpcall;
-function ReadHeaderExW(hArcData: TArcHandle; var HeaderData: THeaderDataExW) : Integer; dcpcall;
-function ProcessFile(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PAnsiChar) : Integer; dcpcall;
-function ProcessFileW(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PWideChar) : Integer; dcpcall;
-function CloseArchive(hArcData: TArcHandle): Integer; dcpcall;
-procedure SetChangeVolProc(hArcData : TArcHandle; pChangeVolProc : TChangeVolProc); dcpcall;
-procedure SetChangeVolProcW(hArcData : TArcHandle; pChangeVolProc : TChangeVolProcW); dcpcall;
-procedure SetProcessDataProc(hArcData : TArcHandle; pProcessDataProc : TProcessDataProc); dcpcall;
-procedure SetProcessDataProcW(hArcData : TArcHandle; pProcessDataProc : TProcessDataProcW); dcpcall;
+function OpenArchive(var ArchiveData: TOpenArchiveData) : TArcHandle; dcpcall; export;
+function OpenArchiveW(var ArchiveData: tOpenArchiveDataW) : TArcHandle; dcpcall; export;
+function ReadHeader(hArcData: TArcHandle; var HeaderData: THeaderData) : Integer; dcpcall; export;
+function ReadHeaderExW(hArcData: TArcHandle; var HeaderData: THeaderDataExW) : Integer; dcpcall; export;
+function ProcessFile(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PAnsiChar) : Integer; dcpcall; export;
+function ProcessFileW(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PWideChar) : Integer; dcpcall; export;
+function CloseArchive(hArcData: TArcHandle): Integer; dcpcall; export;
+procedure SetChangeVolProc(hArcData : TArcHandle; pChangeVolProc : TChangeVolProc); dcpcall; export;
+procedure SetChangeVolProcW(hArcData : TArcHandle; pChangeVolProc : TChangeVolProcW); dcpcall; export;
+procedure SetProcessDataProc(hArcData : TArcHandle; pProcessDataProc : TProcessDataProc); dcpcall; export;
+procedure SetProcessDataProcW(hArcData : TArcHandle; pProcessDataProc : TProcessDataProcW); dcpcall; export;
 { Optional }
-function GetPackerCaps : Integer; dcpcall;
-function GetBackgroundFlags: Integer; dcpcall;
+function GetPackerCaps : Integer; dcpcall; export;
+function GetBackgroundFlags: Integer; dcpcall; export;
 { Extension API }
-procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall;
+procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall; export;
 
 var
   gStartupInfo: TExtensionStartupInfo;
@@ -173,7 +191,8 @@ threadvar
 implementation
 
 uses
-  SysUtils, DCBasicTypes, DCDateTimeUtils, DCConvertEncoding, DCFileAttributes;
+  SysUtils, DCBasicTypes, DCDateTimeUtils, DCConvertEncoding, DCFileAttributes,
+  RarLng;
 
 type
   // From libunrar (dll.hpp)
@@ -268,8 +287,12 @@ begin
 end;
 
 function UnrarCallback(Msg: LongWord; UserData, P1: Pointer; P2: PtrInt) : Integer; dcpcall;
+const
+  Giga = 1024 * 1024;
 var
   PasswordU: String;
+  Buttons: PPAnsiChar;
+  DictSize: UIntPtr absolute P1;
   VolumeNameA: TRarUnicodeArray;
   VolumeNameU: TRarUnicodeString;
   PasswordA: array[0..511] of AnsiChar;
@@ -329,16 +352,33 @@ begin
         StrLCopy(PRarUnicodeChar(P1), PRarUnicodeChar(WideStringToRarUnicodeString(VolumeNameW)), P2 - 1);
       end;
     end;
+  UCM_LARGEDICT:
+    begin
+      P2:= P2 div Giga;
+      DictSize:= (DictSize div Giga) + Ord((DictSize mod Giga <> 0));
+      Buttons:= ArrayStringToPPchar([rsMsgButtonExtract, rsMsgButtonCancel], 0);
+      try
+        PasswordU:= Format(rsDictNotAllowed, [DictSize, P2, DictSize]) + LineEnding;
+
+        if gStartupInfo.MsgChoiceBox(PAnsiChar(PasswordU), PAnsiChar(rsDictLargeWarning), Buttons, 0, 1) = 0 then
+          Result:= 1
+        else begin
+          Result:= -1;
+        end;
+      finally
+        FreeMem(Buttons);
+      end;
+    end;
   end;
 end;
 
-function OpenArchive(var ArchiveData: TOpenArchiveData) : TArcHandle; dcpcall;
+function OpenArchive(var ArchiveData: TOpenArchiveData) : TArcHandle; dcpcall; export;
 begin
   Result := 0;
   ArchiveData.OpenResult := E_NOT_SUPPORTED;
 end;
 
-function OpenArchiveW(var ArchiveData: tOpenArchiveDataW): TArcHandle; dcpcall;
+function OpenArchiveW(var ArchiveData: tOpenArchiveDataW): TArcHandle; dcpcall; export;
 var
   RarArcName: TRarUnicodeString;
   AHandle: TRARHandle absolute Result;
@@ -374,12 +414,12 @@ begin
   end;
 end;
 
-function ReadHeader(hArcData: TArcHandle; var HeaderData: THeaderData) : Integer; dcpcall;
+function ReadHeader(hArcData: TArcHandle; var HeaderData: THeaderData) : Integer; dcpcall; export;
 begin
   Result := E_NOT_SUPPORTED;
 end;
 
-function ReadHeaderExW(hArcData: TArcHandle; var HeaderData: THeaderDataExW) : Integer; dcpcall;
+function ReadHeaderExW(hArcData: TArcHandle; var HeaderData: THeaderDataExW) : Integer; dcpcall; export;
 var
   RarHeader: RARHeaderDataEx;
   AHandle: TRARHandle absolute hArcData;
@@ -423,17 +463,20 @@ begin
         GetSystemSpecificAttributes(RarHostSystem(HeaderData.HostOS),
                                     HeaderData.FileAttr);
     HeaderData.FileTime := GetSystemSpecificFileTime(HeaderData.FileTime);
+
+    Int64Rec(HeaderData.MfileTime).Lo:= RarHeader.MtimeLow;
+    Int64Rec(HeaderData.MfileTime).Hi:= RarHeader.MtimeHigh;
 {$POP}
     AHandle.ProcessFileNameW := HeaderData.FileName;
   end;
 end;
 
-function ProcessFile(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PAnsiChar) : Integer; dcpcall;
+function ProcessFile(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PAnsiChar) : Integer; dcpcall; export;
 begin
   Result := E_NOT_SUPPORTED;
 end;
 
-function ProcessFileW(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PWideChar) : Integer; dcpcall;
+function ProcessFileW(hArcData: TArcHandle; Operation: Integer; DestPath, DestName: PWideChar) : Integer; dcpcall; export;
 var
   pwcDestPath: PRarUnicodeChar = nil;
   pwcDestName: PRarUnicodeChar = nil;
@@ -457,7 +500,7 @@ begin
   end;
 end;
 
-function CloseArchive(hArcData: TArcHandle) : Integer;dcpcall;
+function CloseArchive(hArcData: TArcHandle) : Integer;dcpcall; export;
 var
   AHandle: TRARHandle absolute hArcData;
 begin
@@ -469,17 +512,17 @@ begin
   AHandle.Free;
 end;
 
-procedure SetChangeVolProc(hArcData: TArcHandle; pChangeVolProc: TChangeVolProc); dcpcall;
+procedure SetChangeVolProc(hArcData: TArcHandle; pChangeVolProc: TChangeVolProc); dcpcall; export;
 begin
 
 end;
 
-procedure SetProcessDataProc(hArcData : TArcHandle; pProcessDataProc : TProcessDataProc); dcpcall;
+procedure SetProcessDataProc(hArcData : TArcHandle; pProcessDataProc : TProcessDataProc); dcpcall; export;
 begin
 
 end;
 
-procedure SetChangeVolProcW(hArcData: TArcHandle; pChangeVolProc: TChangeVolProcW); dcpcall;
+procedure SetChangeVolProcW(hArcData: TArcHandle; pChangeVolProc: TChangeVolProcW); dcpcall; export;
 var
   AHandle: TRARHandle absolute hArcData;
 begin
@@ -487,7 +530,7 @@ begin
     AHandle.ChangeVolProcW := pChangeVolProc
 end;
 
-procedure SetProcessDataProcW(hArcData : TArcHandle; pProcessDataProc : TProcessDataProcW); dcpcall;
+procedure SetProcessDataProcW(hArcData : TArcHandle; pProcessDataProc : TProcessDataProcW); dcpcall; export;
 var
   AHandle: TRARHandle absolute hArcData;
 begin
@@ -498,25 +541,27 @@ begin
   end;
 end;
 
-function GetPackerCaps: Integer; dcpcall;
+function GetPackerCaps: Integer; dcpcall; export;
 begin
   Result := PK_CAPS_MULTIPLE or PK_CAPS_BY_CONTENT
             or PK_CAPS_NEW or PK_CAPS_MODIFY or PK_CAPS_DELETE
             or PK_CAPS_OPTIONS or PK_CAPS_ENCRYPT;
 end;
 
-function GetBackgroundFlags: Integer; dcpcall;
+function GetBackgroundFlags: Integer; dcpcall; export;
 begin
   Result:= BACKGROUND_UNPACK or BACKGROUND_PACK;
 end;
 
-procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall;
+procedure ExtensionInitialize(StartupInfo: PExtensionStartupInfo); dcpcall; export;
 begin
   gStartupInfo := StartupInfo^;
+  TranslateResourceStrings;
+
   if ModuleHandle = NilHandle then
   begin
-    gStartupInfo.MessageBox('Cannot load library ' + _unrar + '! Please check your installation.',
-                                    nil, MB_OK or MB_ICONERROR);
+    gStartupInfo.MessageBox(PAnsiChar(Format(rsMsgLibraryNotFound, [_unrar])),
+                            nil, MB_OK or MB_ICONERROR);
   end;
 end;
 

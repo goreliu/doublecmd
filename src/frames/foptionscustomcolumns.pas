@@ -30,9 +30,9 @@ interface
 uses
   //Lazarus, Free-Pascal, etc.
   ComCtrls, Controls, Classes, SysUtils, StdCtrls, ExtCtrls, Forms, ColorBox,
-  Buttons, Spin, Grids, Menus, Dialogs, LMessages,
+  Buttons, Spin, Grids, Menus, Dialogs, LMessages, DividerBevel,
   //DC
-  uColumns, fOptionsFrame, uColumnsFileView;
+  uColumns, KASToolPanel, fOptionsFrame, uColumnsFileView;
 
 type
 
@@ -116,7 +116,7 @@ type
     lblInactiveCursorColor: TLabel;
     lblInactiveMarkColor: TLabel;
     lblMarkColor: TLabel;
-    lblPreviewTop: TLabel;
+    lblPreviewTop: TDividerBevel;
     lblWorkingColumn: TLabel;
     miAddColumn: TMenuItem;
     pnlCommon: TPanel;
@@ -127,7 +127,7 @@ type
     pnlConfigColumns: TPanel;
     pnlGeneralColumnsViewSettings: TPanel;
     pnlLeft: TPanel;
-    pnlPreviewCont: TPanel;
+    pnlPreviewCont: TKASToolPanel;
     pnlRight: TPanel;
     sneFontSize: TSpinEdit;
     spGridArea: TSplitter;
@@ -292,7 +292,7 @@ begin
 
   //4. Load our list of columns set.
   FillFileSystemList;
-  FillColumnsList;
+  cmbFileSystemChange(cmbFileSystem);
 
   //5. Select the one we currently have in the active panel if possible. User won't be lost and it's the most pertinent thing to do.
   if frmMain.ActiveNotebook.ActiveView.ClassNameIs('TColumnsFileView') then
@@ -440,7 +440,7 @@ end;
 { TfrmOptionsCustomColumns.cbConfigColumnsChange }
 procedure TfrmOptionsCustomColumns.cbConfigColumnsChange(Sender: TObject);
 begin
-  if bColumnConfigLoaded then
+  if bColumnConfigLoaded and (cbConfigColumns.ItemIndex >= 0) then
   begin
     ColumnClass.Assign(ColSet.GetColumnSet(PtrInt(cbConfigColumns.Items.Objects[cbConfigColumns.ItemIndex])));
     LastLoadedOptionSignature := ComputeCompleteOptionsSignature;
@@ -487,6 +487,7 @@ begin
       if (SuggestedCustomColumnsName = '') or (cbConfigColumns.Items.indexof(SuggestedCustomColumnsName) <> -1) then
         SuggestedCustomColumnsName := ColumnClassForConfig.Name + '(' + GetDateTimeInStrEZSortable(now) + ')';
       ColumnClassForConfig.Name := SuggestedCustomColumnsName;
+      ColumnClassForConfig.Unique := EmptyStr;
       ColSet.Add(ColumnClassForConfig);
       FillColumnsList;
       cbConfigColumns.ItemIndex := cbConfigColumns.Items.IndexOf(ColumnClassForConfig.Name);

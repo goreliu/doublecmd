@@ -6,8 +6,9 @@ interface
 
 uses
   Classes, SysUtils, Controls, LMessages, Grids, Graphics,
-  uDisplayFile, DCXmlConfig, uTypes, uFileViewWithGrid, uFile,
-  uFileSource, uFileProperty;
+  uDisplayFile, DCXmlConfig, uTypes,
+  uFileView, uFileViewWithMainCtrl, uFileViewWithGrid,
+  uFile, uFileSource, uFileProperty;
 
 type
 
@@ -18,6 +19,7 @@ type
   TBriefDrawGrid = class(TFileViewGrid)
   protected
     FBriefView: TBriefFileView;
+    FOnDrawCell: TFileViewOnDrawCell;
   protected
     procedure UpdateView; override;
     procedure CalculateColRowCount; override;
@@ -25,6 +27,7 @@ type
     procedure DoMouseMoveScroll(X, Y: Integer);
   protected
     procedure KeyDown(var Key : Word; Shift : TShiftState); override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     function  DoMouseWheelDown(Shift: TShiftState; MousePos: TPoint): Boolean; override;
     function  DoMouseWheelUp(Shift: TShiftState; MousePos: TPoint): Boolean; override;
@@ -34,11 +37,16 @@ type
     function  CellToIndex(ACol, ARow: Integer): Integer; override;
     procedure IndexToCell(Index: Integer; out ACol, ARow: Integer); override;
     procedure DrawCell(aCol, aRow: Integer; aRect: TRect; aState: TGridDrawState); override;
+
+    property OnDrawCell: TFileViewOnDrawCell read FOnDrawCell write FOnDrawCell;
   end;
 
   { TBriefFileView }
 
   TBriefFileView = class (TFileViewWithGrid)
+  protected
+    function GetOnDrawCell: TFileViewOnDrawCell;
+    procedure SetOnDrawCell( OnDrawCell: TFileViewOnDrawCell );
   protected
     procedure CreateDefault(AOwner: TWinControl); override;
     function GetFileViewGridClass: TFileViewGridClass; override;
@@ -47,10 +55,13 @@ type
     function GetVisibleFilesIndexes: TRange; override;
     function GetIconRect(FileIndex: PtrInt): TRect; override;
     procedure MouseScrollTimer(Sender: TObject); override;
+    procedure DoFileRenamed(ADisplayFile: TDisplayFile); override;
     procedure DoFileUpdated(AFile: TDisplayFile; UpdatedProperties: TFilePropertiesTypes = []); override;
   public
     function Clone(NewParent: TWinControl): TBriefFileView; override;
+    procedure CloneTo(FileView: TFileView); override;
     procedure SaveConfiguration(AConfig: TXmlConfig; ANode: TXmlNode; ASaveHistory:boolean); override;
+    property OnDrawCell: TFileViewOnDrawCell read GetOnDrawCell write SetOnDrawCell;
   end;
 
 implementation
@@ -344,6 +355,48 @@ begin
   end;
 end;
 
+procedure TBriefDrawGrid.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+
+  procedure handleMBLeft;
+  var
+    handler: TFileSourceUIHandler;
+    params: TFileSourceUIParams;
+    index: Integer;
+  begin
+    params:= Default( TFileSourceUIParams );
+    params.sender:= FBriefView;
+    params.fs:= FBriefView.FileSource;
+    params.multiColumns:= False;
+
+    handler:= params.fs.GetUIHandler;
+    if handler = nil then
+      Exit;
+
+    params.shift:= Shift;
+    params.x:= X;
+    params.y:= Y;
+    MouseToCell( X, Y, params.col, params.row );
+    if NOT self.IsRowIndexValid(params.row) then
+      Exit;
+
+    index:= CellToIndex( params.col, params.row );
+    if index < 0 then
+      Exit;
+
+    ColRowToOffset(True, True, params.col, params.drawingRect.Left, params.drawingRect.Right );
+    ColRowToOffset(False, True, params.row, params.drawingRect.Top, params.drawingRect.Bottom );
+
+    params.displayFile:= FBriefView.FFiles[index];
+    handler.click( params );
+  end;
+
+begin
+  if Button = mbLeft then
+    handleMBLeft
+  else
+    inherited;
+end;
+
 procedure TBriefDrawGrid.MouseMove(Shift: TShiftState; X, Y: Integer);
 begin
   inherited MouseMove(Shift, X, Y);
@@ -419,6 +472,7 @@ var
   iTextTop: Integer;
   AFile: TDisplayFile;
   FileSourceDirectAccess: Boolean;
+  params: TFileSourceUIParams;
 
   //------------------------------------------------------
   //begin subprocedures
@@ -427,8 +481,8 @@ var
   procedure DrawIconCell;
     //------------------------------------------------------
     var
-      Y: Integer;
       IconID: PtrInt;
+      targetWidth: Integer;
     begin
       if (gShowIcons <> sim_none) then
       begin
@@ -438,20 +492,23 @@ var
           IconID := PixMapManager.GetDefaultIcon(AFile.FSFile);
 
         // center icon vertically
-        Y:= aRect.Top + (RowHeights[ARow] - gIconsSize) div 2;
+        params.iconRect.Left:= aRect.Left + CELL_PADDING;
+        params.iconRect.Top:= aRect.Top + (aRect.Height - gIconsSize) div 2;
+        params.iconRect.Width:= gIconsSize;
+        params.iconRect.Height:= gIconsSize;
 
-        if gShowHiddenDimmed and AFile.FSFile.IsHidden then
+        if gShowHiddenDimmed and FBriefView.FileSource.IsHiddenFile(AFile.FSFile) then
           PixMapManager.DrawBitmapAlpha(IconID,
                                         Canvas,
-                                        aRect.Left + CELL_PADDING,
-                                        Y
+                                        params.iconRect.Left,
+                                        params.iconRect.Top
                                        )
         else
           // Draw icon for a file
           PixMapManager.DrawBitmap(IconID,
                                    Canvas,
-                                   aRect.Left + CELL_PADDING,
-                                   Y
+                                   params.iconRect.Left,
+                                   params.iconRect.Top
                                    );
 
         // Draw overlay icon for a file if needed
@@ -460,19 +517,19 @@ var
           PixMapManager.DrawBitmapOverlay(AFile,
                                           FileSourceDirectAccess,
                                           Canvas,
-                                          aRect.Left + 1,
-                                          Y
+                                          params.iconRect.Left,
+                                          params.iconRect.Top
                                           );
         end;
 
       end;
       // Print filename with align
-      Y:= (DefaultColWidth - 2 - Canvas.TextWidth('I'));
-      if (gShowIcons <> sim_none) then Y:= Y - gIconsSize - 2;
+      targetWidth:= (DefaultColWidth - 2 - Canvas.TextWidth('I'));
+      if (gShowIcons <> sim_none) then targetWidth:= targetWidth - gIconsSize - 2;
       if (not gBriefViewFileExtAligned) or (AFile.FSFile.Extension = '') then
         begin
           s:= AFile.DisplayStrings[0];
-          s:= FitFileName(s, Canvas, AFile.FSFile, Y);
+          s:= FitFileName(s, Canvas, AFile.FSFile, targetWidth);
         end
       else
         begin
@@ -480,13 +537,30 @@ var
           s:= AFile.FSFile.Extension;
           Canvas.TextOut(aRect.Left + DefaultColWidth - Canvas.TextWidth(s + 'I'), iTextTop, s);
           s:= AFile.FSFile.NameNoExt;
-          s:= FitFileName(s, Canvas, AFile.FSFile, Y - Canvas.TextWidth(AFile.FSFile.Extension + 'I'));
+          s:= FitFileName(s, Canvas, AFile.FSFile, targetWidth - Canvas.TextWidth(AFile.FSFile.Extension + 'I'));
         end;
       if (gShowIcons <> sim_none) then
         Canvas.TextOut(aRect.Left + gIconsSize + 4, iTextTop, s)
       else
         Canvas.TextOut(aRect.Left + 2, iTextTop, s);
     end; //of DrawIconCell
+
+  procedure callFileSourceDrawCell;
+  var
+    handler: TFileSourceUIHandler;
+  begin
+    handler:= FBriefView.FileSource.GetUIHandler;
+    if handler = nil then
+      Exit;
+
+    handler.draw( params );
+  end;
+
+  procedure callOnDrawCell;
+  begin
+    if Assigned(OnDrawCell) and not(CsDesigning in ComponentState) then
+      OnDrawCell(FBriefView,aCol,aRow,params.drawingRect,params.focused,AFile);
+  end;
 
   //------------------------------------------------------
   //end of subprocedures
@@ -498,6 +572,15 @@ begin
     begin
       AFile:= FBriefView.FFiles[Idx];
       FileSourceDirectAccess:= fspDirectAccess in FBriefView.FileSource.Properties;
+
+      params:= Default( TFileSourceUIParams );
+      params.sender:= FBriefView;
+      params.fs:= FBriefView.FileSource;
+      params.multiColumns:= False;
+      params.col:= aCol;
+      params.row:= aRow;
+      params.displayFile:= aFile;
+
       if AFile.DisplayStrings.Count = 0 then
         FBriefView.MakeColumnsStrings(AFile);
 
@@ -506,6 +589,11 @@ begin
       iTextTop := aRect.Top + (RowHeights[aRow] - Canvas.TextHeight('Wg')) div 2;
 
       DrawIconCell;
+
+      params.drawingRect:= aRect;
+      params.focused:= (gdSelected in aState) and FBriefView.Active;
+      callFileSourceDrawCell;
+      callOnDrawCell;
     end
   else
     begin
@@ -519,6 +607,16 @@ begin
 end;
 
 { TBriefFileView }
+
+function TBriefFileView.GetOnDrawCell: TFileViewOnDrawCell;
+begin
+  Result:= TBriefDrawGrid(dgPanel).OnDrawCell;
+end;
+
+procedure TBriefFileView.SetOnDrawCell(OnDrawCell: TFileViewOnDrawCell);
+begin
+  TBriefDrawGrid(dgPanel).OnDrawCell:= OnDrawCell;
+end;
 
 procedure TBriefFileView.CreateDefault(AOwner: TWinControl);
 begin
@@ -612,6 +710,11 @@ begin
   end;
 end;
 
+procedure TBriefFileView.DoFileRenamed(ADisplayFile: TDisplayFile);
+begin
+  ADisplayFile.Tag:= -1;
+end;
+
 procedure TBriefFileView.DoFileUpdated(AFile: TDisplayFile;
   UpdatedProperties: TFilePropertiesTypes);
 begin
@@ -622,6 +725,13 @@ end;
 function TBriefFileView.Clone(NewParent: TWinControl): TBriefFileView;
 begin
   Result := TBriefFileView.Create(NewParent, Self);
+end;
+
+procedure TBriefFileView.CloneTo(FileView: TFileView);
+begin
+  inherited CloneTo(FileView);
+  if FileView is TBriefFileView then
+    TBriefFileView(FileView).OnDrawCell:= self.OnDrawCell;
 end;
 
 procedure TBriefFileView.SaveConfiguration(AConfig: TXmlConfig; ANode: TXmlNode; ASaveHistory:boolean);

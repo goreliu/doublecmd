@@ -7,7 +7,8 @@ interface
 uses
   Classes, SysUtils, Controls, Grids, Graphics, StdCtrls, LCLVersion,
   uDisplayFile, DCXmlConfig, uFileSorting, uFileProperty,
-  uFileViewWithMainCtrl, uFile, uFileViewHeader, uFileView, uFileSource;
+  uFileViewWithMainCtrl, uFile, uFileViewHeader, uFileView, uFileSource,
+  uSmoothScrollingGrid;
 
 type
 
@@ -15,7 +16,7 @@ type
 
   { TFileViewGrid }
 
-  TFileViewGrid = class(TDrawGrid)
+  TFileViewGrid = class(TSmoothScrollingGrid)
   protected
     FLastMouseMoveTime: QWord;
     FLastMouseScrollTime: QWord;
@@ -113,10 +114,23 @@ type
 implementation
 
 uses
-  LCLIntf, LCLType, LCLProc, LazUTF8, Math, LMessages,
+  Types, LCLIntf, LCLType, LCLProc, LazUTF8, Math, LMessages,
   DCStrUtils, uGlobs, uPixmapManager, uKeyboard,
   uDCUtils, fMain,
   uFileFunctions;
+
+{
+  Workaround
+  https://gitlab.com/freepascal.org/lazarus/lazarus/-/issues/40934
+}
+function TextFitInfo(ACanvas: TCanvas; const Text: String; MaxWidth: Integer): Integer;
+var
+  lSize: TSize;
+begin
+  Result:= 0;
+  LCLIntf.GetTextExtentExPoint(ACanvas.Handle, PChar(Text),
+                               Length(Text), MaxWidth, @Result, nil, lSize);
+end;
 
 function FitFileName(const AFileName: String; ACanvas: TCanvas; AFile: TFile; ATargetWidth: Integer): String;
 var
@@ -125,7 +139,7 @@ var
   AMaxWidth: Integer;
 begin
   Index:= UTF8Length(AFileName);
-  AMaxWidth:= ACanvas.TextFitInfo(AFileName, ATargetWidth);
+  AMaxWidth:= TextFitInfo(ACanvas, AFileName, ATargetWidth);
 
   if Index <= AMaxWidth then
     Result:= AFileName
@@ -136,7 +150,7 @@ begin
       else begin
         S:= '..';
       end;
-      Index:= ACanvas.TextFitInfo(AFileName, ATargetWidth - ACanvas.TextWidth(S));
+      Index:= TextFitInfo(ACanvas, AFileName, ATargetWidth - ACanvas.TextWidth(S));
       Result:= UTF8Copy(AFileName, 1, Index) + S;
   end;
 end;
@@ -150,13 +164,13 @@ var
   AMaxWidth: Integer;
 begin
   Index:= UTF8Length(sStringToFit);
-  AMaxWidth:= ACanvas.TextFitInfo(sStringToFit, ATargetWidth);
+  AMaxWidth:= TextFitInfo(ACanvas, sStringToFit, ATargetWidth);
 
   if Index <= AMaxWidth then
     Result:= sStringToFit
   else
     begin
-      Index:= ACanvas.TextFitInfo(sStringToFit, ATargetWidth - ACanvas.TextWidth(ELLIPSIS));
+      Index:= TextFitInfo(ACanvas, sStringToFit, ATargetWidth - ACanvas.TextWidth(ELLIPSIS));
       Result:= UTF8Copy(sStringToFit, 1, Index) + ELLIPSIS;
     end;
 end;
@@ -268,11 +282,16 @@ begin
 
   if MouseOnGrid(X, Y) then
     inherited MouseDown(Button, Shift, X, Y)
-  else
+  else begin
+    if Assigned(OnMouseDown) then
     begin
-      if Assigned(OnMouseDown) then
-        OnMouseDown(Self, Button, Shift, X, Y);
+      OnMouseDown(Self, Button, Shift, X, Y);
     end;
+    if not Focused then
+    begin
+      if CanSetFocus then SetFocus;
+    end;
+  end;
 end;
 
 procedure TFileViewGrid.MouseUp(Button: TMouseButton; Shift: TShiftState; X,
@@ -505,9 +524,7 @@ begin
   DoubleBuffered := True;
   Align := alClient;
   MouseWheelOption:= mwGrid;
-{$if lcl_fullversion >= 1080004}
   AllowOutboundEvents := False;
-{$endif}
   Options := [goTabs, goThumbTracking];
   TabStop := False;
 
@@ -560,12 +577,14 @@ var
 begin
   ScrollTo := IsActiveFileVisible;
 
-  // Update grid col and row count
-  dgPanel.SetColRowCount(FFiles.Count);
-
+  // Row count updates and Content updates should be grouped in one transaction
+  // otherwise, Grids may have subtle synchronization issues.
+  dgPanel.BeginUpdate;
+  dgPanel.SetColRowCount(FFiles.Count); // Update grid col and row count
   dgPanel.CalculateColRowCount;
   dgPanel.CalculateColumnWidth;
   SetFilesDisplayItems;
+  dgPanel.EndUpdate;
 
   if SetActiveFileNow(RequestedActiveFile, True, FLastTopRowIndex) then
     RequestedActiveFile := ''
@@ -600,6 +619,9 @@ begin
                            fpAttributes,      // For distinguishing directories
                            fpLink,            // For distinguishing directories (link to dir) and link icons
                            fpModificationTime // For selecting/coloring files (by SearchTemplate)
+                           {$IFDEF DARWIN}
+                           ,fpMacOSSpecific   // macOS
+                           {$ENDIF}
                           ];
 end;
 
@@ -642,6 +664,8 @@ end;
 
 function TFileViewWithGrid.GetActiveFileIndex: PtrInt;
 begin
+  if dgPanel=nil then
+    Exit;
   Result := dgPanel.CellToIndex(dgPanel.Col, dgPanel.Row);
 end;
 

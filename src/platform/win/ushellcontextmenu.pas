@@ -80,7 +80,7 @@ uses
   uShellExecute, fMain, uDCUtils, uFormCommands, DCOSUtils, uOSUtils, uShowMsg,
   uExts, uFileSystemFileSource, DCConvertEncoding, LazUTF8, uOSForms, uGraphics,
   Forms, DCWindows, DCStrUtils, Clipbrd, uFileSystemWatcher, uShellFolder,
-  uOleDragDrop;
+  uOleDragDrop, uGdiPlus;
 
 const
   USER_CMD_ID = $1000;
@@ -97,7 +97,7 @@ function MyWndProc(hWnd: HWND; uiMsg: UINT; wParam: WPARAM; lParam: LPARAM): LRE
 begin
   case uiMsg of
     WM_MENUSELECT:
-      Result := DefWindowProc(hWnd, uiMsg, wParam, lParam);
+      Result := DefWindowProcW(hWnd, uiMsg, wParam, lParam);
     (* For working with submenu of context menu *)
     WM_INITMENUPOPUP,
     WM_DRAWITEM,
@@ -117,6 +117,37 @@ begin
   end; // case
 end;
 
+function GetDriveContextMenu(Handle: HWND; Files: TFiles): IContextMenu;
+var
+  Path: String;
+  pchEaten: ULONG;
+  S: UnicodeString;
+  dwAttributes: ULONG = 0;
+  PathPIDL: PItemIDList = nil;
+  Folder, DesktopFolder: IShellFolder;
+begin
+  OleCheckUTF8(SHGetDesktopFolder(DesktopFolder));
+  OleCheckUTF8(SHGetFolderLocation(Handle, CSIDL_DRIVES, 0, 0, PathPIDL));
+  try
+    if Files[0].Attributes <> FILE_ATTRIBUTE_DEVICE then
+      Path:= Files[0].FullPath
+    else begin
+      Path:= GetDisplayName(DesktopFolder, PathPIDL, SHGDN_FORPARSING);
+      Path:= Copy(Files[0].LinkProperty.LinkTo, Length(Path) + 2, MaxInt);
+    end;
+    OleCheckUTF8(DeskTopFolder.BindToObject(PathPIDL, nil, IID_IShellFolder, Folder));
+  finally
+    CoTaskMemFree(PathPIDL);
+  end;
+  S := CeUtf8ToUtf16(Path);
+  OleCheckUTF8(Folder.ParseDisplayName(Handle, nil, PWideChar(S), pchEaten, PathPIDL, dwAttributes));
+  try
+    OleCheckUTF8(Folder.GetUIObjectOf(Handle, 1, PathPIDL, IID_IContextMenu, nil, Result));
+  finally
+    CoTaskMemFree(PathPIDL);
+  end;
+end;
+
 function GetRecycleBinContextMenu(Handle: HWND): IContextMenu;
 var
   PathPIDL: PItemIDList = nil;
@@ -124,7 +155,11 @@ var
 begin
   OleCheckUTF8(SHGetDesktopFolder(DesktopFolder));
   OleCheckUTF8(SHGetFolderLocation(Handle, CSIDL_BITBUCKET, 0, 0, PathPIDL));
-  DesktopFolder.GetUIObjectOf(Handle, 1, PathPIDL, IID_IContextMenu, nil, Result);
+  try
+    OleCheckUTF8(DesktopFolder.GetUIObjectOf(Handle, 1, PathPIDL, IID_IContextMenu, nil, Result));
+  finally
+    CoTaskMemFree(PathPIDL);
+  end;
 end;
 
 function GetForegroundContextMenu(Handle: HWND; Files: TFiles): IContextMenu;
@@ -244,6 +279,8 @@ function GetShellContextMenu(Handle: HWND; Files: TFiles; Background: boolean): 
 begin
   if Files = nil then
     Result := GetRecycleBinContextMenu(Handle)
+  else if (Files.Count = 1) and (Files[0].Attributes and FILE_ATTRIBUTE_DEVICE <> 0) then
+    Result := GetDriveContextMenu(Handle, Files)
   else if Background then
     Result := GetBackgroundContextMenu(Handle, Files)
   else
@@ -316,7 +353,7 @@ var
   Always_Expanded_Action_Count: integer = 0;
   bSeparatorAlreadyInserted: boolean;
 
-  function GetMeTheBitmapForThis(ImageRequiredIndex: PtrInt): TBitmap;
+  function CreateBitmap: TBitmap;
   begin
     Result := Graphics.TBitmap.Create;
     Result.SetSize(gIconsSize, gIconsSize);
@@ -324,8 +361,35 @@ var
     Result.Canvas.Brush.Color := clMenu;
     Result.Canvas.Brush.Style := bsSolid;
     Result.Canvas.FillRect(0, 0, gIconsSize, gIconsSize);
-    PixMapManager.DrawBitmap(ImageRequiredIndex, Result.Canvas, 0, 0);
+  end;
 
+  function GetMyIcon: TBitmap;
+  var
+    AIcon: TIcon;
+  begin
+    Result:= CreateBitmap;
+    AIcon:= TIcon.Create;
+    try
+      AIcon.LoadFromResourceName(MainInstance, 'MAINICON');
+      AIcon.Current:= AIcon.GetBestIndexForSize(TSize.Create(gIconsSize, gIconsSize));
+
+      if (AIcon.Width = gIconsSize) and (AIcon.Height = gIconsSize) then
+        DrawIcon(Result.Canvas.Handle, 0, 0, AIcon.Handle)
+      else if IsGdiPlusLoaded then
+        GdiPlusStretchDraw(AIcon.Handle, Result.Canvas.Handle, 0, 0, gIconsSize, gIconsSize)
+      else begin
+        DrawIconEx(Result.Canvas.Handle, 0, 0, AIcon.Handle, gIconsSize, gIconsSize, 0, 0, DI_NORMAL);
+      end;
+    finally
+      AIcon.Free;
+    end;
+    if Result.PixelFormat <> pf32bit then BitmapConvert(Result);
+  end;
+
+  function GetMeTheBitmapForThis(ImageRequiredIndex: PtrInt): TBitmap;
+  begin
+    Result:= CreateBitmap;
+    PixMapManager.DrawBitmap(ImageRequiredIndex, Result.Canvas, 0, 0);
     if Result.PixelFormat <> pf32bit then BitmapConvert(Result);
   end;
 
@@ -399,7 +463,7 @@ begin
 
     // Let's prepare our icon for extended menu if not already prepaed during the session.
     if ContextMenuDCIcon = nil then
-      ContextMenuDCIcon := GetMeTheBitmapForThis(gFiOwnDCIcon);
+      ContextMenuDCIcon := GetMyIcon;
     if ContextMenucm_FileAssoc = nil then
       ContextMenucm_FileAssoc := GetMeTheBitmapForThis(PixMapManager.GetIconByName('cm_fileassoc'));
     if ContextMenucm_RunTerm = nil then
@@ -541,13 +605,14 @@ begin
   FParent:= GetControlHandle(Parent);
   // Replace window procedure
 {$PUSH}{$HINTS OFF}
-  OldWProc := WNDPROC(SetWindowLongPtr(FParent, GWL_WNDPROC, LONG_PTR(@MyWndProc)));
+  OldWProc := WNDPROC(SetWindowLongPtrW(FParent, GWL_WNDPROC, LONG_PTR(@MyWndProc)));
 {$POP}
   FFiles := Files;
   FBackground := Background;
   FShellMenu := 0;
   FUserWishForContextMenu := UserWishForContextMenu;
-  if Assigned(Files) then begin
+  if Assigned(Files) and (Files.Count > 0) and (Files[0].Attributes <> FILE_ATTRIBUTE_DEVICE) then
+  begin
     UFlags := UFlags or CMF_CANRENAME;
   end;
   // Add extended verbs if shift key is down
@@ -580,7 +645,7 @@ destructor TShellContextMenu.Destroy;
 begin
   // Restore window procedure
   {$PUSH}{$HINTS OFF}
-  SetWindowLongPtr(FParent, GWL_WNDPROC, LONG_PTR(@OldWProc));
+  SetWindowLongPtrW(FParent, GWL_WNDPROC, LONG_PTR(@OldWProc));
   {$POP}
   // Free global variables
   ShellMenu2 := nil;
@@ -623,6 +688,8 @@ begin
             aFile := FFiles[0];
             if FBackground then // Add "Background" context menu specific items
             begin
+              SetMenuDefaultItem(FShellMenu, UINT(-1), 0);
+
               InnerExtActionList := TExtActionList.Create;
 
               // Add commands to root of context menu
@@ -707,20 +774,23 @@ begin
 
           if SameText(sVerb, sCmdVerbRename) then
           begin
-            if FFiles.Count = 1 then
-              with FFiles[0] do
+            if (FFiles.Count = 1) then
+            begin
+              // Change drive label
+              if (FFiles[0].Attributes and FILE_ATTRIBUTE_DEVICE <> 0) then
               begin
-                if not SameText(FullPath, ExtractFileDrive(FullPath) + PathDelim) then
-                  frmMain.actRenameOnly.Execute
-                else  // change drive label
-                begin
-                  sVolumeLabel := mbGetVolumeLabel(FullPath, True);
-                  if InputQuery(rsMsgSetVolumeLabel, rsMsgVolumeLabel, sVolumeLabel) then
-                    mbSetVolumeLabel(FullPath, sVolumeLabel);
-                end;
+                aFile := FFiles[0];
+                sVolumeLabel := mbGetVolumeLabel(aFile.FullPath, True);
+                if InputQuery(rsMsgSetVolumeLabel, rsMsgVolumeLabel, sVolumeLabel) then
+                  mbSetVolumeLabel(aFile.FullPath, sVolumeLabel);
               end
-            else
+              else begin
+                frmMain.actRenameOnly.Execute;
+              end;
+            end
+            else begin
               frmMain.actRename.Execute;
+            end;
             bHandled := True;
           end
           else if SameText(sVerb, sCmdVerbCut) then

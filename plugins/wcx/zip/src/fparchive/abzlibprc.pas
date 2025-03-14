@@ -5,7 +5,31 @@ unit AbZlibPrc;
 interface
 
 uses
-  Classes, SysUtils, ZStream, AbDfBase;
+  Classes, SysUtils, ZStream;
+
+type
+  TAbProgressStep = procedure (aPercentDone: Integer) of object;
+
+  TCompressionLevel =
+  (
+    clNone      = 0,
+    clSuperFast = 1,
+    clFast      = 3,
+    clNormal    = 6,
+    clMaximum   = 9
+  );
+
+  { TAbDeflateHelper }
+
+  TAbDeflateHelper = class
+  public
+    NormalSize: Int64;
+    StreamSize: Int64;
+    PartialSize: Int64;
+    InflateChecksum: Boolean;
+    OnProgressStep: TAbProgressStep;
+    CompressionLevel: TCompressionLevel;
+  end;
 
 type
 
@@ -19,6 +43,8 @@ type
   public
     constructor Create(ALevel: Integer; ADest: TStream);
     function Write(const Buffer; Count: Longint): Longint; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+    property Hash: UInt32 read FHash;
   end;
 
   { TInflateStream }
@@ -26,7 +52,9 @@ type
   TInflateStream = class(TDecompressionStream)
   private
     FHash: UInt32;
+    FChecksum: Boolean;
   public
+    constructor Create(ASource: TStream; AChecksum: Boolean);
     function CopyInto(ATarget: TStream; ACount: Int64): Int64;
     function Read(var Buffer; Count: LongInt): LongInt; override;
   end;
@@ -48,13 +76,7 @@ var
   ALevel: Integer;
   ADeflateStream: TDeflateStream;
 begin
-  case aHelper.PKZipOption of
-    'n': ALevel:= 6;
-    'x': ALevel:= 9;
-    'f': ALevel:= 3;
-    's': ALevel:= 1;
-    else ALevel:= Z_DEFAULT_COMPRESSION;
-  end;
+  ALevel:= LongInt(aHelper.CompressionLevel);
 
   { if the helper's stream size <= 0, calculate
     the stream size from the stream itself }
@@ -67,10 +89,9 @@ begin
     { attach progress notification method }
     ADeflateStream.FOnProgressStep:= aHelper.OnProgressStep;
     ADeflateStream.CopyFrom(aSource, aHelper.StreamSize);
-    { save the uncompressed and compressed sizes }
+    { save the uncompressed size }
     aHelper.NormalSize:= ADeflateStream.raw_written;
-    aHelper.CompressedSize:= ADeflateStream.compressed_written;
-    { provide encryption check value }
+    { provide checksum value }
     Result := LongInt(ADeflateStream.FHash);
   finally
     ADeflateStream.Free;
@@ -83,7 +104,7 @@ var
   ACount: Int64;
   AInflateStream: TInflateStream;
 begin
-  AInflateStream:= TInflateStream.Create(aSource, True);
+  AInflateStream:= TInflateStream.Create(aSource, aHelper.InflateChecksum);
   try
     if aHelper.PartialSize > 0 then
     begin
@@ -94,7 +115,6 @@ begin
       ACount:= aHelper.NormalSize;
       aHelper.NormalSize:= aDest.CopyFrom(AInflateStream, ACount);
     end;
-    aHelper.CompressedSize:= AInflateStream.compressed_read;
     Result:= LongInt(AInflateStream.FHash);
   finally
     AInflateStream.Free;
@@ -102,6 +122,12 @@ begin
 end;
 
 { TInflateStream }
+
+constructor TInflateStream.Create(ASource: TStream; AChecksum: Boolean);
+begin
+  FChecksum:= AChecksum;
+  inherited Create(ASource, True);
+end;
 
 function TInflateStream.CopyInto(ATarget: TStream; ACount: Int64): Int64;
 var
@@ -129,7 +155,10 @@ end;
 function TInflateStream.Read(var Buffer; Count: LongInt): LongInt;
 begin
   Result:= inherited Read(Buffer, Count);
-  FHash:= crc32_16bytes(@Buffer, Result, FHash);
+  if FChecksum then
+  begin
+    FHash:= crc32_16bytes(@Buffer, Result, FHash);
+  end;
   if (Result < Count) and (Fstream.avail_in > 0) then
   begin
     FSource.Seek(-Fstream.avail_in, soCurrent);
@@ -165,6 +194,15 @@ begin
   if Assigned(FOnProgressStep) then
   begin
     FOnProgressStep(raw_written * 100 div FSize);
+  end;
+end;
+
+function TDeflateStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+begin
+  if (Offset = 0) and (Origin = soCurrent) then
+    Result:= raw_written
+  else begin
+    Result:= inherited Seek(Offset, Origin);
   end;
 end;
 

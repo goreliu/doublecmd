@@ -35,7 +35,10 @@ procedure ChooseSymbolicLink(aFileView: TFileView; aFile: TFile);
 procedure SetFileSystemPath(aFileView: TFileView; aPath: String);
 
 function RenameFile(aFileSource: IFileSource; const aFile: TFile;
-                    const NewFileName: String; Interactive: Boolean): TSetFilePropertyResult;
+                    const NewFileName: String; Interactive: Boolean; Reload: Boolean): TSetFilePropertyResult;
+
+
+function isCompatibleFileSourceForCopyOperation( fs1: IFileSource; fs2: IFileSource ): Boolean;
 
 function GetCopyOperationType(SourceFileSource, TargetFileSource: IFileSource;
                               out OperationType: TFileSourceOperationType): Boolean;
@@ -45,6 +48,7 @@ implementation
 uses
   LCLProc, fFileExecuteYourSelf, uGlobs, uShellExecute, uFindEx, uDebug,
   uOSUtils, uShowMsg, uLng, uVfsModule, DCOSUtils, DCStrUtils,
+  uFileSourceManager,
   uFileSourceOperation,
   uFileSourceExecuteOperation,
   uVfsFileSource,
@@ -54,11 +58,12 @@ uses
   uArchiveFileSourceUtil,
   uFileSourceOperationMessageBoxesUI,
   uFileProperty, URIParser,
-  WcxPlugin, uWcxModule, uHash;
+  WcxPlugin, uWcxModule, uHash, uSuperUser;
 
 procedure ChooseFile(aFileView: TFileView; aFileSource: IFileSource;
   aFile: TFile);
 var
+  Index, PathIndex: Integer;
   sCmd, sParams, sStartPath: String;
   Operation: TFileSourceExecuteOperation = nil;
   aFileCopy: TFile = nil;
@@ -134,7 +139,9 @@ begin
               with aFileView do
               begin
                 // If path is URI
-                if Pos('://', Operation.ResultString) > 0 then
+                Index:= Pos('://', Operation.ResultString);
+                PathIndex:= Pos(PathDelim, Operation.ResultString);
+                if (Index > 0) and ((PathIndex > Index) or (PathIndex = 0)) then
                   ChooseFileSource(aFileView, Operation.ResultString)
                 else if (FileSource.IsClass(TFileSystemFileSource)) or
                         (mbSetCurrentDir(ExcludeTrailingPathDelimiter(Operation.ResultString)) = False) then
@@ -303,8 +310,9 @@ end;
 
 procedure ChooseSymbolicLink(aFileView: TFileView; aFile: TFile);
 var
-  SearchRec: TSearchRecEx;
   sPath: String;
+  LastError: Integer;
+  SearchRec: TSearchRecEx;
 begin
   if not aFileView.FileSource.IsClass(TFileSystemFileSource) then
   begin
@@ -314,19 +322,23 @@ begin
 
   sPath:= aFileView.CurrentPath + IncludeTrailingPathDelimiter(aFile.Name);
   try
-    if FindFirstEx(sPath + AllFilesMask, 0, SearchRec) = 0 then
+    LastError:= FindFirstEx(sPath + AllFilesMask, 0, SearchRec);
+    if (LastError = 0) then
       begin
         with aFileView do
         CurrentPath := CurrentPath + IncludeTrailingPathDelimiter(aFile.Name);
       end
-    else
+    else if AccessDenied(LastError) then
       begin
         sPath:= ReadSymLink(aFile.FullPath);
         if sPath <> EmptyStr then
           aFileView.CurrentPath := IncludeTrailingPathDelimiter(GetAbsoluteFileName(aFileView.CurrentPath, sPath))
         else
           msgError(Format(rsMsgChDirFailed, [aFile.FullPath]));
-      end;
+      end
+    else begin
+      aFileView.ChangePathToChild(aFile);
+    end;
   finally
     FindCloseEx(SearchRec);
   end;
@@ -344,7 +356,7 @@ begin
 end;
 
 function RenameFile(aFileSource: IFileSource; const aFile: TFile;
-  const NewFileName: String; Interactive: Boolean): TSetFilePropertyResult;
+  const NewFileName: String; Interactive: Boolean; Reload: Boolean): TSetFilePropertyResult;
 var
   aFiles: TFiles = nil;
   Operation: TFileSourceSetFilePropertyOperation = nil;
@@ -367,6 +379,7 @@ begin
 
       if Assigned(Operation) then
       begin
+        Operation.Reload:= Reload;
         // Only if the operation can change file name.
         if fpName in Operation.SupportedProperties then
         begin
@@ -393,6 +406,14 @@ begin
       FreeAndNil(aFiles);
     end;
   end;
+end;
+
+function isCompatibleFileSourceForCopyOperation(fs1: IFileSource; fs2: IFileSource): Boolean;
+begin
+  Result:= (fsoCopy in fs1.GetOperationsTypes) and
+           (fsoCopy in fs2.GetOperationsTypes) and
+           fs1.Equals(fs1) and
+           SameText(fs1.GetCurrentAddress, fs2.GetCurrentAddress);
 end;
 
 function GetCopyOperationType(SourceFileSource, TargetFileSource: IFileSource;

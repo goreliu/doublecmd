@@ -7,7 +7,9 @@ interface
 uses
   Classes, SysUtils,
   uFile,
+  uFileSource, uFileSourceManager,
   uMultiListFileSource,
+  uFileSourceOperationTypes,
   uFileSourceOperation,
   uFileSourceProperty;
 
@@ -25,6 +27,7 @@ type
 
   TSearchResultFileSource = class(TMultiListFileSource, ISearchResultFileSource)
   public
+    function GetProcessor: TFileSourceProcessor; override;
 
     function GetRootDir(sPath : String): String; override;
     function GetProperties: TFileSourceProperties; override;
@@ -41,6 +44,45 @@ implementation
 
 uses
   uFileSystemFileSource, uSearchResultListOperation, uLng;
+
+type
+
+  { TSearchResultFileSourceProcessor }
+
+  TSearchResultFileSourceProcessor = class( TDefaultFileSourceProcessor )
+  private
+    procedure consultMoveOperation( var params: TFileSourceConsultParams );
+  public
+    procedure consultOperation( var params: TFileSourceConsultParams ); override;
+  end;
+
+var
+  searchResultFileSourceProcessor: TSearchResultFileSourceProcessor;
+
+procedure TSearchResultFileSourceProcessor.consultMoveOperation( var params: TFileSourceConsultParams);
+var
+  searchResultFS: ISearchResultFileSource;
+begin
+  if params.phase<>TFileSourceConsultPhase.source then
+    Exit;
+
+  searchResultFS:= params.currentFS as ISearchResultFileSource;
+  params.sourceFS:= searchResultFS.FileSource;
+end;
+
+procedure TSearchResultFileSourceProcessor.consultOperation( var params: TFileSourceConsultParams);
+begin
+  case params.operationType of
+    fsoMove:
+      self.consultMoveOperation( params );
+  end;
+  Inherited;
+end;
+
+function TSearchResultFileSource.GetProcessor: TFileSourceProcessor;
+begin
+  Result:= searchResultFileSourceProcessor;
+end;
 
 function TSearchResultFileSource.GetRootDir(sPath: String): String;
 begin
@@ -76,6 +118,12 @@ begin
   else
     Result:= True;
 end;
+
+initialization
+  searchResultFileSourceProcessor:= TSearchResultFileSourceProcessor.Create;
+
+finalization
+  FreeAndNil( searchResultFileSourceProcessor );
 
 end.
 

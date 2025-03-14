@@ -53,12 +53,13 @@ object frmEditor: TfrmEditor
   OnCreate = FormCreate
   SessionProperties = 'Height;Width;WindowState;Left;Top'
   ShowInTaskBar = stAlways
-  LCLVersion = '2.2.3.0'
+  LCLVersion = '3.8.0.0'
   object StatusBar: TStatusBar
     Left = 0
     Height = 23
     Top = 437
     Width = 640
+    AutoHint = True
     Panels = <    
       item
         Width = 50
@@ -70,12 +71,21 @@ object frmEditor: TfrmEditor
         Width = 96
       end    
       item
-        Width = 50
+        Width = 64
+      end    
+      item
+        Width = 64
+      end    
+      item
+        Width = 64
       end    
       item
         Width = 128
       end>
+    ParentShowHint = False
     SimplePanel = False
+    ShowHint = True
+    OnMouseMove = StatusBarMouseMove
   end
   inline Editor: TSynEdit
     Left = 0
@@ -589,7 +599,7 @@ object frmEditor: TfrmEditor
         Width = 13
         MouseActions = <>
         MarkupInfo.Background = clBtnFace
-        MarkupInfo.Foreground = clNone
+        MarkupInfo.Foreground = clBtnText
         DigitCount = 2
         ShowOnlyLineNumbersMultiplesOf = 1
         ZeroStart = False
@@ -820,6 +830,9 @@ object frmEditor: TfrmEditor
       object miGotoLine: TMenuItem
         Action = actEditGotoLine
       end
+      object miTimeDate: TMenuItem
+        Action = actEditTimeDate
+      end
       object N5: TMenuItem
         Caption = '-'
       end
@@ -915,13 +928,6 @@ object frmEditor: TfrmEditor
       HelpType = htKeyword
       Hint = 'Exit'
       ImageIndex = 12
-      OnExecute = actExecute
-    end
-    object actSaveAll: TAction
-      Category = 'File'
-      Caption = 'Sa&ve All'
-      HelpType = htKeyword
-      Hint = 'Save All'
       OnExecute = actExecute
     end
     object actEditFind: TAction
@@ -1037,6 +1043,11 @@ object frmEditor: TfrmEditor
       Category = 'Edit'
       Caption = 'Goto Line...'
       ImageIndex = 16
+      OnExecute = actExecute
+    end
+    object actEditTimeDate: TAction
+      Category = 'Edit'
+      Caption = 'Time/Date'
       OnExecute = actExecute
     end
     object actEditFindPrevious: TAction

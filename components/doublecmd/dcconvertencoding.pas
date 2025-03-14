@@ -61,18 +61,21 @@ function CeTryDecode(const aValue: AnsiString; aCodePage: Cardinal;
 {$ELSEIF DEFINED(UNIX)}
 var
   SystemEncodingUtf8: Boolean = False;
-  SystemLanguage, SystemEncoding, SystemLocale: String;
+  SystemEncoding, SystemLocale: String;
 {$ENDIF}
+
+var
+  SystemLanguage: String;
 
 implementation
 
 uses
   {$IF DEFINED(UNIX)}
-  iconvenc_dyn, LazUTF8
+  LazUTF8
     {$IF DEFINED(DARWIN)}
-    , MacOSAll, CocoaAll
+    , dc_iconvenc_dyn, MacOSAll, CocoaAll, StrUtils
     {$ELSE}
-    , UnixCP
+    , iconvenc_dyn, UnixCP
     {$ENDIF}
   {$ELSEIF DEFINED(MSWINDOWS)}
   Windows
@@ -324,6 +327,8 @@ begin
 end;
 
 procedure Initialize;
+var
+  Buffer: array[1..4] of AnsiChar;
 begin
   CeOemToSys:=   @OEM2Ansi;
   CeSysToOem:=   @Ansi2OEM;
@@ -335,6 +340,9 @@ begin
   CeUtf8ToAnsi:= @UTF82Sys;
   CeSysToUtf8:=  @Sys2UTF8;
   CeUtf8ToSys:=  @UTF82Sys;
+
+  if GetLocaleInfo(GetUserDefaultLCID, LOCALE_SABBREVLANGNAME, @Buffer[1], 4) > 0 then
+    SystemLanguage := LowerCase(Copy(Buffer, 1, 2));
 end;
 
 {$ELSEIF DEFINED(UNIX)}
@@ -379,6 +387,7 @@ begin
   begin
     // Crop to terminating zero
     SystemLanguage:= PAnsiChar(SystemLanguage);
+    SystemLanguage:= Copy2Symb(SystemLanguage, '-');
     // Get system country
     CurrentLocale:= NSLocale.currentLocale();
     Country:= NSString(CurrentLocale.objectForKey(NSLocaleCountryCode)).UTF8String;
@@ -398,7 +407,7 @@ begin
   Lang:= SysUtils.GetEnvironmentVariable('LC_ALL');
   if Length(Lang) = 0 then
     begin
-      Lang:= SysUtils.GetEnvironmentVariable('LC_MESSAGES');
+      Lang:= SysUtils.GetEnvironmentVariable('LC_CTYPE');
       if Length(Lang) = 0 then
       begin
         Lang:= SysUtils.GetEnvironmentVariable('LANG');

@@ -60,6 +60,13 @@
 
 #define DM_USER 0x4000 /* Starting value for user defined messages */
 
+/* Set/Get Property */
+#define TK_STRING  1
+#define TK_FLOAT   2
+#define TK_INT32   3
+#define TK_INT64   4
+#define TK_BOOL    5
+
 // MessageBox: To indicate the buttons displayed in the message box,
 // specify one of the following values.
 #define MB_OK               0x00000000
@@ -91,6 +98,10 @@
 #define ID_NO     7
 #define ID_CLOSE  8
 #define ID_HELP   9
+// DialogBoxParam: Flags
+#define DB_LFM      0    // Data contains a form in the LFM format
+#define DB_LRS      1    // Data contains a form in the LRS format
+#define DB_FILENAME 2    // Data contains a form file name (*.lfm)
 
 /* other */
 #define EXT_MAX_PATH  16384 /* 16 Kb */
@@ -100,10 +111,15 @@ typedef intptr_t (DCPCALL *tDlgProc)(uintptr_t pDlg, char* DlgItemName, intptr_t
 /* Definition of callback functions called by the DLL */
 typedef BOOL (DCPCALL *tInputBoxProc)(char* Caption, char* Prompt, BOOL MaskInput, char* Value, int ValueMaxLen);
 typedef int (DCPCALL *tMessageBoxProc)(char* Text, char* Caption, long Flags);
+typedef int (DCPCALL *tMsgChoiceBoxProc)(char* Text, char* Caption, char** Buttons, int BtnDef, int BtnEsc);
 typedef BOOL (DCPCALL *tDialogBoxLFMProc)(intptr_t LFMData, unsigned long DataSize, tDlgProc DlgProc);
 typedef BOOL (DCPCALL *tDialogBoxLRSProc)(intptr_t LRSData, unsigned long DataSize, tDlgProc DlgProc);
 typedef BOOL (DCPCALL *tDialogBoxLFMFileProc)(char* LFMFileName, tDlgProc DlgProc);
+typedef uintptr_t (DCPCALL *tDialogBoxParamProc)(void* Data, uint32_t DataSize, tDlgProc DlgProc, uint32_t Flags, void *UserData, void* Reserved);
 typedef int (DCPCALL *tTranslateStringProc)(void *Translation, const char *Identifier, const char *Original, char *Output, int OutLen);
+typedef intptr_t (DCPCALL *tSetProperty)(uintptr_t pDlg, const char* DlgItemName, const char *PropName, void *PropValue, int PropType);
+typedef intptr_t (DCPCALL *tGetProperty)(uintptr_t pDlg, const char* DlgItemName, const char *PropName, void *PropValue, int PropType, int PropSize);
+typedef uintptr_t (DCPCALL *tCreateComponent)(uintptr_t pDlg, const char* Parent, const char* DlgItemName, const char* DlgItemClass, void* Reserved);
 
 #pragma pack(push)
 #pragma pack(1)
@@ -119,7 +135,13 @@ typedef struct {
   tDlgProc SendDlgMsg;
   void *Translation;
   tTranslateStringProc TranslateString;
-  unsigned char Reserved[4094 * sizeof(void *)];
+  uintptr_t VersionAPI;
+  tMsgChoiceBoxProc MsgChoiceBox;
+  tDialogBoxParamProc DialogBoxParam;
+  tSetProperty SetProperty;
+  tGetProperty GetProperty;
+  tCreateComponent CreateComponent;
+  unsigned char Reserved[4088 * sizeof(void *)];
 } tExtensionStartupInfo;
 #pragma pack(pop)
 

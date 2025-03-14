@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    Wfx plugin for working with File Transfer Protocol
 
-   Copyright (C) 2013-2023 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2013-2024 Alexander Koblov (alexx2000@mail.ru)
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -40,14 +40,17 @@ type
     FListCommand: String;
     FPassphrase: AnsiString;
     FChannel: PLIBSSH2_CHANNEL;
+    FErrorStream: TStringBuilder;
   private
     function OpenChannel: Boolean;
+    procedure PrintErrors(const E: String);
     function CloseChannel(Channel: PLIBSSH2_CHANNEL): Boolean;
     function SendCommand(const Command: String): Boolean; overload;
-    function SendCommand(const Command: String; out Answer: String): Boolean; overload;
+    function SendCommand(const Command: String; out Answer: String; Err: Boolean = True): Boolean; overload;
   private
     FAnswer: String;
   protected
+    FAgent: Boolean;
     FCurrentDir: String;
     FLastError: Integer;
     FSavedPassword: Boolean;
@@ -59,6 +62,7 @@ type
     procedure PrintLastError;
     procedure DetectEncoding;
     function AuthKey: Integer;
+    function AuthAgent: Integer;
     function Connect: Boolean; override;
   public
     constructor Create(const Encoding: String); override;
@@ -73,10 +77,12 @@ type
     function CreateDir(const Directory: string): Boolean; override;
     function DeleteDir(const Directory: string): Boolean; override;
     function DeleteFile(const FileName: string): Boolean; override;
-    function ExecuteCommand(const Command: String): Boolean; override;
+    function FileProperties(const FileName: String): Boolean; override;
+    function CopyFile(const OldName, NewName: String): Boolean; override;
     function ChangeWorkingDir(const Directory: string): Boolean; override;
     function RenameFile(const OldName, NewName: string): Boolean; override;
     function ChangeMode(const FileName, Mode: String): Boolean; override;
+    function ExecuteCommand(const Command, Directory: String): Boolean; override;
     function StoreFile(const FileName: string; Restore: Boolean): Boolean; override;
     function RetrieveFile(const FileName: string; FileSize: Int64; Restore: Boolean): Boolean; override;
   public
@@ -85,6 +91,7 @@ type
     function List(Directory: String; NameList: Boolean): Boolean; override;
     function FsSetTime(const FileName: String; LastAccessTime, LastWriteTime: PWfxFileTime): BOOL; override;
   public
+    property Agent: Boolean read FAgent write FAgent;
     property Fingerprint: AnsiString read FFingerprint write FFingerprint;
   end;
 
@@ -95,6 +102,7 @@ uses
   DCBasicTypes, DCConvertEncoding, FileUtil, Base64, LConvEncoding, SynaCode, StrUtils;
 
 const
+  TXT_BUFFER_SIZE = 4096;
   SMB_BUFFER_SIZE = 131072;
   LIST_TIME_STYLE = ' --time-style=+%Y.%m.%d-%H:%M:%S';
   LIST_LOCALE_C   = 'export LC_TIME=C' + #10 + 'export LC_MESSAGES=C' + #10;
@@ -181,6 +189,17 @@ begin
   Result:= (FLastError = 0);
 end;
 
+procedure TScpSend.PrintErrors(const E: String);
+var
+  S: String = '';
+  Index: Integer = 1;
+begin
+  while GetNextLine(E, S, Index) do
+  begin
+    LogProc(PluginNumber, msgtype_importanterror, PWideChar(ServerToClient(S)));
+  end;
+end;
+
 function TScpSend.SendCommand(const Command: String): Boolean;
 begin
   repeat
@@ -194,12 +213,11 @@ begin
   Result:= (FLastError >= 0);
 end;
 
-function TScpSend.SendCommand(const Command: String;
-  out Answer: String): Boolean;
-const
-  BUFFER_SIZE = 4096;
+function TScpSend.SendCommand(const Command: String; out Answer: String;
+  Err: Boolean): Boolean;
 var
   Ret: cint;
+  E, Buffer: String;
 begin
   Result:= OpenChannel;
   if Result then
@@ -207,18 +225,23 @@ begin
     Result:= SendCommand(Command);
     if Result then
     begin
-      SetLength(Answer, BUFFER_SIZE + 1);
+      E:= EmptyStr;
+      Answer:= EmptyStr;
+      SetLength(Buffer, TXT_BUFFER_SIZE + 1);
       while libssh2_channel_eof(FChannel) = 0 do
       begin
-        if libssh2_channel_read_stderr(FChannel, Pointer(Answer), BUFFER_SIZE) > 0 then
-          Result:= False;
-        Ret:= libssh2_channel_read(FChannel, Pointer(Answer), BUFFER_SIZE);
-        if (Ret > 0) then begin
-          SetLength(Answer, Ret);
-          Answer:= TrimRightLineEnding(Answer, tlbsLF);
-        end;
+        repeat
+          Ret:= libssh2_channel_read_stderr(FChannel, Pointer(Buffer), TXT_BUFFER_SIZE);
+        until Ret <> LIBSSH2_ERROR_EAGAIN;
+        if Ret > 0 then E+= Copy(Buffer, 1, Ret);
+
+        repeat
+          Ret:= libssh2_channel_read(FChannel, Pointer(Buffer), TXT_BUFFER_SIZE);
+        until Ret <> LIBSSH2_ERROR_EAGAIN;
+        if (Ret > 0) then Answer+= Copy(Buffer, 1, Ret);
       end;
-      Result:=  Result and (libssh2_channel_get_exit_status(FChannel) = 0);
+      Result:= (libssh2_channel_get_exit_status(FChannel) = 0) and (Length(E) = 0);
+      if Err and (Length(E) > 0) then PrintErrors(E);
     end;
     CloseChannel(FChannel);
   end;
@@ -324,6 +347,49 @@ begin
   end;
 
   Result:= FLastError;
+end;
+
+function TScpSend.AuthAgent: Integer;
+var
+  agent: PLIBSSH2_AGENT;
+  identity, prev_identity: Plibssh2_agent_publickey;
+begin
+  agent:= libssh2_agent_init(FSession);
+  if (agent = nil) then Exit(-1);
+  try
+    Result:= libssh2_agent_connect(agent);
+    if (Result = LIBSSH2_ERROR_NONE) then
+    try
+      Result:= libssh2_agent_list_identities(agent);
+      if Result < 0 then Exit;
+      prev_identity:= nil;
+
+      while True do
+      begin
+        Result:= libssh2_agent_get_identity(agent, @identity, prev_identity);
+        if (Result < 0) then Exit;
+        if (Result = 1) then Exit(-1);
+
+        repeat
+          FLastError:= libssh2_agent_userauth(agent, PAnsiChar(FUserName), identity);
+        until (FLastError <> LIBSSH2_ERROR_EAGAIN);
+
+        if (FLastError <> 0) then
+        begin
+          DoStatus(False, Format('Authentication with username %s and public key %s failed', [username, identity^.comment]));
+        end
+        else begin
+          DoStatus(False, Format('Authentication with username %s and public key %s succeeded', [username, identity^.comment]));
+          Break;
+        end;
+        prev_identity:= identity;
+      end;
+    finally
+      libssh2_agent_disconnect(agent);
+    end;
+  finally
+    libssh2_agent_free(agent);
+  end;
 end;
 
 function TScpSend.Connect: Boolean;
@@ -433,10 +499,18 @@ begin
       begin
         DoStatus(False, 'Username authentication');
       end
-      else if (strpos(userauthlist, 'publickey') <> nil) and (FPublicKey <> '') and (FPrivateKey <> '') then
+      else if (strpos(userauthlist, 'publickey') <> nil) and (FAgent or ((FPublicKey <> '') and (FPrivateKey <> ''))) then
       begin
-        DoStatus(False, 'Public key authentication');
-        if (AuthKey < 0) then
+        if FAgent then
+        begin
+          DoStatus(False, 'SSH-agent authentication');
+          FLastError:= AuthAgent;
+        end
+        else begin
+          DoStatus(False, 'Public key authentication');
+          FLastError:= AuthKey;
+        end;
+        if (FLastError < 0) then
         begin
           PrintLastError;
           Exit(False);
@@ -486,10 +560,10 @@ end;
 
 constructor TScpSend.Create(const Encoding: String);
 begin
-  FCurrentDir:= '/';
   inherited Create(Encoding);
   FTargetPort:= '22';
   FListCommand:= 'ls -la';
+  FErrorStream:= TStringBuilder.Create;
 end;
 
 destructor TScpSend.Destroy;
@@ -503,6 +577,7 @@ begin
     end;
   end;
   inherited Destroy;
+  FErrorStream.Free
 end;
 
 function TScpSend.Login: Boolean;
@@ -512,12 +587,24 @@ begin
   Result:= Connect;
   if Result then
   begin
+    if FAuto then DetectEncoding;
+
+    if (Length(FCurrentDir) = 0) then
+    begin
+      if not SendCommand('pwd', FAnswer) then
+        FCurrentDir:= '/'
+      else begin
+        FCurrentDir:= TrimRightLineEnding(FAnswer, tlbsLF);
+        FCurrentDir:= CeUtf16ToUtf8(ServerToClient(FCurrentDir));
+      end;
+      DoStatus(False, 'Remote directory: ' + FCurrentDir);
+    end;
     if not FAutoDetect then
     begin
       FAutoDetect:= True;
       // Try to use custom time style
       ACommand:= LIST_LOCALE_C + FListCommand + LIST_TIME_STYLE;
-      if SendCommand(ACommand + ' > /dev/null', FAnswer) then
+      if SendCommand(ACommand + ' > /dev/null', FAnswer, False) then
       begin
         FListCommand:= ACommand;
         FFtpList.Masks.Insert(0, 'pppppppppp $!!!S* YYYY MM DD hh mm ss $n*');
@@ -525,13 +612,12 @@ begin
       else begin
         // Try to use 'C' locale
         ACommand:= LIST_LOCALE_C + FListCommand;
-        if SendCommand(ACommand + ' > /dev/null', FAnswer) then
+        if SendCommand(ACommand + ' > /dev/null', FAnswer, False) then
         begin
           FListCommand:= ACommand
         end;
       end;
     end;
-    if FAuto then DetectEncoding;
   end;
 end;
 
@@ -555,6 +641,7 @@ end;
 procedure TScpSend.CloneTo(AValue: TFTPSendEx);
 begin
   inherited CloneTo(AValue);
+  TScpSend(AValue).FAgent:= FAgent;
   TScpSend(AValue).FPassphrase:= FPassphrase;
   TScpSend(AValue).FFingerprint:= FFingerprint;
 end;
@@ -566,7 +653,7 @@ end;
 
 function TScpSend.FileExists(const FileName: String): Boolean;
 begin
-  Result:= SendCommand('stat ' + EscapeNoQuotes(FileName), FAnswer);
+  Result:= SendCommand('stat ' + EscapeNoQuotes(FileName), FAnswer, False);
 end;
 
 function TScpSend.CreateDir(const Directory: string): Boolean;
@@ -584,21 +671,26 @@ begin
   Result:= SendCommand('rm -f ' + EscapeNoQuotes(FileName), FAnswer);
 end;
 
-function TScpSend.ExecuteCommand(const Command: String): Boolean;
+function TScpSend.ExecuteCommand(const Command, Directory: String): Boolean;
 var
   Index: Integer;
+  ADirectory: String;
   Answer: TStringList;
 begin
   FDataStream.Clear;
   Result:= OpenChannel;
   if Result then
   begin
+    if Directory = EmptyStr then
+      ADirectory:= FCurrentDir
+    else begin
+      ADirectory:= Directory;
+    end;
     DoStatus(False, Command);
-    Result:= SendCommand('cd ' + EscapeNoQuotes(FCurrentDir) + ' && ' + Command);
+    Result:= SendCommand('cd ' + EscapeNoQuotes(ADirectory) + ' && ' + Command);
     if Result then
     begin
-      Result:= DataRead(FDataStream);
-      if Result then
+      if DataRead(FDataStream) then
       begin
         FDataStream.Position:= 0;
         Answer:= TStringList.Create;
@@ -614,6 +706,17 @@ begin
     end;
     CloseChannel(FChannel);
   end;
+end;
+
+function TScpSend.FileProperties(const FileName: String): Boolean;
+begin
+  Result:= SendCommand('stat ' + EscapeNoQuotes(FileName), FAnswer);
+  if Result then FFullResult.Text:= FAnswer;
+end;
+
+function TScpSend.CopyFile(const OldName, NewName: String): Boolean;
+begin
+  Result:= SendCommand('cp -p ' + EscapeNoQuotes(OldName) + ' ' + EscapeNoQuotes(NewName), FAnswer);
 end;
 
 function TScpSend.ChangeWorkingDir(const Directory: string): Boolean;
@@ -780,19 +883,27 @@ end;
 
 function TScpSend.DataRead(const DestStream: TStream): Boolean;
 var
-  Ret, ERet: cint;
-  ABuffer: array[Byte] of AnsiChar;
-  AEBuffer: array[Byte] of AnsiChar;
+  Ret: cint;
+  Buffer: String;
 begin
-  repeat
-    if libssh2_channel_eof(FChannel) <> 0 then Break;
-    Ret:= libssh2_channel_read(FChannel, ABuffer, 256);
-    ERet:= libssh2_channel_read_stderr(FChannel, AEBuffer, 256);
-    if (ERet > 0) then begin
-      LogProc(PluginNumber, msgtype_importanterror, PWideChar(ServerToClient(AEBuffer)));
-    end;
-    if Ret > 0 then DestStream.Write(ABuffer, Ret);
-  until not ((Ret > 0) or (Ret = LIBSSH2_ERROR_EAGAIN));
+  FErrorStream.Clear;
+  SetLength(Buffer, TXT_BUFFER_SIZE + 1);
+  while libssh2_channel_eof(FChannel) = 0 do
+  begin
+    repeat
+      Ret:= libssh2_channel_read_stderr(FChannel, Pointer(Buffer), TXT_BUFFER_SIZE);
+    until Ret <> LIBSSH2_ERROR_EAGAIN;
+    if Ret > 0 then FErrorStream.Append(Copy(Buffer, 1, Ret));
+
+    repeat
+      Ret:= libssh2_channel_read(FChannel, Pointer(Buffer), TXT_BUFFER_SIZE);
+    until Ret <> LIBSSH2_ERROR_EAGAIN;
+    if Ret > 0 then DestStream.Write(Buffer[1], Ret);
+  end;
+  if (FErrorStream.Length > 0) then
+  begin
+    PrintErrors(FErrorStream.ToString);
+  end;
   Result:= DestStream.Position > 0;
 end;
 

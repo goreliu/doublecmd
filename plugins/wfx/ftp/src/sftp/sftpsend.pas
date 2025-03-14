@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    Wfx plugin for working with File Transfer Protocol
 
-   Copyright (C) 2013-2020 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2013-2024 Alexander Koblov (alexx2000@mail.ru)
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -119,9 +119,27 @@ begin
 end;
 
 function TSftpSend.Login: Boolean;
+var
+  Return: Integer;
 begin
   Result:= Connect;
-  if Result and FAuto then DetectEncoding;
+  if Result then
+  begin
+    if FAuto then DetectEncoding;
+
+    if (Length(FCurrentDir) = 0) then
+    begin
+      SetLength(FCurrentDir, MAX_PATH + 1);
+      Return:= libssh2_sftp_realpath(FSFTPSession, '.', PAnsiChar(FCurrentDir), MAX_PATH);
+      if Return < 1 then
+        FCurrentDir:= '/'
+      else begin
+        SetLength(FCurrentDir, Return);
+        FCurrentDir:= CeUtf16ToUtf8(ServerToClient(FCurrentDir));
+      end;
+      DoStatus(False, 'Remote directory: ' + FCurrentDir);
+    end;
+  end;
 end;
 
 function TSftpSend.Logout: Boolean;

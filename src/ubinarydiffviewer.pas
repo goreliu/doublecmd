@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    Binary difference viewer and comparator
 
-   Copyright (C) 2014-2021 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2014-2024 Alexander Koblov (alexx2000@mail.ru)
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -70,7 +70,7 @@ type
 implementation
 
 uses
-  Math;
+  Math, LazUTF8;
 
 const
   cHexWidth       = 16;
@@ -87,8 +87,9 @@ var
   I: Integer;
   X, Y: Integer;
   yIndex: Integer;
+  CharLen: Integer;
   P1, P2: PAnsiChar;
-  CurrentPos, LineStart: PtrInt;
+  CurrentPos, SecondPos: PtrInt;
   Mine, Foreign, WordHex: String;
   WordWidth, SymbolWidth: Integer;
   MineLength, ForeignLength: Integer;
@@ -106,15 +107,22 @@ begin
     if Assigned(SecondViewer) then
     begin
       X := 0;
+      SecondPos := CurrentPos;
       Y := yIndex * FTextHeight;
-      LineStart := CurrentPos;
       AddLineOffset(CurrentPos);
       // Mine text
       Mine := TransformHex(CurrentPos, FHighLimit);
       MineLength:= Min(cHexWidth, (Length(Mine) - cHexStartHex) div cWordSize);
       // Foreign text
-      Foreign := SecondViewer.TransformHex(LineStart, SecondViewer.FHighLimit);
-      ForeignLength:= (Length(Foreign) - cHexStartHex) div cWordSize;
+      if SecondPos >= SecondViewer.FHighLimit then
+      begin
+        Foreign := Mine;
+        ForeignLength := -1;
+      end
+      else begin
+        Foreign := SecondViewer.TransformHex(SecondPos, SecondViewer.FHighLimit);
+        ForeignLength:= (Length(Foreign) - cHexStartHex) div cWordSize;
+      end;
       // Pointers to text
       P1 := PAnsiChar(Mine) + cHexStartHex;
       P2 := PAnsiChar(Foreign) + cHexStartHex;
@@ -137,12 +145,19 @@ begin
       end;
       Inc(X, SymbolWidth);
       // Write ASCII part
-      WordHex:= Copy(Mine, cHexStartAscii + 1, cHexWidth);
-      for I:= 1 to Length(WordHex) do
+      WordHex:= Copy(Mine, cHexStartAscii + 1, MaxInt);
+      I:= 0;
+      P1:= PAnsiChar(WordHex);
+      P2:= P1 + Length(WordHex);
+      while (P1 < P2) do
       begin
-        Canvas.Font.Color := SymbolColor[I - 1];
-        Canvas.TextOut(X, Y, WordHex[I]);
+        CharLen := UTF8CodepointSize(P1);
+        if (CharLen = 0) then Break;
+        Canvas.Font.Color := SymbolColor[I];
+        Canvas.TextOut(X, Y, Copy(P1, 1, CharLen));
         Inc(X, SymbolWidth);
+        Inc(P1, CharLen);
+        Inc(I);
       end;
       Canvas.Font.Color := clWindowText;
     end;

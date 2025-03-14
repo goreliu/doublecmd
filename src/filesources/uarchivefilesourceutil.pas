@@ -9,7 +9,7 @@ uses
  uFileView,
  uFile,
  uArchiveFileSource,
- uFileSource,
+ uFileSource, uFileSourceManager,
  uOperationsManager;
 
 function GetArchiveFileSource(SourceFileSource: IFileSource;
@@ -70,7 +70,7 @@ begin
       else if (ArchiveType = EmptyStr) then
         Result := TMultiArchiveFileSource.CreateByArchiveName(SourceFileSource, ArchiveFileName)
       else
-        Result := TMultiArchiveFileSource.CreateByArchiveType(SourceFileSource, ArchiveFileName, ArchiveType);
+        Result := TMultiArchiveFileSource.CreateByArchiveType(SourceFileSource, ArchiveFileName, ArchiveType, IncludeHidden);
     end;
   end;
 end;
@@ -308,7 +308,7 @@ begin
     end
     else if aFile.IsDirectory then
     begin
-      aFolderList.AddObject(aFile.Path + aFile.Name + DirectorySeparator, aFile.Clone);
+      aFolderList.AddObject( IncludeTrailingPathDelimiter(aFile.FullPath), aFile.Clone);
     end
     else
     begin

@@ -362,9 +362,15 @@ resourcestring
   rsMnuOpen = 'Open';
   rsMnuView = 'View';
   rsMnuEdit = 'Edit';
+  rsMnuiCloudDriverDownloadNow = 'Download Now';
+  rsMnuiCloudDriverRemoveDownload = 'Remove Download';
   rsMnuOpenWith = 'Open with';
   rsMnuOpenWithOther = 'Other...';
-  rsMenuMacOsServices = 'Services';
+  rsMenuMacOSShare = 'Share...';
+  rsMenuMacOSGrantPermissionToSupportFinderTags = 'Grant "Full Disk Access" permission to support Finder Tags...';
+  rsMenuMacOSEditFinderTags = 'Edit Finder Tags...';
+  rsMenuMacOSAddFinderTag = 'Add "%s"';
+  rsMenuMacOSRemoveFinderTag = 'Remove "%s"';
   rsMnuMount = 'Mount';
   rsMnuUmount = 'Unmount';
   rsMnuNoMedia = 'No media available';
@@ -374,10 +380,12 @@ resourcestring
   rsMnuRestore = 'Restore';
   rsMnuPackHere = 'Pack here...';
   rsMnuExtractHere = 'Extract here...';
+  rsOpenWithMacOSFilter = 'Applications (*.app)|*.app|All files (*)|*';
   // for main menu
   rsMnuCreateShortcut = 'Create Shortcut...';
-  rsMnuMapNetworkDrive = 'Map Network Drive...';
   rsMnuDisconnectNetworkDrive = 'Disconnect Network Drive...';
+  // for dock emnu
+  rsMnuNewWindow = 'New Window';
   // for content plugins menu
   rsMnuContentDefault = '<Default>';
   rsMnuContentOctal = 'Octal';
@@ -492,8 +500,17 @@ resourcestring
   rsViewPaintToolsList = 'Pen;Rect;Ellipse';
 
   // Editor
+  rsEditStatSelModeCol = 'COL';
+  rsEditStatSelModeLine = 'LINE';
+  rsEditStatSelModeNorm = 'NORM';
+  rsEditStatInsertModeIns = 'INS';
+  rsEditStatInsertModeOvr = 'OVR';
   rsEditGotoLineTitle = 'Goto Line';
   rsEditGotoLineQuery = 'Goto line:';
+  rsEditHintModified = 'Modified';
+  rsEditHintCursorPos = 'Cursor Position';
+  rsEditHintInsertMode = 'Insert Mode';
+  rsEditHintSelectionMode = 'Selection Mode';
   rsEditAboutText = 'Internal Editor of Double Commander.';
   // Editor Highlighters
   rsSynLangPlainText = 'Plain text';
@@ -785,6 +802,11 @@ resourcestring
   rsOptionsEditorMiscellaneous = 'Miscellaneous';
   rsOptionsEditorMouse = 'Mouse';
   rsOptionsEditorPlugins = 'Plugins';
+  rsOptionsEditorPluginsDsx = 'Search plugins';
+  rsOptionsEditorPluginsWcx = 'Packer plugins';
+  rsOptionsEditorPluginsWlx = 'Viewer plugins';
+  rsOptionsEditorPluginsWdx = 'Content plugins';
+  rsOptionsEditorPluginsWfx = 'File system plugins';
   rsOptionsEditorQuickSearch = 'Quick search/filter';
   rsOptionsEditorTerminal = 'Terminal';
   rsOptionsEditorToolbar = 'Toolbar';
@@ -992,6 +1014,70 @@ resourcestring
   rsMsgTCExecutableNotFound = 'Error! Cannot find the TC configuration executable:'+#$0A+'%s';
   rsMsgTCisRunning = 'Error! TC is still running but it should be closed for this operation.'+#$0A+'Close it and press OK or press CANCEL to abort.';
   rsMsgAllDCIntCmds = 'All Double Commander internal commands';
+
+  // macOS Modern Form Sytle
+  rsMFSTBITreeViewTitle = 'TreeView';
+  rsMFSTBITreeViewTips = 'Show Tree View Panel';
+  rsMFSTBIHorzSplitTitle = 'HorzSplit';
+  rsMFSTBIHorzSplitTips = 'Toggle Horizontal Split Mode';
+  rsMFSTBISwapPanelsTitle = 'SwapPanels';
+  rsMFSTBISwapPanelsTips = 'Swap Panels';
+
+  rsMFSTBIiCloudDriverTitle = 'iCloud Driver';
+  rsMFSTBIiCloudDriverTips = 'iCloud Driver';
+
+  rsMFSTBIShowModeTitle = 'ShowMode';
+  rsMFSTBIShowModeTips = 'Show as Brief, Full or Thumbnails';
+  rsMFSTBIShowBriefTitle = 'as Brief';
+  rsMFSTBIShowFullTitle = 'as Full';
+  rsMFSTBIShowThumbnailsTitle = 'as Thumbnails';
+  rsMFSTBIShareTitle = 'Share';
+  rsMFSTBIAirDropTitle = 'AirDrop';
+  rsMFSTBIAirDropTips = 'AirDrop';
+  rsMFSTBIQuickLookTitle = 'QuickLook';
+  rsMFSTBIQuickLookTips = 'macOS Quick Look Panel';
+  rsMFSTBIEditFinderTagTitle = 'EditTag';
+  rsMFSTBIEditFinderTagTips = 'Edit Finder Tags...';
+
+  rsMFSTBIGoTitle = 'Go';
+  rsMFSTBIGoTips = 'Go';
+  rsMFSTBIFinderRevealTitle = 'Finder';
+  rsMFSTBIFinderRevealTips = 'Reveal in Finder';
+  rsMFSTBIShowInfoTitle = 'ShowInfo';
+  rsMFSTBIShowInfoTips = 'Show Info in Finder';
+
+  rsMFSTBICommandTitle = 'Command';
+  rsMFSTBICommandMenuDirectoryHotlist = 'Directory Hotlist';
+  rsMFSTBICommandMenuFavoriteTabs = 'Favorite Tabs';
+  rsMFSTBICommandMenuQuickLook = 'macOS QuickLook';
+
+  rsMFSTBISearchTitle = 'Search';
+  rsMFSTBISearchTips  = 'Search Files...';
+  rsMFSTBISearchCombinedTags = 'Search for combined tags...';
+
+  rsMFSTBITerminalTitle = 'Terminal';
+  rsMFSTBITerminalTips  = 'Open in Terminal';
+  rsMFSTBIPrivilegeTitle = 'Privilege';
+  rsMFSTBIPrivilegeTips = 'As a file manager, Double Command requires full disk access permissions. Clicking this button will pop up the macOS system settings page. Please add "Double Commander.app" to the "Full Disk Access" list to complete the authorization.';
+
+  rsMFSTBIRefreshTitle = 'Refresh';
+  rsMFSTBIRefreshTips = 'Refresh File List';
+  rsMFSTBICompareTitle = 'Compare';
+  rsMFSTBICompareTips = 'Compare by Contents...';
+
+  rsMFSTBISyncTitle = 'Sync';
+  rsMFSTBISyncTips = 'Synchronize Dirs...';
+
+  rsMFSTBIEditTitle = 'Edit';
+  rsMFSTBIEditTips = 'Edit...';
+
+  rsMountedFileSourceCopyMultiFilesToWcxDlgTitle = 'The operation is not supported';
+  rsMountedFileSourceCopyMultiFilesToWcxDlgMessage = 'Some virtual filesystem contain specific directory structures. When copying from it to a compressed archive, only one directory can be selected at a time, unless the actual locations of the selected directories are all located under the same parent directory.'#13#13'For example, for iCloud Drive, when copying directory from the root to a compressed archive, maybe only one directory should be selected.'#13#13'It is recommended that you follow your usual practice and try to select only one directory when you receive this prompt.';
+
+  // macOS
+  rsiCloudDriverCopySeedFileConfirmDlgTitle = 'The operation may contain files that were not downloaded, continue anyway?';
+  rsiCloudDriverCopySeedFileConfirmDlgMessage = 'It is recommended to download the files first. Otherwise, what is copied is not the content of the files, but the corresponding placeholder files, which will result in hidden files with the .iCloud extension.';
+  rsMacOSAssignFinderTagsToMultiItems = 'Assign tags to %d items';
 
   //Columns Menu
   rsMenuConfigureCustomColumns= 'Configure custom columns';

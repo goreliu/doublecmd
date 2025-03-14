@@ -40,3 +40,44 @@ msgstr "OK"
 #: tdialogbox.lblargs.caption
 msgid "Additional parameters"
 msgstr "Дополнительные параметры"
+
+#: rarlng.rsdictlargewarning
+msgid "Large dictionary warning"
+msgstr "Предупреждение о большом словаре"
+
+#: rarlng.rsdictnotallowed
+#, object-pascal-format
+msgid "%u GB dictionary exceeds %u GB limit and needs more than %u GB memory to unpack."
+msgstr "Размер словаря %u Гб превышает ограничение в %u Гб, для распаковки требуется более %u Гб памяти."
+
+#: rarlng.rsmsgbuttoncancel
+msgid "&Cancel"
+msgstr "О&тмена"
+
+#: rarlng.rsmsgbuttonextract
+msgid "&Extract"
+msgstr "&Распаковать"
+
+#: rarlng.rsmsgpasswordenter
+msgid "Please enter the password:"
+msgstr "Введите пароль:"
+
+#: rarlng.rsmsgexecutablenotfound
+#, object-pascal-format
+msgid ""
+"Cannot find RAR executable!\n"
+"\n"
+"%s\n"
+"\n"
+"Please check the plugin settings."
+msgstr ""
+"Исполняемый файл RAR не найден!\n"
+"\n"
+"%s\n"
+"\n"
+"Проверьте настройки плагина."
+
+#: rarlng.rsmsglibrarynotfound
+#, object-pascal-format
+msgid "Cannot load library %s! Please check your installation."
+msgstr "Не удалось загрузить библиотеку %s! Пожалуйста, проверьте установку."

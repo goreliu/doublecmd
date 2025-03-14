@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    This unit contains Unix specific functions
 
-   Copyright (C) 2015-2023 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2015-2024 Alexander Koblov (alexx2000@mail.ru)
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -40,13 +40,21 @@ const
 {$IF DEFINED(LINUX)}
   FD_CLOEXEC = 1;
   O_CLOEXEC  = &02000000;
+  O_PATH     = &010000000;
+  _SC_NPROCESSORS_ONLN = 83;
 {$ELSEIF DEFINED(FREEBSD)}
   O_CLOEXEC  = &04000000;
+  _SC_NPROCESSORS_ONLN = 58;
+  CLOSE_RANGE_CLOEXEC = (1 << 2);
 {$ELSEIF DEFINED(NETBSD)}
   O_CLOEXEC  = $00400000;
 {$ELSEIF DEFINED(HAIKU)}
   FD_CLOEXEC = 1;
   O_CLOEXEC  = $00000040;
+{$ELSEIF DEFINED(DARWIN)}
+  F_NOCACHE  = 48;
+  O_CLOEXEC  = $1000000;
+  _SC_NPROCESSORS_ONLN = 58;
 {$ELSE}
   O_CLOEXEC  = 0;
 {$ENDIF}
@@ -155,6 +163,7 @@ type
 {$ELSE}
   TDCStat = BaseUnix.Stat;
 {$ENDIF}
+  PDCStat = ^TDCStat;
 
   TDCStatHelper = record Helper for TDCStat
   Public
@@ -248,6 +257,10 @@ function getgrgid(gid: gid_t): PGroupRecord; cdecl; external clib;
             fields of the record in the group database that matches the group name)
 }
 function getgrnam(name: PChar): PGroupRecord; cdecl; external clib;
+{en
+   Get configuration information at run time
+}
+function sysconf(name: cint): clong; cdecl; external clib;
 
 function FileLock(Handle: System.THandle; Mode: cInt): System.THandle;
 
@@ -255,12 +268,12 @@ function fpMkTime(tm: PTimeStruct): TTime;
 function fpLocalTime(timer: PTime; tp: PTimeStruct): PTimeStruct;
 
 {$IF DEFINED(LINUX)}
+var
+  KernVersion: UInt16;
+
 function fpFDataSync(fd: cint): cint;
 function fpCloneFile(src_fd, dst_fd: cint): Boolean;
 function fpFAllocate(fd: cint; mode: cint; offset, len: coff_t): cint;
-
-function mbFileGetXattr(const FileName: String): TStringArray;
-function mbFileCopyXattr(const Source, Target: String): Boolean;
 {$ENDIF}
 
 {$IF DEFINED(UNIX) AND NOT DEFINED(DARWIN)}
@@ -271,8 +284,12 @@ implementation
 
 uses
   Unix, DCConvertEncoding, LazUTF8
-{$IFDEF DARWIN}
+{$IF DEFINED(DARWIN)}
   , DCDarwin
+{$ELSEIF DEFINED(LINUX)}
+  , Dos, DCLinux, DCOSUtils
+{$ELSEIF DEFINED(FREEBSD)}
+  , DCOSUtils
 {$ENDIF}
   ;
 
@@ -378,8 +395,6 @@ begin
   {$ENDIF}
 end;
 
-
-
 {$IF DEFINED(BSD)}
 type rlim_t = Int64;
 {$ENDIF}
@@ -399,26 +414,44 @@ const
   {$ENDIF}
 
 procedure tzset(); cdecl; external clib;
-function sysconf(name: cint): clong; cdecl; external clib;
 function mktime(tp: PTimeStruct): TTime; cdecl; external clib;
 function localtime_r(timer: PTime; tp: PTimeStruct): PTimeStruct; cdecl; external clib;
 function lchown(path : PChar; owner : TUid; group : TGid): cInt; cdecl; external clib;
 {$IF DEFINED(LINUX)}
 function fdatasync(fd: cint): cint; cdecl; external clib;
 function fallocate(fd: cint; mode: cint; offset, len: coff_t): cint; cdecl; external clib;
+{$ENDIF}
 
-function lremovexattr(const path, name: PAnsiChar): cint; cdecl; external clib;
-function llistxattr(const path: PAnsiChar; list: PAnsiChar; size: csize_t): ssize_t; cdecl; external clib;
-function lgetxattr(const path, name: PAnsiChar; value: Pointer; size: csize_t): ssize_t; cdecl; external clib;
-function lsetxattr(const path, name: PAnsiChar; const value: Pointer; size: csize_t; flags: cint): cint; cdecl; external clib;
+{$IF DEFINED(LINUX) OR DEFINED(FREEBSD)}
+var
+  hLibC: TLibHandle = NilHandle;
+
+procedure LoadCLibrary;
+begin
+  hLibC:= mbLoadLibrary(mbGetModuleName(@tzset));
+end;
+{$ENDIF}
+
+{$IF DEFINED(LINUX) OR DEFINED(BSD)}
+var
+  close_range: function(first: cuint; last: cuint; flags: cint): cint; cdecl = nil;
 {$ENDIF}
 
 procedure FileCloseOnExecAll;
+const
+  MAX_FD = 1024;
 var
   fd: cint;
   p: TRLimit;
   fd_max: rlim_t = RLIM_INFINITY;
 begin
+{$IF DEFINED(LINUX) OR DEFINED(BSD)}
+  if Assigned(close_range) then
+  begin
+    close_range(3, High(Int32), CLOSE_RANGE_CLOEXEC);
+    Exit;
+  end;
+{$ENDIF}
   if (FpGetRLimit(RLIMIT_NOFILE, @p) = 0) and (p.rlim_cur <> RLIM_INFINITY) then
     fd_max:= p.rlim_cur
   else begin
@@ -426,8 +459,8 @@ begin
     fd_max:= sysconf(_SC_OPEN_MAX);
     {$ENDIF}
   end;
-  if fd_max = RLIM_INFINITY then
-    fd_max:= High(Byte);
+  if (fd_max = RLIM_INFINITY) or (fd_max > MAX_FD) then
+    fd_max:= MAX_FD;
   for fd:= 3 to cint(fd_max) do
     FileCloseOnExec(fd);
 end;
@@ -510,6 +543,7 @@ begin
   if (fpFStatFS(Handle, @Sbfs) = 0) then
   begin
     case UInt32(Sbfs.fstype) of
+      NFS_SUPER_MAGIC,
       SMB_SUPER_MAGIC,
       SMB2_MAGIC_NUMBER,
       CIFS_MAGIC_NUMBER: Exit;
@@ -563,103 +597,28 @@ begin
   Result := fallocate(fd, mode, offset, len);
   if Result = -1 then fpseterrno(fpgetCerrno);
 end;
-
-function mbFileGetXattr(const FileName: String): TStringArray;
-var
-  AList: String;
-  ALength: ssize_t;
-  AFileName: String;
-begin
-  SetLength(AList, MaxSmallint);
-  Result:= Default(TStringArray);
-  AFileName:= CeUtf8ToSys(FileName);
-  ALength:= llistxattr(PAnsiChar(AFileName), Pointer(AList), Length(AList));
-  if (ALength < 0) then
-  begin
-    if (fpgetCerrno <> ESysERANGE) then
-    begin
-      fpseterrno(fpgetCerrno);
-      Exit;
-    end
-    else begin
-      ALength:= llistxattr(PAnsiChar(AFileName), nil, 0);
-      if ALength < 0 then
-      begin
-        fpseterrno(fpgetCerrno);
-        Exit;
-      end;
-      SetLength(AList, ALength);
-      ALength:= llistxattr(PAnsiChar(AFileName), Pointer(AList), ALength);
-      if ALength < 0 then
-      begin
-        fpseterrno(fpgetCerrno);
-        Exit;
-      end;
-    end;
-  end;
-  if (ALength > 0) then
-  begin
-    SetLength(AList, ALength - 1);
-    Result:= AList.Split(#0);
-  end;
-end;
-
-function mbFileCopyXattr(const Source, Target: String): Boolean;
-var
-  Value: String;
-  Index: Integer;
-  ALength: ssize_t;
-  Names: TStringArray;
-  ASource, ATarget: String;
-begin
-  Result:= True;
-  ASource:= CeUtf8ToSys(Source);
-  ATarget:= CeUtf8ToSys(Target);
-  // Remove attributes from target
-  Names:= mbFileGetXattr(Target);
-  for Index:= 0 to High(Names) do
-  begin
-    lremovexattr(PAnsiChar(ATarget), PAnsiChar(Names[Index]));
-  end;
-  SetLength(Value, MaxSmallint);
-  Names:= mbFileGetXattr(Source);
-  for Index:= 0 to High(Names) do
-  begin
-    ALength:= lgetxattr(PAnsiChar(ASource), PAnsiChar(Names[Index]), Pointer(Value), Length(Value));
-    if (ALength < 0) then
-    begin
-      if (fpgetCerrno <> ESysERANGE) then
-      begin
-        fpseterrno(fpgetCerrno);
-        Exit(False);
-      end
-      else begin
-        ALength:= lgetxattr(PAnsiChar(ASource), PAnsiChar(Names[Index]), nil, 0);
-        if ALength < 0 then
-        begin
-          fpseterrno(fpgetCerrno);
-          Exit(False);
-        end;
-        SetLength(Value, ALength);
-        ALength:= lgetxattr(PAnsiChar(ASource), PAnsiChar(Names[Index]), Pointer(Value), Length(Value));
-        if ALength < 0 then
-        begin
-          fpseterrno(fpgetCerrno);
-          Exit(False);
-        end;
-      end;
-    end;
-    if (lsetxattr(PAnsiChar(ATarget), PAnsiChar(Names[Index]), Pointer(Value), ALength, 0) < 0) then
-    begin
-      fpseterrno(fpgetCerrno);
-      Exit(fpgeterrno = ESysEOPNOTSUPP);
-    end;
-  end;
-end;
 {$ENDIF}
 
-initialization
+procedure Initialize;
+begin
   tzset();
+{$IF DEFINED(LINUX) OR DEFINED(FREEBSD)}
+  LoadCLibrary;
+  {$IF DEFINED(LINUX)}
+  KernVersion:= BEtoN(DosVersion);
+  // Linux kernel >= 5.11
+  if KernVersion >= $50B then
+  {$ENDIF}
+  begin
+    Pointer(close_range):= GetProcAddress(hLibC, 'close_range');
+  end;
+{$ELSEIF DEFINED(DARWIN)}
+  close_range:= @CloseRange;
+{$ENDIF}
+end;
+
+initialization
+  Initialize;
 
 end.
 

@@ -333,9 +333,25 @@ msgstr "Open checksum-bestand nadat de taak voltooid is"
 msgid "C&reate separate checksum file for each file"
 msgstr "Maak aparte checksum aan voor elk bestand"
 
+#: tfrmchecksumcalc.cbseparatefolder.caption
+msgid "Create separate checksum file for each &directory"
+msgstr ""
+
+#: tfrmchecksumcalc.lblfileformat.caption
+msgid "File &format"
+msgstr ""
+
 #: tfrmchecksumcalc.lblsaveto.caption
 msgid "&Save checksum file(s) to:"
 msgstr "Sla checksumbestand(en) op in:"
+
+#: tfrmchecksumcalc.rbunix.caption
+msgid "Unix"
+msgstr ""
+
+#: tfrmchecksumcalc.rbwindows.caption
+msgid "Windows"
+msgstr ""
 
 #: tfrmchecksumverify.btnclose.caption
 msgctxt "TFRMCHECKSUMVERIFY.BTNCLOSE.CAPTION"
@@ -997,6 +1013,10 @@ msgctxt "tfrmeditor.acteditselectall.hint"
 msgid "Select All"
 msgstr "Selecteer alles"
 
+#: tfrmeditor.actedittimedate.caption
+msgid "Time/Date"
+msgstr ""
+
 #: tfrmeditor.acteditundo.caption
 msgctxt "TFRMEDITOR.ACTEDITUNDO.CAPTION"
 msgid "Undo"
@@ -1067,14 +1087,6 @@ msgstr "Opslaan &als..."
 #: tfrmeditor.actfilesaveas.hint
 msgid "Save As"
 msgstr "Opslaan als"
-
-#: tfrmeditor.actsaveall.caption
-msgid "Sa&ve All"
-msgstr "Sla alles op"
-
-#: tfrmeditor.actsaveall.hint
-msgid "Save All"
-msgstr "Sla alles op"
 
 #: tfrmeditor.caption
 msgctxt "tfrmeditor.caption"
@@ -1734,26 +1746,6 @@ msgstr "Geef bestandnamen in die uitgesloten zijn van zoekopdrachten, gescheiden
 #: tfrmfinddlg.cmbfindfilemask.hint
 msgid "Enter files names separated with \";\""
 msgstr "Geef bestandnamen in gescheiden door puntkomma"
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[0].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[0].text"
-msgid "Plugin"
-msgstr "Invoegsel"
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[1].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[1].text"
-msgid "Field"
-msgstr "Veld"
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[2].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[2].text"
-msgid "Operator"
-msgstr "Uitvoerder"
-
-#: tfrmfinddlg.frmcontentplugins.headercontrol.sections[3].text
-msgctxt "tfrmfinddlg.frmcontentplugins.headercontrol.sections[3].text"
-msgid "Value"
-msgstr "Waarde"
 
 #: tfrmfinddlg.gbdirectories.caption
 msgctxt "tfrmfinddlg.gbdirectories.caption"
@@ -2477,6 +2469,10 @@ msgstr "&Laad tabbladen vanuit bestand"
 msgid "Create &Directory"
 msgstr "Maak map"
 
+#: tfrmmain.actmapnetworkdrive.caption
+msgid "Map Network Drive..."
+msgstr "Breng netwerkschijf in kaart..."
+
 #: tfrmmain.actmarkcurrentextension.caption
 msgid "Select All with the Same E&xtension"
 msgstr "Kies alles met hetzelfde achtervoegsel"
@@ -2792,6 +2788,14 @@ msgstr "Menu"
 #: tfrmmain.actshowsysfiles.caption
 msgid "Show &Hidden/System Files"
 msgstr "Toon verborgen-/systeembestanden"
+
+#: tfrmmain.actshowtabslist.caption
+msgid "Show Tabs List"
+msgstr ""
+
+#: tfrmmain.actshowtabslist.hint
+msgid "Show list of all open tabs"
+msgstr ""
 
 #: tfrmmain.actsortbyattr.caption
 msgid "Sort by &Attributes"
@@ -3143,7 +3147,7 @@ msgid "C&onfiguration"
 msgstr "&Instellingen"
 
 #: tfrmmain.mnufavoritetabs.caption
-msgid "Favorites"
+msgid "F&avorites"
 msgstr "Favorieten"
 
 #: tfrmmain.mnufiles.caption
@@ -3161,7 +3165,7 @@ msgstr "&Markeren"
 
 #: tfrmmain.mnunetwork.caption
 msgctxt "tfrmmain.mnunetwork.caption"
-msgid "Network"
+msgid "&Network"
 msgstr "Netwerk"
 
 #: tfrmmain.mnushow.caption
@@ -3932,6 +3936,10 @@ msgstr "Toon uitvoer van terminal"
 #: tfrmoptionsarchivers.chkfilenameonlylist.caption
 msgid "Use archive name without extension as list"
 msgstr "Gebruik archiefnaam zonder achtervoegsel als lijst"
+
+#: tfrmoptionsarchivers.chkhide.caption
+msgid "Show as normal files"
+msgstr ""
 
 #: tfrmoptionsarchivers.ckbarchiverunixfileattributes.caption
 msgid "Uni&x file attributes"
@@ -5278,6 +5286,14 @@ msgstr "Automatisch inspringen"
 msgid "Allows to indent the caret, when new line is created with <Enter>, with the same amount of leading white space as the preceding line"
 msgstr ""
 
+#: tfrmoptionseditor.chkgroupundo.caption
+msgid "Group Undo"
+msgstr ""
+
+#: tfrmoptionseditor.chkgroupundo.hint
+msgid "All continuous changes of the same type will be processed in one call instead of undoing/redoing each one"
+msgstr ""
+
 #: tfrmoptionseditor.chkrightedge.caption
 msgid "Right margin:"
 msgstr "Rechterkantlijn:"
@@ -5365,11 +5381,6 @@ msgstr "Achtergrond"
 #: tfrmoptionseditorcolors.btnresetmask.hint
 msgid "Reset"
 msgstr "Terugzetten op standaard"
-
-#: tfrmoptionseditorcolors.btnsavemask.hint
-msgctxt "TFRMOPTIONSEDITORCOLORS.BTNSAVEMASK.HINT"
-msgid "Save"
-msgstr "Opslaan"
 
 #: tfrmoptionseditorcolors.bvlattributesection.caption
 msgid "Element Attributes"
@@ -6367,11 +6378,6 @@ msgctxt "TFRMOPTIONSFILETYPESCOLORS.BTNADDCATEGORY.CAPTION"
 msgid "A&dd"
 msgstr "Toevoegen"
 
-#: tfrmoptionsfiletypescolors.btnapplycategory.caption
-msgctxt "TFRMOPTIONSFILETYPESCOLORS.BTNAPPLYCATEGORY.CAPTION"
-msgid "A&pply"
-msgstr "Toepassen"
-
 #: tfrmoptionsfiletypescolors.btndeletecategory.caption
 msgctxt "TFRMOPTIONSFILETYPESCOLORS.BTNDELETECATEGORY.CAPTION"
 msgid "D&elete"
@@ -6532,6 +6538,16 @@ msgstr "Parameters"
 #: tfrmoptionshotkeys.stghotkeys.columns[2].title.caption
 msgid "Controls"
 msgstr "Knoppen"
+
+#: tfrmoptionsicloud.appslistview.columns[0].caption
+msgctxt "tfrmoptionsicloud.appslistview.columns[0].caption"
+msgid "Applications"
+msgstr ""
+
+#: tfrmoptionsicloud.appslistview.columns[1].caption
+msgctxt "tfrmoptionsicloud.appslistview.columns[1].caption"
+msgid "Count of Contents"
+msgstr ""
 
 #: tfrmoptionsicons.cbiconsexclude.caption
 msgctxt "TFRMOPTIONSICONS.CBICONSEXCLUDE.CAPTION"
@@ -7160,8 +7176,10 @@ msgid "File name"
 msgstr "Bestandsnaam"
 
 #: tfrmoptionspluginswfx.lblplugindescription.caption
+#, fuzzy
+#| msgid "Fi&le system plugins allow access to disks inaccessible by operating system or to external devices like Palm/PocketPC."
 msgctxt "tfrmoptionspluginswfx.lblplugindescription.caption"
-msgid "Fi&le system plugins allow access to disks inaccessible by operating system or to external devices like Palm/PocketPC."
+msgid "Fi&le system plugins allow access to disks inaccessible by operating system or to external devices like smartphones."
 msgstr "Bestandssysteem-invoegsels geven u toegang tot schijven die niet benaderbaar zijn door het besturingssysteem of tot externe apparaten zoals Palm/PocketPC."
 
 #: tfrmoptionspluginswfx.stgplugins.columns[0].title.caption
@@ -7859,6 +7877,10 @@ msgctxt "tfrmoptionstoolbarbase.MISUBTOOLBARPRIORCURRENT.CAPTION"
 msgid "just prior current selection"
 msgstr "net voor huidige selectie"
 
+#: tfrmoptionstoolbarbase.rblinebreak.caption
+msgid "Line break"
+msgstr ""
+
 #: tfrmoptionstoolbarbase.rbseparator.caption
 msgid "Separator"
 msgstr "Scheidingsteken"
@@ -8378,23 +8400,23 @@ msgstr "Minder regels"
 msgid "Use &content plugins, combine with:"
 msgstr "Gebruik inhoud-invoegsels, combineer met:"
 
-#: tfrmsearchplugin.headercontrol.sections[0].text
-msgctxt "TFRMSEARCHPLUGIN.HEADERCONTROL.SECTIONS[0].TEXT"
-msgid "Plugin"
-msgstr "Invoegsel"
-
-#: tfrmsearchplugin.headercontrol.sections[1].text
-msgctxt "tfrmsearchplugin.headercontrol.sections[1].text"
+#: tfrmsearchplugin.lblfield.caption
+msgctxt "tfrmsearchplugin.lblfield.caption"
 msgid "Field"
 msgstr "Veld"
 
-#: tfrmsearchplugin.headercontrol.sections[2].text
-msgctxt "tfrmsearchplugin.headercontrol.sections[2].text"
+#: tfrmsearchplugin.lbloperator.caption
+msgctxt "tfrmsearchplugin.lbloperator.caption"
 msgid "Operator"
 msgstr "Uitvoerder"
 
-#: tfrmsearchplugin.headercontrol.sections[3].text
-msgctxt "tfrmsearchplugin.headercontrol.sections[3].text"
+#: tfrmsearchplugin.lblplugin.caption
+msgctxt "tfrmsearchplugin.lblplugin.caption"
+msgid "Plugin"
+msgstr "Invoegsel"
+
+#: tfrmsearchplugin.lblvalue.caption
+msgctxt "tfrmsearchplugin.lblvalue.caption"
 msgid "Value"
 msgstr "Waarde"
 
@@ -9620,6 +9642,11 @@ msgctxt "TFRMVIEWER.MIVIEW.CAPTION"
 msgid "&View"
 msgstr "&Tonen"
 
+#: tfrmviewer.mnuplugins.caption
+msgctxt "tfrmviewer.mnuplugins.caption"
+msgid "Plugins"
+msgstr "Invoegtoepassing"
+
 #: tfrmviewoperations.btnstartpause.caption
 msgctxt "tfrmviewoperations.btnstartpause.caption"
 msgid "&Start"
@@ -10303,6 +10330,22 @@ msgctxt "ulng.rseditgotolinetitle"
 msgid "Goto Line"
 msgstr "Ga naar regel"
 
+#: ulng.rsedithintcursorpos
+msgid "Cursor Position"
+msgstr ""
+
+#: ulng.rsedithintinsertmode
+msgid "Insert Mode"
+msgstr ""
+
+#: ulng.rsedithintmodified
+msgid "Modified"
+msgstr ""
+
+#: ulng.rsedithintselectionmode
+msgid "Selection Mode"
+msgstr ""
+
 #: ulng.rseditnewfile
 msgid "new.txt"
 msgstr "nieuwe.txt"
@@ -10320,6 +10363,7 @@ msgid "&Backward"
 msgstr "Achterwaarts"
 
 #: ulng.rseditsearchcaption
+msgctxt "ulng.rseditsearchcaption"
 msgid "Search"
 msgstr "Zoeken"
 
@@ -10331,6 +10375,26 @@ msgstr "Voorwaarts"
 msgctxt "ulng.rseditsearchreplace"
 msgid "Replace"
 msgstr "Vervangen"
+
+#: ulng.rseditstatinsertmodeins
+msgid "INS"
+msgstr ""
+
+#: ulng.rseditstatinsertmodeovr
+msgid "OVR"
+msgstr ""
+
+#: ulng.rseditstatselmodecol
+msgid "COL"
+msgstr ""
+
+#: ulng.rseditstatselmodeline
+msgid "LINE"
+msgstr ""
+
+#: ulng.rseditstatselmodenorm
+msgid "NORM"
+msgstr ""
 
 #: ulng.rseditwithexternaleditor
 msgid "with external editor"
@@ -10746,6 +10810,14 @@ msgstr "Geen sneltoets met 'ENTER'"
 msgid "By command name;By shortcut key (grouped);By shortcut key (one per row)"
 msgstr "Op opdrachtnaam;Op sneltoets (gegroepeerd);Op sneltoets (één per rij)"
 
+#: ulng.rsiclouddrivercopyseedfileconfirmdlgmessage
+msgid "It is recommended to download the files first. Otherwise, what is copied is not the content of the files, but the corresponding placeholder files, which will result in hidden files with the .iCloud extension."
+msgstr ""
+
+#: ulng.rsiclouddrivercopyseedfileconfirmdlgtitle
+msgid "The operation may contain files that were not downloaded, continue anyway?"
+msgstr ""
+
 #: ulng.rsimporttoolbarproblem
 msgid "Cannot find reference to default bar file"
 msgstr "Kan verwijzing naar standaardbalkbestand niet vinden"
@@ -10775,6 +10847,11 @@ msgstr ""
 msgid "List of \"Find files\" windows"
 msgstr "Lijst van vensters voor zoeken van bestanden"
 
+#: ulng.rsmacosassignfindertagstomultiitems
+#, object-pascal-format
+msgid "Assign tags to %d items"
+msgstr ""
+
 #: ulng.rsmarkminus
 msgid "Unselect mask"
 msgstr "Deselectie masker"
@@ -10803,8 +10880,228 @@ msgstr "Configureer aangepaste kolommen"
 msgid "Enter new custom columns name"
 msgstr "Geef nieuwe aangepaste kolommennaam"
 
-#: ulng.rsmenumacosservices
-msgid "Services"
+#: ulng.rsmenumacosaddfindertag
+#, object-pascal-format
+msgid "Add \"%s\""
+msgstr ""
+
+#: ulng.rsmenumacoseditfindertags
+msgctxt "ulng.rsmenumacoseditfindertags"
+msgid "Edit Finder Tags..."
+msgstr ""
+
+#: ulng.rsmenumacosgrantpermissiontosupportfindertags
+msgid "Grant \"Full Disk Access\" permission to support Finder Tags..."
+msgstr ""
+
+#: ulng.rsmenumacosremovefindertag
+#, object-pascal-format
+msgid "Remove \"%s\""
+msgstr ""
+
+#: ulng.rsmenumacosshare
+msgid "Share..."
+msgstr ""
+
+#: ulng.rsmfstbiairdroptips
+msgctxt "ulng.rsmfstbiairdroptips"
+msgid "AirDrop"
+msgstr ""
+
+#: ulng.rsmfstbiairdroptitle
+msgctxt "ulng.rsmfstbiairdroptitle"
+msgid "AirDrop"
+msgstr ""
+
+#: ulng.rsmfstbicommandmenudirectoryhotlist
+#, fuzzy
+msgctxt "ulng.rsmfstbicommandmenudirectoryhotlist"
+msgid "Directory Hotlist"
+msgstr "Lijst met favoriete mappen"
+
+#: ulng.rsmfstbicommandmenufavoritetabs
+#, fuzzy
+msgctxt "ulng.rsmfstbicommandmenufavoritetabs"
+msgid "Favorite Tabs"
+msgstr "Favoriete tabbladen"
+
+#: ulng.rsmfstbicommandmenuquicklook
+msgid "macOS QuickLook"
+msgstr ""
+
+#: ulng.rsmfstbicommandtitle
+#, fuzzy
+msgctxt "ulng.rsmfstbicommandtitle"
+msgid "Command"
+msgstr "Opdracht"
+
+#: ulng.rsmfstbicomparetips
+msgid "Compare by Contents..."
+msgstr ""
+
+#: ulng.rsmfstbicomparetitle
+#, fuzzy
+msgctxt "ulng.rsmfstbicomparetitle"
+msgid "Compare"
+msgstr "Vergelijken"
+
+#: ulng.rsmfstbieditfindertagtips
+msgctxt "ulng.rsmfstbieditfindertagtips"
+msgid "Edit Finder Tags..."
+msgstr ""
+
+#: ulng.rsmfstbieditfindertagtitle
+msgid "EditTag"
+msgstr ""
+
+#: ulng.rsmfstbiedittips
+msgid "Edit..."
+msgstr ""
+
+#: ulng.rsmfstbiedittitle
+#, fuzzy
+msgctxt "ulng.rsmfstbiedittitle"
+msgid "Edit"
+msgstr "Bewerken"
+
+#: ulng.rsmfstbifinderrevealtips
+msgid "Reveal in Finder"
+msgstr ""
+
+#: ulng.rsmfstbifinderrevealtitle
+msgid "Finder"
+msgstr ""
+
+#: ulng.rsmfstbigotips
+msgctxt "ulng.rsmfstbigotips"
+msgid "Go"
+msgstr ""
+
+#: ulng.rsmfstbigotitle
+msgctxt "ulng.rsmfstbigotitle"
+msgid "Go"
+msgstr ""
+
+#: ulng.rsmfstbihorzsplittips
+msgid "Toggle Horizontal Split Mode"
+msgstr ""
+
+#: ulng.rsmfstbihorzsplittitle
+msgid "HorzSplit"
+msgstr ""
+
+#: ulng.rsmfstbiiclouddrivertips
+msgctxt "ulng.rsmfstbiiclouddrivertips"
+msgid "iCloud Driver"
+msgstr ""
+
+#: ulng.rsmfstbiiclouddrivertitle
+msgctxt "ulng.rsmfstbiiclouddrivertitle"
+msgid "iCloud Driver"
+msgstr ""
+
+#: ulng.rsmfstbiprivilegetips
+msgid "As a file manager, Double Command requires full disk access permissions. Clicking this button will pop up the macOS system settings page. Please add \"Double Commander.app\" to the \"Full Disk Access\" list to complete the authorization."
+msgstr ""
+
+#: ulng.rsmfstbiprivilegetitle
+msgid "Privilege"
+msgstr ""
+
+#: ulng.rsmfstbiquicklooktips
+msgid "macOS Quick Look Panel"
+msgstr ""
+
+#: ulng.rsmfstbiquicklooktitle
+msgid "QuickLook"
+msgstr ""
+
+#: ulng.rsmfstbirefreshtips
+msgid "Refresh File List"
+msgstr ""
+
+#: ulng.rsmfstbirefreshtitle
+msgid "Refresh"
+msgstr ""
+
+#: ulng.rsmfstbisearchcombinedtags
+msgid "Search for combined tags..."
+msgstr ""
+
+#: ulng.rsmfstbisearchtips
+msgid "Search Files..."
+msgstr ""
+
+#: ulng.rsmfstbisearchtitle
+#, fuzzy
+msgctxt "ulng.rsmfstbisearchtitle"
+msgid "Search"
+msgstr "Zoeken"
+
+#: ulng.rsmfstbisharetitle
+msgid "Share"
+msgstr ""
+
+#: ulng.rsmfstbishowbrieftitle
+msgid "as Brief"
+msgstr ""
+
+#: ulng.rsmfstbishowfulltitle
+msgid "as Full"
+msgstr ""
+
+#: ulng.rsmfstbishowinfotips
+msgid "Show Info in Finder"
+msgstr ""
+
+#: ulng.rsmfstbishowinfotitle
+msgid "ShowInfo"
+msgstr ""
+
+#: ulng.rsmfstbishowmodetips
+msgid "Show as Brief, Full or Thumbnails"
+msgstr ""
+
+#: ulng.rsmfstbishowmodetitle
+msgid "ShowMode"
+msgstr ""
+
+#: ulng.rsmfstbishowthumbnailstitle
+msgid "as Thumbnails"
+msgstr ""
+
+#: ulng.rsmfstbiswappanelstips
+msgid "Swap Panels"
+msgstr ""
+
+#: ulng.rsmfstbiswappanelstitle
+msgid "SwapPanels"
+msgstr ""
+
+#: ulng.rsmfstbisynctips
+msgid "Synchronize Dirs..."
+msgstr ""
+
+#: ulng.rsmfstbisynctitle
+msgid "Sync"
+msgstr ""
+
+#: ulng.rsmfstbiterminaltips
+msgid "Open in Terminal"
+msgstr ""
+
+#: ulng.rsmfstbiterminaltitle
+#, fuzzy
+msgctxt "ulng.rsmfstbiterminaltitle"
+msgid "Terminal"
+msgstr "Terminalvenster"
+
+#: ulng.rsmfstbitreeviewtips
+msgid "Show Tree View Panel"
+msgstr ""
+
+#: ulng.rsmfstbitreeviewtitle
+msgid "TreeView"
 msgstr ""
 
 #: ulng.rsmnuactions
@@ -10841,9 +11138,13 @@ msgstr "Uitwerpen"
 msgid "Extract here..."
 msgstr "Pak hier uit..."
 
-#: ulng.rsmnumapnetworkdrive
-msgid "Map Network Drive..."
-msgstr "Breng netwerkschijf in kaart..."
+#: ulng.rsmnuiclouddriverdownloadnow
+msgid "Download Now"
+msgstr ""
+
+#: ulng.rsmnuiclouddriverremovedownload
+msgid "Remove Download"
+msgstr ""
 
 #: ulng.rsmnumount
 msgid "Mount"
@@ -10853,6 +11154,10 @@ msgstr "Aankoppelen"
 msgctxt "ulng.rsmnunew"
 msgid "New"
 msgstr "Nieuw"
+
+#: ulng.rsmnunewwindow
+msgid "New Window"
+msgstr ""
 
 #: ulng.rsmnunomedia
 msgid "No media available"
@@ -10895,6 +11200,19 @@ msgstr "Ontkoppelen"
 msgctxt "ulng.rsmnuview"
 msgid "View"
 msgstr "Overzicht"
+
+#: ulng.rsmountedfilesourcecopymultifilestowcxdlgmessage
+msgid ""
+"Some virtual filesystem contain specific directory structures. When copying from it to a compressed archive, only one directory can be selected at a time, unless the actual locations of the selected directories are all located under the same parent directory.\n"
+"\n"
+"For example, for iCloud Drive, when copying directory from the root to a compressed archive, maybe only one directory should be selected.\n"
+"\n"
+"It is recommended that you follow your usual practice and try to select only one directory when you receive this prompt."
+msgstr ""
+
+#: ulng.rsmountedfilesourcecopymultifilestowcxdlgtitle
+msgid "The operation is not supported"
+msgstr ""
 
 #: ulng.rsmsgaccount
 msgid "Account:"
@@ -12394,6 +12712,10 @@ msgctxt "ulng.rsopenwithgraphics"
 msgid "Graphics"
 msgstr "Afbeeldingen"
 
+#: ulng.rsopenwithmacosfilter
+msgid "Applications (*.app)|*.app|All files (*)|*"
+msgstr ""
+
 #: ulng.rsopenwithmultimedia
 msgid "Multimedia"
 msgstr "Multimedia"
@@ -13001,6 +13323,7 @@ msgid "Drives list button"
 msgstr "Schijflijstknop"
 
 #: ulng.rsoptionseditorfavoritetabs
+msgctxt "ulng.rsoptionseditorfavoritetabs"
 msgid "Favorite Tabs"
 msgstr "Favoriete tabbladen"
 
@@ -13119,6 +13442,26 @@ msgstr ""
 msgctxt "ulng.rsoptionseditorplugins"
 msgid "Plugins"
 msgstr "Invoegtoepassingen"
+
+#: ulng.rsoptionseditorpluginsdsx
+msgid "Search plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswcx
+msgid "Packer plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswdx
+msgid "Content plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswfx
+msgid "File system plugins"
+msgstr ""
+
+#: ulng.rsoptionseditorpluginswlx
+msgid "Viewer plugins"
+msgstr ""
 
 #: ulng.rsoptionseditorquicksearch
 msgid "Quick search/filter"
@@ -13814,7 +14157,7 @@ msgstr "Volledige bestandsnaam (pad+bestandsnaam)"
 #: ulng.rsvarhelpwith
 #, fuzzy
 msgid "Help with \"%\" variables"
-msgstr "Hulp voor '%s' variabelen"
+msgstr "Hulp voor '%' variabelen"
 
 #: ulng.rsvarinputparam
 msgid "Will request request user to enter a parameter with a default suggested value"

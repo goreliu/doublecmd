@@ -54,11 +54,12 @@ type
     FTargetPath: String;
     FTargetMask: String;
     FAlgorithm: THashAlgorithm;
-    FOneFile: Boolean;
+    FOneFile, FSeparateFolder: Boolean;
     FOpenFileAfterOperationCompleted: Boolean;
 
   protected
     FResult: TVerifyChecksumResult;
+    FTextLineBreakStyle: TTextLineBreakStyle;
 
     function GetID: TFileSourceOperationType; override;
 
@@ -85,6 +86,8 @@ type
     property Mode: TCalcCheckSumOperationMode read FMode write FMode;
     property Algorithm: THashAlgorithm read FAlgorithm write FAlgorithm;
     property OneFile: Boolean read FOneFile write FOneFile;
+    property SeparateFolder: Boolean read FSeparateFolder write FSeparateFolder;
+    property TextLineBreakStyle: TTextLineBreakStyle read FTextLineBreakStyle write FTextLineBreakStyle;
     property OpenFileAfterOperationCompleted: Boolean  read FOpenFileAfterOperationCompleted write FOpenFileAfterOperationCompleted;
     property Result: TVerifyChecksumResult read FResult;
   end;

@@ -66,10 +66,10 @@ type
     FArchiveType: String;
     FArchiveTypeCount: Integer;
     FHasFolder,
-    FNewArchive,
     FExistsArchive : Boolean;
     FSourceFileSource: IFileSource;
-    FTargetFileSource:  IArchiveFileSource;
+    FTargetFileSource:  IFileSource;
+    FCount: Integer;
     FPlugin: Boolean;
     FPassword: String;
     FVolumeSize: String;
@@ -88,11 +88,10 @@ type
   // Frees 'Files'.
   procedure ShowPackDlg(TheOwner: TComponent;
                        const SourceFileSource: IFileSource;
-                       const TargetFileSource: IArchiveFileSource;
+                       const TargetFileSource: IFileSource;
                        var Files: TFiles;
                        TargetArchivePath: String;
-                       TargetPathInArchive: String;
-                       bNewArchive : Boolean = True);
+                       TargetPathInArchive: String);
 
 implementation
 
@@ -103,15 +102,14 @@ uses
   uOperationsManager, uArchiveFileSourceUtil, uMultiArchiveFileSource,
   uWcxArchiveCopyInOperation, uMultiArchiveCopyInOperation, uMasks,
   DCStrUtils, uMultiArc, uWcxModule, uTempFileSystemFileSource,
-  uFileSourceCopyOperation, uShowForm, uShowMsg;
+  uFileSourceCopyOperation, uShowForm, uShowMsg, uGlobsPaths;
 
 procedure ShowPackDlg(TheOwner: TComponent;
                      const SourceFileSource: IFileSource;
-                     const TargetFileSource: IArchiveFileSource;
+                     const TargetFileSource: IFileSource;
                      var Files: TFiles;
                      TargetArchivePath: String;
-                     TargetPathInArchive: String;
-                     bNewArchive : Boolean = True);
+                     TargetPathInArchive: String);
 var
   I: Integer;
   PackDialog: TfrmPackDlg;
@@ -123,52 +121,43 @@ begin
   PackDialog.rgPacker.Items.Add(EmptyStr);
   PackDialog.rgPacker.Items.Clear;
 {$ENDIF}
+  with PackDialog do
   try
-    with PackDialog do
-    begin
-      FArchiveType:= 'none';
-      FNewArchive:= bNewArchive;
-      FSourceFileSource:= SourceFileSource;
-      FTargetFileSource:= TargetFileSource;
-      FTargetPathInArchive:= TargetPathInArchive;
-      FArchiveExt:= ExtensionSeparator + FArchiveType;
-      if bNewArchive then  // create new archive
-        begin
-          if Files.Count = 1 then // if one file selected
-            begin
-              FArchiveName:= Files[0].NameNoExt;
-              FHasFolder:= Files[0].IsDirectory or Files[0].IsLinkToDirectory;
-              edtPackCmd.Text := TargetArchivePath + FArchiveName + ExtensionSeparator + FArchiveType;
-            end
-          else   // if some files selected
-            begin
-              FHasFolder:= False;
-              for I:= 0 to Files.Count - 1 do
-              begin
-                if Files[I].IsDirectory or Files[I].IsLinkToDirectory then
-                begin
-                  FHasFolder:= True;
-                  Break;
-                end;
-              end;
-              FArchiveName:= MakeFileName(Files.Path, 'archive');
-              edtPackCmd.Text := TargetArchivePath + FArchiveName + ExtensionSeparator + FArchiveType;
-            end
-        end
-      else  // pack in exsists archive
-        begin
-          if Assigned(TargetFileSource) then
-            edtPackCmd.Text := TargetFileSource.ArchiveFileName;
-        end;
+    FCount:= Files.Count;
+    FArchiveType:= 'none';
+    FSourceFileSource:= SourceFileSource;
+    FTargetFileSource:= TargetFileSource;
+    FTargetPathInArchive:= TargetPathInArchive;
+    FArchiveExt:= ExtensionSeparator + FArchiveType;
 
-      if (ShowModal = mrOK) then
+    if Files.Count = 1 then // if one file selected
       begin
-        case PrepareData(SourceFileSource, Files, @OnPackCopyOutStateChanged) of
-          pdrInCallback:
-            PackDialog:= nil;
-          pdrSynchronous:
-            PackFiles(SourceFileSource, Files);
+        FArchiveName:= Files[0].NameNoExt;
+        FHasFolder:= Files[0].IsDirectory or Files[0].IsLinkToDirectory;
+        edtPackCmd.Text := TargetArchivePath + FArchiveName + ExtensionSeparator + FArchiveType;
+      end
+    else   // if some files selected
+      begin
+        FHasFolder:= False;
+        for I:= 0 to Files.Count - 1 do
+        begin
+          if Files[I].IsDirectory or Files[I].IsLinkToDirectory then
+          begin
+            FHasFolder:= True;
+            Break;
+          end;
         end;
+        FArchiveName:= MakeFileName(Files.Path, 'archive');
+        edtPackCmd.Text := TargetArchivePath + FArchiveName + ExtensionSeparator + FArchiveType;
+      end;
+
+    if (ShowModal = mrOK) then
+    begin
+      case PrepareData(SourceFileSource, Files, @OnPackCopyOutStateChanged) of
+        pdrInCallback:
+          PackDialog:= nil;
+        pdrSynchronous:
+          PackFiles(SourceFileSource, Files);
       end;
     end;
   finally
@@ -233,6 +222,7 @@ end;
 
 procedure TfrmPackDlg.btnConfigClick(Sender: TObject);
 var
+  I: LongInt;
   WcxFileSource: IWcxArchiveFileSource;
 begin
   try
@@ -245,7 +235,20 @@ begin
       end
     else // MultiArc addon
       begin
-        FCustomParams:= InputBox(Caption, rsMsgArchiverCustomParams, FCustomParams);
+        for I := 0 to gMultiArcList.Count - 1 do
+        begin
+          with gMultiArcList.Items[I] do
+          begin
+            if FEnabled and MatchesMaskList(FArchiveType, FExtension, ',') then
+            begin
+              if ShowInputComboBox(Caption, rsMsgArchiverCustomParams, FAskHistory, FCustomParams) then
+              begin
+                gMultiArcList.SaveToFile(gpCfgDir + sMULTIARC_FILENAME);
+              end;
+              Break;
+            end;
+          end;
+        end;
       end;
   except
     on e: Exception do
@@ -332,6 +335,32 @@ procedure TfrmPackDlg.SwitchOptions(ArcTypeChange: Boolean); // Ugly but working
 var
   I: LongInt;
   sCmd: String;
+  procedure SwitchTarOptions(SingleFileMode: Boolean);
+  begin
+    if SingleFileMode then
+    begin
+      // If file list contain directory then
+      // put to the tar archive first is needed
+      if FHasFolder then
+      begin
+        cbPutInTarFirst.Checked:= True;
+        EnableControl(cbPutInTarFirst, False);
+      end
+      else
+      begin
+        cbCreateSeparateArchives.Checked:= (FCount = 1);
+        cbPutInTarFirst.Checked:= (FCount > 1);
+        EnableControl(cbPutInTarFirst, True);
+      end;
+    end
+    else
+    begin
+      sCmd:= LowerCase(FArchiveType);
+      cbPutInTarFirst.Checked:= False;
+      EnableControl(cbPutInTarFirst, not ((sCmd = 'tar') or StrBegins(sCmd, 'tar.')));
+      cbCreateSeparateArchives.Checked:= False;
+    end;
+  end;
 begin
   cbPutInTarFirst.OnChange:= nil;
 
@@ -347,28 +376,11 @@ begin
     begin
       if gWCXPlugins.Enabled[I] and (gWCXPlugins.Ext[I] = FArchiveType) then
       begin
+         EnableControl(btnConfig, ((gWCXPlugins.Flags[I] and PK_CAPS_OPTIONS) <> 0));
         // If plugin supports packing with password
         EnableControl(cbEncrypt, ((gWCXPlugins.Flags[I] and PK_CAPS_ENCRYPT) <> 0));
         // If archive can not contain multiple files
-        if ((gWCXPlugins.Flags[I] and PK_CAPS_MULTIPLE) = 0) then
-        begin
-          // If file list contain directory then
-          // put to the tar archive first is needed
-          if not FHasFolder then
-            cbCreateSeparateArchives.Checked:= True
-          else
-            begin
-              cbPutInTarFirst.Checked:= True;
-              EnableControl(cbPutInTarFirst, False);
-            end;
-        end
-        else
-          begin
-            sCmd:= LowerCase(FArchiveType);
-            cbPutInTarFirst.Checked:= False;
-            EnableControl(cbPutInTarFirst, not ((sCmd = 'tar') or StrBegins(sCmd, 'tar.')));
-            cbCreateSeparateArchives.Checked:= False;
-          end;
+        SwitchTarOptions((gWCXPlugins.Flags[I] and PK_CAPS_MULTIPLE) = 0);
         FPlugin:= True;
         // Options that supported by plugins
         EnableControl(cbStoreDir, True);
@@ -396,30 +408,14 @@ begin
           else
             sCmd:= FAdd;
 
+          EnableControl(btnConfig, (Pos('%S', sCmd) <> 0));
           // If addon supports create multi volume archive
           EnableControl(cbMultivolume, (Pos('%V', sCmd) <> 0));
           // If addon supports packing with password
           EnableControl(cbEncrypt, (Pos('%W', sCmd) <> 0));
 
           // If archive can not contain multiple files
-          if (mafFileNameList in FFlags) then
-          begin
-            // If file list contain directory then
-            // put to the tar archive first is needed
-            if not FHasFolder then
-              cbCreateSeparateArchives.Checked:= True
-            else
-              begin
-                cbPutInTarFirst.Checked:= True;
-                EnableControl(cbPutInTarFirst, False);
-              end;
-          end
-          else begin
-            sCmd:= LowerCase(FArchiveType);
-            cbPutInTarFirst.Checked:= False;
-            EnableControl(cbPutInTarFirst, not ((sCmd = 'tar') or StrBegins(sCmd, 'tar.')));
-            cbCreateSeparateArchives.Checked:= False;
-          end;
+          SwitchTarOptions(mafFileNameList in FFlags);
           FPlugin:= False;
           // Options that don't supported by addons
           cbStoreDir.Checked:= True;
@@ -539,8 +535,8 @@ var
               begin
                 with Operation as TWcxArchiveCopyInOperation do
                 begin
+                  CreateNew:= True;
                   PackingFlags:= aFlags;
-                  CreateNew:= FNewArchive;
                   TarBefore:= cbPutInTarFirst.Checked;
                 end;
               end
@@ -548,14 +544,14 @@ var
               begin
                 with Operation as TMultiArchiveCopyInOperation do
                 begin
+                  CreateNew:= True;
+                  PackingFlags := aFlags;
+                  CustomParams:= FCustomParams;
+                  TarBefore:= cbPutInTarFirst.Checked;
                   if cbEncrypt.Checked then
                     Password:= FPassword;
                   if cbMultivolume.Checked then
                     VolumeSize:= FVolumeSize;
-                  PackingFlags := aFlags;
-                  CreateNew:= FNewArchive;
-                  CustomParams:= FCustomParams;
-                  TarBefore:= cbPutInTarFirst.Checked;
                 end;
               end;
 
@@ -569,17 +565,6 @@ var
   sPassword, sPasswordTmp: String;
   QueueId: TOperationsManagerQueueIdentifier;
 begin
-  if Assigned(FTargetFileSource) then
-  begin
-    // Already have a target file source.
-    // It must be an archive file source.
-    if not (FTargetFileSource.IsClass(TArchiveFileSource)) then
-      raise Exception.Create('Invalid target file source type');
-
-    NewTargetFileSource := FTargetFileSource;
-  end
-  else // Create a new target file source.
-  begin
     if not FPlugin then
     begin
       if cbEncrypt.Checked then
@@ -629,10 +614,10 @@ begin
             FArchiveName:= GetAbsoluteFileName(Files.Path, edtPackCmd.Text);
             try
               // Check if there is an ArchiveFileSource for possible archive.
-              aFile := SourceFileSource.CreateFileObject(ExtractFilePath(FArchiveName));
+              aFile := FTargetFileSource.CreateFileObject(ExtractFilePath(FArchiveName));
               try
                 aFile.Name := Files[I].Name + FArchiveExt;
-                NewTargetFileSource := GetArchiveFileSource(SourceFileSource, aFile, FArchiveType, False, True);
+                NewTargetFileSource := GetArchiveFileSource(FTargetFileSource, aFile, FArchiveType, False, True);
               finally
                 FreeAndNil(aFile);
               end;
@@ -660,10 +645,10 @@ begin
         FArchiveName:= GetAbsoluteFileName(Files.Path, edtPackCmd.Text);
         try
           // Check if there is an ArchiveFileSource for possible archive.
-          aFile := SourceFileSource.CreateFileObject(ExtractFilePath(FArchiveName));
+          aFile := FTargetFileSource.CreateFileObject(ExtractFilePath(FArchiveName));
           try
             aFile.Name := ExtractFileName(FArchiveName);
-            NewTargetFileSource := GetArchiveFileSource(SourceFileSource, aFile, FArchiveType, False, True);
+            NewTargetFileSource := GetArchiveFileSource(FTargetFileSource, aFile, FArchiveType, False, True);
           finally
             FreeAndNil(aFile);
           end;
@@ -681,7 +666,6 @@ begin
         // Pack files
         Pack(Files, QueueIdentifier);
       end;
-  end;
   // Save last used packer
   gLastUsedPacker:= FArchiveType;
 end;

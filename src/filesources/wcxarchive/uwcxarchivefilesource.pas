@@ -151,6 +151,7 @@ uses
   DCFileAttributes,
   FileUtil, uCryptProc,
   uWcxArchiveListOperation,
+  uTempFileSystemFileSource,
   uWcxArchiveCopyInOperation,
   uWcxArchiveCopyOutOperation,
   uWcxArchiveDeleteOperation,
@@ -474,14 +475,12 @@ begin
     else
       begin
         SizeProperty := TFileSizeProperty.Create(WcxHeader.UnpSize);
+        SizeProperty.IsValid := (WcxHeader.UnpSize >= 0);
         CompressedSizeProperty := TFileCompressedSizeProperty.Create(WcxHeader.PackSize);
+        CompressedSizeProperty.IsValid := (WcxHeader.PackSize >= 0);
       end;
-    ModificationTimeProperty := TFileModificationDateTimeProperty.Create(0);
-    try
-      ModificationTime := WcxFileTimeToDateTime(WcxHeader.FileTime);
-    except
-      on EConvertError do;
-    end;
+    ModificationTimeProperty := TFileModificationDateTimeProperty.Create(WcxHeader.DateTime);
+    ModificationTimeProperty.IsValid := (WcxHeader.DateTime <= SysUtils.MaxDateTime);
 
     // Set name after assigning Attributes property, because it is used to get extension.
     Name := ExtractFileNameEx(WcxHeader.FileName);
@@ -493,7 +492,11 @@ begin
   Result := [fsoList, fsoCopyOut, fsoTestArchive, fsoExecute, fsoCalcStatistics]; // by default
   with FWcxModule do
   begin
-    if (((FPluginCapabilities and PK_CAPS_NEW) <> 0) or ((FPluginCapabilities and PK_CAPS_MODIFY) <> 0)) and
+    if (((FPluginCapabilities and PK_CAPS_MODIFY) = 0) and mbFileExists(ArchiveFileName)) then
+    begin
+      // not supported
+    end
+    else if (((FPluginCapabilities and PK_CAPS_NEW) <> 0) or ((FPluginCapabilities and PK_CAPS_MODIFY) <> 0)) and
        (Assigned(PackFiles) or Assigned(PackFilesW)) then
       Result:= Result + [fsoCopyIn];
     if ((FPluginCapabilities and PK_CAPS_DELETE) <> 0) and
@@ -591,10 +594,14 @@ function TWcxArchiveFileSource.CreateCopyInOperation(
 var
   TargetFileSource: IFileSource;
 begin
-  TargetFileSource := Self;
-  Result := TWcxArchiveCopyInOperation.Create(SourceFileSource,
-                                              TargetFileSource,
-                                              SourceFiles, TargetPath);
+  if ParentFileSource is ITempFileSystemFileSource then
+    Result := nil
+  else begin
+    TargetFileSource := Self;
+    Result := TWcxArchiveCopyInOperation.Create(SourceFileSource,
+                                                TargetFileSource,
+                                                SourceFiles, TargetPath);
+  end;
 end;
 
 function TWcxArchiveFileSource.CreateCopyOutOperation(
@@ -614,9 +621,13 @@ function TWcxArchiveFileSource.CreateDeleteOperation(var FilesToDelete: TFiles):
 var
   TargetFileSource: IFileSource;
 begin
-  TargetFileSource := Self;
-  Result := TWcxArchiveDeleteOperation.Create(TargetFileSource,
-                                              FilesToDelete);
+  if ParentFileSource is ITempFileSystemFileSource then
+    Result := nil
+  else begin
+    TargetFileSource := Self;
+    Result := TWcxArchiveDeleteOperation.Create(TargetFileSource,
+                                                FilesToDelete);
+  end;
 end;
 
 function TWcxArchiveFileSource.CreateExecuteOperation(var ExecutableFile: TFile;
@@ -676,7 +687,7 @@ var
   AllDirsList, ExistsDirList : TStringHashListUtf8;
   I : Integer;
   NameLength: Integer;
-  ArchiveTime: LongInt;
+  ArchiveTime: TDateTime;
 begin
   Result:= False;
 
@@ -743,7 +754,7 @@ begin
         if FOpenResult <> E_SUCCESS then Exit;
       end; // while
 
-      ArchiveTime:= FileTimeToWcxFileTime(mbFileAge(ArchiveFileName));
+      ArchiveTime:= FileTimeToDateTimeEx(mbFileGetTime(ArchiveFileName));
 
       (* if plugin does not give a list of folders *)
       for I := 0 to AllDirsList.Count - 1 do
@@ -756,7 +767,7 @@ begin
             Header.FileName := AllDirsList.List[I]^.Key;
             Header.ArcName  := ArchiveFileName;
             Header.FileAttr := GENERIC_ATTRIBUTE_FOLDER;
-            Header.FileTime := ArchiveTime;
+            Header.DateTime := ArchiveTime;
 
             AFileList.Add(Header);
           except

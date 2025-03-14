@@ -47,7 +47,9 @@ type
     DE_LXDE     = 4,
     DE_MATE     = 5,
     DE_CINNAMON = 6,
-    DE_LXQT     = 7
+    DE_LXQT     = 7,
+    DE_FLY      = 8,
+    DE_FLATPAK  = 9
   );
 
 const
@@ -59,7 +61,9 @@ const
     'LXDE',
     'MATE',
     'Cinnamon',
-    'LXQt'
+    'LXQt',
+    'Fly',
+    'Flatpak'
   );
 
 {$IF DEFINED(LINUX)}
@@ -162,12 +166,12 @@ implementation
 
 uses
   URIParser, Unix, Process, LazUTF8, DCOSUtils, DCClassesUtf8, DCStrUtils,
-  DCUnix, uDCUtils, uOSUtils
+  LazLogger, DCUnix, uDCUtils, uOSUtils
 {$IF (NOT DEFINED(FPC_USE_LIBC)) or (DEFINED(BSD) AND NOT DEFINED(DARWIN))}
   , SysCall
 {$ENDIF}
 {$IF NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
-  , libfontconfig, uMimeActions, uMimeType, uGVolume
+  , uFontConfig, uMimeActions, uMimeType, uGVolume
 {$ENDIF}
 {$IFDEF DARWIN}
   , uMyDarwin
@@ -218,6 +222,10 @@ const
                                         'XDG_SESSION_DESKTOP',
                                         'DESKTOP_SESSION');
 begin
+  if fpGetEnv(PAnsiChar('FLATPAK_ID')) <> nil then
+  begin
+    Exit(DE_FLATPAK);
+  end;
   Result:= DE_UNKNOWN;
   for I:= Low(EnvVariable) to High(EnvVariable) do
   begin
@@ -240,6 +248,8 @@ begin
       Exit(DE_MATE);
     if Pos('cinnamon', DesktopSession) <> 0 then
       Exit(DE_CINNAMON);
+    if Pos('fly', DesktopSession) <> 0 then
+      Exit(DE_FLY);
   end;
   if GetEnvironmentVariable('KDE_FULL_SESSION') <> '' then
     Exit(DE_KDE);
@@ -247,8 +257,6 @@ begin
     Exit(DE_GNOME);
   if GetEnvironmentVariable('_LXSESSION_PID') <> '' then
     Exit(DE_LXDE);
-  if fpSystemStatus('pgrep xfce4-session > /dev/null') = 0 then
-    Exit(DE_XFCE);
 end;
 
 function FileIsLinkToFolder(const FileName: String; out LinkTarget: String): Boolean;
@@ -282,9 +290,10 @@ var
   fsExeScr : TFileStreamEx = nil;
 begin
   // First check FileName is not a directory and then check if executable
-  Result:= (fpStat(UTF8ToSys(FileName), Info) <> -1) and FPS_ISREG(Info.st_mode) and
+  Result:= (fpStat(UTF8ToSys(FileName), Info) <> -1) and
+           (FPS_ISREG(Info.st_mode)) and (Info.st_size >= SizeOf(dwSign)) and
            (BaseUnix.fpAccess(UTF8ToSys(FileName), BaseUnix.X_OK) = 0);
-  if Result and (Info.st_size >= SizeOf(dwSign)) then
+  if Result then
   try
     fsExeScr := TFileStreamEx.Create(FileName, fmOpenRead or fmShareDenyNone);
     try
@@ -462,7 +471,7 @@ begin
       if Result then
       begin
         Drive^.Path:= MountPath;
-        WriteLn(Drive^.DeviceId, ' -> ', MountPath);
+        DebugLn(Drive^.DeviceId, ' -> ', MountPath);
       end
     end;
     if not Result and HavePMount and Drive^.IsMediaRemovable then
@@ -576,14 +585,14 @@ begin
 
       { The child does the actual exec, and then exits }
       if FpExecLP(Command, Args) = -1 then
-        Writeln(Format('Execute error %d: %s', [fpgeterrno, SysErrorMessage(fpgeterrno)]));
+        DebugLn('Execute error %d: %s', [fpgeterrno, SysErrorMessage(fpgeterrno)]);
 
       { If the FpExecLP fails, we return an exitvalue of 127, to let it be known }
       fpExit(127);
     end
   else if pid = -1 then         { Fork failed }
     begin
-      WriteLn('Fork failed: ' + Command, LineEnding, SysErrorMessage(fpgeterrno));
+      DebugLn('Fork failed: ' + Command, LineEnding, SysErrorMessage(fpgeterrno));
     end
   else if pid > 0 then          { Parent }
     begin
@@ -612,7 +621,7 @@ begin
     AFont:= FcFontMatch(nil, APattern, @Res);
     if Assigned(AFont) then
     begin
-      AFontName:= FcPatternFormat(AFont, '%{fullname}');
+      AFontName:= FcPatternFormat(AFont, '%{family}');
       if Assigned(AFontName) then
       begin
         Result:= StrPas(AFontName);
@@ -629,9 +638,10 @@ initialization
   {$IFDEF LINUX}
     CheckPMount;
   {$ENDIF}
-  if (LoadFontConfigLib('libfontconfig.so.1', False) > 0) then
+  if LoadFontConfigLib('libfontconfig.so.1') then
   begin
     MonoSpaceFont:= GetFontName(MonoSpaceFont);
+    DebugLn('Monospace: ', MonoSpaceFont);
     UnLoadFontConfigLib;
   end;
 {$ENDIF}

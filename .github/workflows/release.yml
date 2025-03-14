@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   build-mac:
-    runs-on: macos-11
+    runs-on: macos-13
     steps:
     - name: Install Free Pascal
       uses: alexx2000/setup-fpc@master
@@ -19,9 +19,10 @@ jobs:
         lazarus-version: "stable"
 
     - name: Get Lazarus source
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
             repository: 'fpc/Lazarus'
+            ref: 'fixes_3_0'
 
     - name: Build and install Lazarus
       run: make all install
@@ -33,12 +34,12 @@ jobs:
            sudo sed -i -e "s|_PPCARCH_|fpc|g; s|/Developer/lazarus|/usr/local/share/lazarus|g" /etc/lazarus/environmentoptions.xml
 
     - name: Checkout source
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Download unrar source code
-      run: wget https://www.rarlab.com/rar/unrarsrc-6.2.10.tar.gz -O /tmp/unrarsrc.tar.gz
+      run: wget https://www.rarlab.com/rar/unrarsrc-7.0.9.tar.gz -O /tmp/unrarsrc.tar.gz
       
     - name: Extract unrar source code
       run: cd /tmp && tar xzf unrarsrc.tar.gz

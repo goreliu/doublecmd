@@ -47,7 +47,7 @@ uses
   uFileSourceOperationOptions, uWFXModule, uWCXModule, uWDXModule, uwlxmodule,
   udsxmodule, DCXmlConfig, uInfoToolTip, fQuickSearch, uTypes, uClassesEx, uColors,
   uHotDir, uSpecialDir, SynEdit, SynEditTypes, uFavoriteTabs, fTreeViewMenu,
-  uConvEncoding, DCJsonConfig;
+  uConvEncoding, DCJsonConfig, uFileSourceOperationTypes;
 
 type
   { Configuration options }
@@ -173,7 +173,7 @@ type
 
 const
   { Default hotkey list version number }
-  hkVersion = 59;
+  hkVersion = 64;
   // 54 - In "Viewer" context, added the "W" for "cm_WrapText", "4" for "cm_ShowAsDec", "8" for "cm_ShowOffice".
   // 53 - In "Main" context, change shortcut "Alt+`" to "Alt+0" for the "cm_ActivateTabByIndex".
   // 52 - In "Main" context, add shortcut "Ctrl+Shift+B" for "cm_FlatViewSel".
@@ -269,6 +269,7 @@ var
   gDriveBar1,
   gDriveBar2,
   gDriveBarFlat,
+  gDriveBarSyncWidth,
   gDrivesListButton,
   gDirectoryTabs,
   gCurDir,
@@ -305,6 +306,7 @@ var
   gToolbarPathModifierElements: tToolbarPathModifierElements;
 
   gRepeatPassword:Boolean;  // repeat password when packing files
+  gMaxStringItems: Integer;
   gDirHistoryCount:Integer; // how many history we remember
   gShowSystemFiles:Boolean;
   gRunInTermStayOpenCmd: String;
@@ -321,9 +323,12 @@ var
   gUpdatedFilesPosition: TUpdatedFilesPosition;
   gLynxLike:Boolean;
   gFirstTextSearch: Boolean;
+
+  { File views page }
   gExtraLineSpan: Integer;
   gFolderPrefix,
   gFolderPostfix: String;
+  gRenameConfirmMouse: Boolean;
 
   { Mouse }
   gMouseSelectionEnabled: Boolean;
@@ -449,7 +454,6 @@ var
   gDiskIconsSize : Integer;
   gDiskIconsAlpha : Integer;
   gToolIconsSize: Integer;
-  gFiOwnDCIcon : PtrInt;
   gIconsExclude: Boolean;
   gIconsExcludeDirs: String;
   gPixelsPerInch: Integer;
@@ -480,6 +484,7 @@ var
   gShowCopyTabSelectPanel:boolean;
   gUseTrash : Boolean; // if using delete to trash by default
   gRenameSelOnlyName:boolean;
+  gDefaultDropEffect: Boolean;
   gShowDialogOnDragDrop: Boolean;
   gDragAndDropDesiredTextFormat:array[0..pred(NbOfDropTextFormat)] of tDesiredDropTextFormat;
   gDragAndDropAskFormatEachTime: Boolean;
@@ -489,6 +494,8 @@ var
   gAutoExtractOpenMask: String;
   gFileOperationsProgressKind: TFileOperationsProgressKind;
   gFileOperationsConfirmations: TFileOperationsConfirmations;
+  gFileOperationsSounds: array[TFileSourceOperationType] of String;
+  gFileOperationDuration: Integer;
 
   { Multi-Rename}
   gMulRenShowMenuBarOnTop : boolean;
@@ -542,6 +549,7 @@ var
   gInplaceRename,
   gInplaceRenameButton,
   gDblClickToParent,
+  gDblClickEditPath,
   gGoToRoot: Boolean;
   gShowCurDirTitleBar: Boolean;
   gActiveRight: Boolean;
@@ -611,6 +619,7 @@ var
   gImagePaintWidth,
   gColCount,
   gViewerMode,
+  gMaxCodeSize,
   gMaxTextWidth,
   gTabSpaces : Integer;
   gImagePaintColor,
@@ -649,11 +658,13 @@ var
   gSyncDirsShowFilterCopyRight,
   gSyncDirsShowFilterEqual,
   gSyncDirsShowFilterNotEqual,
+  gSyncDirsShowFilterUnknown,
   gSyncDirsShowFilterCopyLeft,
   gSyncDirsShowFilterDuplicates,
   gSyncDirsShowFilterSingles: Boolean;
   gSyncDirsFileMask: string;
   gSyncDirsFileMaskSave: Boolean;
+  gDateTimeFormatSync : String;
 
   { Internal Associations}
   gFileAssociationLastCustomAction: string;
@@ -717,13 +728,11 @@ function GetValidDateTimeFormat(const aFormat, ADefaultFormat: string): string;
 
 procedure RegisterInitialization(InitProc: TProcedure);
 
-const
-  cMaxStringItems=50;
-  
 var
   gConfig: TXmlConfig = nil;
   gStyles: TJsonConfig = nil;
   DefaultDateTimeFormat: String;
+  DefaultDateTimeFormatSync: String;
 
 implementation
 
@@ -735,9 +744,6 @@ uses
    FileUtil, uSynDiffControls
    {$IF DEFINED(MSWINDOWS)}
     , ShlObj
-   {$ENDIF}
-   {$IF DEFINED(DARWIN)}
-    , uMyDarwin
    {$ENDIF}
    {$if lcl_fullversion >= 2010000}
    , SynEditMiscClasses
@@ -756,6 +762,7 @@ var
   // loaded from configuration file
   gPreviousVersion: String = '';
   FInitList: array of TProcedure;
+  CustomDecimalSeparator: String = #$EF#$BF#$BD;
 
 function LoadConfigCheckErrors(LoadConfigProc: TLoadConfigProc;
                                ConfigFileName: String;
@@ -912,7 +919,7 @@ var
           if LoadObj then begin
             HistoryList.Objects[Idx]:= TObject(UIntPtr(History.GetAttr(Node, 'Tag', 0)));
           end;
-          if HistoryList.Count >= cMaxStringItems then Break;
+          if HistoryList.Count >= gMaxStringItems then Break;
         end;
         Node := Node.NextSibling;
       end;
@@ -966,7 +973,7 @@ var
       if SaveObj then begin
         History.SetAttr(SubNode, 'Tag', UInt32(UIntPtr(HistoryList.Objects[I])));
       end;
-      if I >= cMaxStringItems then Break;
+      if I >= gMaxStringItems then Break;
     end;
   end;
 
@@ -1044,11 +1051,20 @@ begin
           Remove(HMHotKey);
         end;
       end;
+      if HotMan.Version < 63 then
+      begin
+        HMHotKey:= FindByCommand('cm_View');
+        if Assigned(HMHotKey) and HMHotKey.SameShortcuts(['F3']) then
+        begin
+          Remove(HMHotKey);
+        end;
+      end;
 
       AddIfNotExists(['F1'],[],'cm_HelpIndex');
       AddIfNotExists(['F2','','',
                       'Shift+F6','',''],'cm_RenameOnly');
-      AddIfNotExists(['F3'],[],'cm_View');
+      AddIfNotExists(['F3','','',
+                      'Shift+F3','','cursor=1',''], 'cm_View');
       AddIfNotExists(['F4'],[],'cm_Edit');
       AddIfNotExists(['F5'],[],'cm_Copy');
       AddIfNotExists(['F6'],[],'cm_Rename');
@@ -1104,6 +1120,7 @@ begin
       AddIfNotExists(['Ctrl+PgDn'],[],'cm_OpenArchive');
       AddIfNotExists(['Ctrl+PgUp'],[],'cm_ChangeDirToParent');
       AddIfNotExists(['Ctrl+Alt+Enter'],[],'cm_ShellExecute');
+      AddIfNotExists(['Ctrl+Shift+A'],[],'cm_ShowTabsList');
       AddIfNotExists(['Ctrl+Shift+B'],[],'cm_FlatViewSel');
       AddIfNotExists(['Ctrl+Shift+C'],[],'cm_CopyFullNamesToClip');
       AddIfNotExists(['Ctrl+Shift+D'],[],'cm_ConfigDirHotList');
@@ -1168,6 +1185,8 @@ begin
         if Assigned(HMHotKey) and HMHotKey.SameShortcuts(['Ctrl+Z']) then
           Remove(HMHotKey);
       end;
+
+      AddIfNotExists(VK_K, [ssModifier], 'cm_MapNetworkDrive');
     end;
 
   HMControl := HMForm.Controls.FindOrCreate('Files Panel');
@@ -1206,11 +1225,25 @@ begin
       AddIfNotExists(['F1'],[],'cm_About');
       AddIfNotExists(['F2'],[],'cm_Reload');
 
+      if HotMan.Version < 60 then
+      begin
+        HMHotKey:= Find(['Right']);
+        if Assigned(HMHotKey) and (HMHotKey.Command = 'cm_LoadNextFile') then
+        begin
+          HMHotKey.Shortcuts[0]:= 'Alt+Right';
+        end;
+        HMHotKey:= Find(['Left']);
+        if Assigned(HMHotKey) and (HMHotKey.Command = 'cm_LoadPrevFile') then
+        begin
+          HMHotKey.Shortcuts[0]:= 'Alt+Left';
+        end;
+      end;
+
       AddIfNotExists(['N'   ,'','',
-                      'Right','',''],'cm_LoadNextFile'); //, ['N'], []);
+                      'Alt+Right','',''],'cm_LoadNextFile');
 
       AddIfNotExists(['P'   ,'','',
-                      'Left','',''],'cm_LoadPrevFile'); //, ['P'], []);
+                      'Alt+Left','',''],'cm_LoadPrevFile');
 
       if HotMan.Version < 54 then
       begin
@@ -1290,6 +1323,12 @@ begin
       AddIfNotExists(['Alt+X'],[],'cm_Exit');
       AddIfNotExists(['Alt+Left'],[],'cm_CopyRightToLeft');
       AddIfNotExists(['Alt+Right'],[],'cm_CopyLeftToRight');
+    end;
+
+  HMForm := HotMan.Forms.FindOrCreate('Confirmation');
+  with HMForm.Hotkeys do
+    begin
+      AddIfNotExists(['F2'], [],'cm_AddToQueue');
     end;
 
   HMForm := HotMan.Forms.FindOrCreate('Copy/Move Dialog');
@@ -1532,7 +1571,7 @@ begin
     CopyFile(gpExePath + 'default' + PathDelim + 'pixmaps.txt', gpCfgDir + 'pixmaps.txt');
   end;
   // multiarc configuration file
-  if not mbFileExists(gpCfgDir + sMULTIARC_FILENAME) then
+  if (mbFileSize(gpCfgDir + sMULTIARC_FILENAME) = 0) then
   begin
     CopyFile(gpExePath + 'default' + PathDelim + sMULTIARC_FILENAME, gpCfgDir + sMULTIARC_FILENAME);
   end;
@@ -1708,6 +1747,7 @@ begin
   gExtraLineSpan := 2;
   gFolderPrefix := '[';
   gFolderPostfix := ']';
+  gRenameConfirmMouse := False;
   { Brief view page }
   gBriefViewFixedCount := 2;
   gBriefViewFixedWidth := 100;
@@ -1835,6 +1875,7 @@ begin
   gDriveBar2 := True;
   gDriveBarFlat := True;
   gDrivesListButton := True;
+  gDriveBarSyncWidth := False;
   gDirectoryTabs := True;
   gCurDir := True;
   gTabHeader := True;
@@ -1877,6 +1918,7 @@ begin
   gUseTrash := True;
   gSkipFileOpError := False;
   gTypeOfDuplicatedRename := drLegacyWithCopy;
+  gDefaultDropEffect:= True;
   gShowDialogOnDragDrop := True;
   gDragAndDropDesiredTextFormat[DropTextRichText_Index].Name:='Richtext format';
   gDragAndDropDesiredTextFormat[DropTextRichText_Index].DesireLevel:=0;
@@ -1893,6 +1935,7 @@ begin
   gAutoExtractOpenMask := EmptyStr;
   gFileOperationsProgressKind := fopkSeparateWindow;
   gFileOperationsConfirmations := [focCopy, focMove, focDelete, focDeleteToTrash];
+  gFileOperationDuration := -1;
 
   { Multi-Rename }
   gMulRenShowMenuBarOnTop := True;
@@ -1963,6 +2006,8 @@ begin
   gSaveFolderTabs := True;
   gSaveSearchReplaceHistory := True;
   gSaveDirHistory := True;
+  gDirHistoryCount := 30;
+  gMaxStringItems := 50;
   gSaveCmdLineHistory := True;
   gSaveFileMaskHistory := True;
   gSaveVolumeSizeHistory := True;
@@ -1987,6 +2032,7 @@ begin
   gInplaceRename := False;
   gInplaceRenameButton := True;
   gDblClickToParent := False;
+  gDblClickEditPath := False;
   gHotDirAddTargetOrNot := False;
   gHotDirFullExpandOrNot:=False;
   gShowPathInPopup:=FALSE;
@@ -2016,7 +2062,7 @@ begin
   { Icons page }
   gShowIcons := sim_all_and_exe;
   gShowIconsNew := gShowIcons;
-  gIconOverlays := False;
+  gIconOverlays := {$IFDEF UNIX}True{$ELSE}False{$ENDIF};
   gIconsSize := 32;
   gIconsSizeNew := gIconsSize;
   gDiskIconsSize := 16;
@@ -2052,6 +2098,7 @@ begin
   gImagePaintWidth := 5;
   gColCount := 1;
   gTabSpaces := 8;
+  gMaxCodeSize := 128;
   gMaxTextWidth := 1024;
   gImagePaintColor := clRed;
   gTextPosition:= 0;
@@ -2090,11 +2137,13 @@ begin
   gSyncDirsShowFilterCopyRight := True;
   gSyncDirsShowFilterEqual := True;
   gSyncDirsShowFilterNotEqual := True;
+  gSyncDirsShowFilterUnknown := True;
   gSyncDirsShowFilterCopyLeft := True;
   gSyncDirsShowFilterDuplicates := True;
   gSyncDirsShowFilterSingles := True;
   gSyncDirsFileMask := '*';
   gSyncDirsFileMaskSave := True;
+  gDateTimeFormatSync := DefaultDateTimeFormatSync;
 
   { Internal Associations}
   gFileAssociationLastCustomAction := rsMsgDefaultCustomActionName;
@@ -2198,11 +2247,10 @@ begin
   { - Not in config - }
   gHelpLang := '';
   gRepeatPassword := True;
-  gDirHistoryCount := 30;
   gFirstTextSearch := True;
   gErrorFile := gpCfgDir + ExtractOnlyFileName(Application.ExeName) + '.err';
   DefaultDateTimeFormat := FormatSettings.ShortDateFormat + ' hh:nn:ss';
-  FormatSettings.DecimalSeparator:='.';
+  DefaultDateTimeFormatSync := 'yyyy.mm.dd hh:nn:ss';
 end;
 
 function OpenConfig(var ErrorMessage: String): Boolean;
@@ -2471,10 +2519,16 @@ procedure LoadXmlConfig;
       end;
   end;
   procedure GetDCFont(Node: TXmlNode; var FontOptions: TDCFontOptions);
+  var
+    FontQuality: Integer;
   begin
     if Assigned(Node) then
-      gConfig.GetFont(Node, '', FontOptions.Name, FontOptions.Size, Integer(FontOptions.Style), Integer(FontOptions.Quality),
-                                FontOptions.Name, FontOptions.Size, Integer(FontOptions.Style), Integer(FontOptions.Quality));
+    begin
+      FontQuality:= Integer(FontOptions.Quality);
+      gConfig.GetFont(Node, '', FontOptions.Name, FontOptions.Size, Integer(FontOptions.Style), FontQuality,
+                                FontOptions.Name, FontOptions.Size, Integer(FontOptions.Style), FontQuality);
+      FontOptions.Quality:= TFontQuality(FontQuality);
+    end;
   end;
   procedure LoadOption(Node: TXmlNode; var Options: TDrivesListButtonOptions; Option: TDrivesListButtonOption; AName: String);
   var
@@ -2489,6 +2543,7 @@ procedure LoadXmlConfig;
     end;
   end;
 var
+  DecimalSeparator: String;
   Root, Node, SubNode: TXmlNode;
   LoadedConfigVersion, iIndexContextMode: Integer;
   oldQuickSearch: Boolean = True;
@@ -2558,62 +2613,12 @@ begin
       gShowCurDirTitleBar := GetValue(Node, 'ShowCurDirTitleBar', gShowCurDirTitleBar);
       gActiveRight := GetValue(Node, 'ActiveRight', gActiveRight);
 
-      //Trick to split initial legacy command for terminal
-      //  Initial name in config was "RunInTerminal".
-      //  If it is still present in config, it means we're running from an older version.
-      //  So if it's different than our setting, let's split it to get actual "cmd" and "params".
-      //  New version uses "RunInTerminalCloseCmd" from now on.
-      //  ALSO, in the case of Windows, installation default was "cmd.exe /K ..." which means Run-and-stayopen
-      //        in the case of Unix, installation default was "xterm -e sh -c ..." which means Run-and-close
-      //  So because of these two different behavior, transition is done slightly differently.
-      {$IF DEFINED(MSWINDOWS)}
-      gRunInTermStayOpenCmd := GetValue(Node, 'RunInTerminal', gRunInTermStayOpenCmd);
-      if gRunInTermStayOpenCmd<>RunInTermCloseCmd then
-      begin
-        SplitCmdLineToCmdParams(gRunInTermStayOpenCmd, gRunInTermStayOpenCmd, gRunInTermStayOpenParams);
-        if gRunInTermStayOpenParams<>'' then gRunInTermStayOpenParams:=gRunInTermStayOpenParams+' {command}' else gRunInTermStayOpenParams:='{command}';
-      end
-      else
-      begin
-        gRunInTermStayOpenCmd := GetValue(Node, 'RunInTerminalStayOpenCmd', RunInTermStayOpenCmd);
-        gRunInTermStayOpenParams := GetValue(Node, 'RunInTerminalStayOpenParams', RunInTermStayOpenParams);
-      end;
+      gRunTermCmd := GetValue(Node, 'JustRunTerminal', RunTermCmd);
+      gRunTermParams := GetValue(Node, 'JustRunTermParams', RunTermParams);
       gRunInTermCloseCmd := GetValue(Node, 'RunInTerminalCloseCmd', RunInTermCloseCmd);
       gRunInTermCloseParams := GetValue(Node, 'RunInTerminalCloseParams', RunInTermCloseParams);
-      {$ELSE}
-      gRunInTermCloseCmd := GetValue(Node, 'RunInTerminal', gRunInTermCloseCmd);
-      if gRunInTermCloseCmd<>RunInTermCloseCmd then
-      begin
-        SplitCmdLineToCmdParams(gRunInTermCloseCmd, gRunInTermCloseCmd, gRunInTermCloseParams);
-        if gRunInTermCloseParams<>'' then gRunInTermCloseParams:=gRunInTermCloseParams+' {command}' else gRunInTermStayOpenParams:='{command}';
-      end
-      else
-      begin
-        gRunInTermCloseCmd := GetValue(Node, 'RunInTerminalCloseCmd', RunInTermCloseCmd);
-        gRunInTermCloseParams := GetValue(Node, 'RunInTerminalCloseParams', RunInTermCloseParams);
-      end;
       gRunInTermStayOpenCmd := GetValue(Node, 'RunInTerminalStayOpenCmd', RunInTermStayOpenCmd);
       gRunInTermStayOpenParams := GetValue(Node, 'RunInTerminalStayOpenParams', RunInTermStayOpenParams);
-      {$ENDIF}
-
-      // Let's try to be backward comptible and re-load possible old values for terminal launch command
-      gRunTermCmd := GetValue(Node, 'JustRunTerminal', '');
-      if gRunTermCmd <> '' then begin
-        gRunTermParams := GetValue(Node, 'JustRunTermParams', RunTermParams);
-      end else begin
-        gRunTermCmd := GetValue(Node, 'RunTerminal', '' );
-        if gRunTermCmd <> '' then begin
-          SplitCmdLineToCmdParams(gRunTermCmd, gRunTermCmd, gRunTermParams);
-        end else begin
-          {$IF DEFINED(DARWIN)}
-          gRunTermCmd:= getMacOSDefaultTerminal;
-          if gRunTermCmd = '' then gRunTermCmd := RunTermCmd;
-          {$ELSE}
-          gRunTermCmd := RunTermCmd;
-          {$ENDIF}
-          gRunTermParams := RunTermParams;
-        end;
-      end;
 
       gOnlyOneAppInstance := GetValue(Node, 'OnlyOneAppInstance', gOnlyOneAppInstance);
       gLynxLike := GetValue(Node, 'LynxLike', gLynxLike);
@@ -2841,6 +2846,7 @@ begin
       gExtraLineSpan := GetValue(Node, 'ExtraLineSpan', gExtraLineSpan);
       gFolderPrefix := GetValue(Node, 'FolderPrefix', gFolderPrefix);
       gFolderPostfix := GetValue(Node, 'FolderPostfix', gFolderPostfix);
+      gRenameConfirmMouse := GetValue(Node, 'RenameConfirmMouse', gRenameConfirmMouse);
     end;
 
     { Keys page }
@@ -2876,6 +2882,7 @@ begin
       gUseTrash := GetValue(Node, 'UseTrash', gUseTrash);
       gSkipFileOpError := GetValue(Node, 'SkipFileOpError', gSkipFileOpError);
       gTypeOfDuplicatedRename := tDuplicatedRename(GetValue(Node, 'TypeOfDuplicatedRename', Integer(gTypeOfDuplicatedRename)));
+      gDefaultDropEffect := GetValue(Node, 'DefaultDropEffect', gDefaultDropEffect);
       gShowDialogOnDragDrop := GetValue(Node, 'ShowDialogOnDragDrop', gShowDialogOnDragDrop);
       gDragAndDropDesiredTextFormat[DropTextRichText_Index].DesireLevel := GetValue(Node, 'DragAndDropTextRichtextDesireLevel', gDragAndDropDesiredTextFormat[DropTextRichText_Index].DesireLevel);
       gDragAndDropDesiredTextFormat[DropTextHtml_Index].DesireLevel := GetValue(Node, 'DragAndDropTextHtmlDesireLevel',gDragAndDropDesiredTextFormat[DropTextHtml_Index].DesireLevel);
@@ -2889,6 +2896,18 @@ begin
       gSearchDefaultTemplate := GetValue(Node, 'SearchDefaultTemplate', gSearchDefaultTemplate);
       gFileOperationsProgressKind := TFileOperationsProgressKind(GetValue(Node, 'ProgressKind', Integer(gFileOperationsProgressKind)));
       gFileOperationsConfirmations := TFileOperationsConfirmations(GetValue(Node, 'Confirmations', Integer(gFileOperationsConfirmations)));
+      // Operations sounds
+      SubNode := Node.FindNode('Sounds');
+      if Assigned(SubNode) then
+      begin
+        gFileOperationDuration:= GetAttr(SubNode, 'Duration', gFileOperationDuration);
+        gFileOperationsSounds[fsoCopy]:= ReplaceEnvVars(GetValue(SubNode, 'Copy', EmptyStr));
+        gFileOperationsSounds[fsoMove]:= ReplaceEnvVars(GetValue(SubNode, 'Move', EmptyStr));
+        gFileOperationsSounds[fsoWipe]:= ReplaceEnvVars(GetValue(SubNode, 'Wipe', EmptyStr));
+        gFileOperationsSounds[fsoDelete]:= ReplaceEnvVars(GetValue(SubNode, 'Delete', EmptyStr));
+        gFileOperationsSounds[fsoSplit]:= ReplaceEnvVars(GetValue(SubNode, 'Split', EmptyStr));
+        gFileOperationsSounds[fsoCombine]:= ReplaceEnvVars(GetValue(SubNode, 'Combine', EmptyStr));
+      end;
       // Operations options
       SubNode := Node.FindNode('Options');
       if Assigned(SubNode) then
@@ -2966,6 +2985,8 @@ begin
     gSaveFolderTabs := GetAttr(Root, 'Configuration/FolderTabs/Save', gSaveFolderTabs);
     gSaveSearchReplaceHistory:= GetAttr(Root, 'History/SearchReplaceHistory/Save', gSaveSearchReplaceHistory);
     gSaveDirHistory := GetAttr(Root, 'History/DirHistory/Save', gSaveDirHistory);
+    gDirHistoryCount := GetAttr(Root, 'History/DirHistory/Count', gDirHistoryCount);
+    gMaxStringItems := GetAttr(Root, 'History/MaxStringItems', gMaxStringItems);
     gSaveCmdLineHistory := GetAttr(Root, 'History/CmdLineHistory/Save', gSaveCmdLineHistory);
     gSaveFileMaskHistory := GetAttr(Root, 'History/FileMaskHistory/Save', gSaveFileMaskHistory);
     gSaveVolumeSizeHistory := GetAttr(Root, 'History/VolumeSizeHistory/Save', gSaveVolumeSizeHistory);
@@ -3019,6 +3040,7 @@ begin
       gInplaceRename := GetValue(Node, 'InplaceRename', gInplaceRename);
       gInplaceRenameButton := GetValue(Node, 'InplaceRenameButton', gInplaceRenameButton);
       gDblClickToParent := GetValue(Node, 'DblClickToParent', gDblClickToParent);
+      gDblClickEditPath := GetValue(Node, 'DoubleClickEditPath', gDblClickEditPath);
       gHotDirAddTargetOrNot:=GetValue(Node, 'HotDirAddTargetOrNot', gHotDirAddTargetOrNot);
       gHotDirFullExpandOrNot:=GetValue(Node, 'HotDirFullExpandOrNot', gHotDirFullExpandOrNot);
       gShowPathInPopup:=GetValue(Node, 'ShowPathInPopup', gShowPathInPopup);
@@ -3031,6 +3053,13 @@ begin
 {$IF DEFINED(UNIX) AND NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
       gSystemItemProperties := GetValue(Node, 'SystemItemProperties', gSystemItemProperties);
 {$ENDIF}
+      DecimalSeparator:= GetValue(Node, 'DecimalSeparator', FormatSettings.DecimalSeparator);
+      if (Length(DecimalSeparator) > 0) and (Ord(DecimalSeparator[1]) < $80) and
+         (DecimalSeparator[1] <> FormatSettings.DecimalSeparator) then
+      begin
+        CustomDecimalSeparator:= DecimalSeparator;
+        FormatSettings.DecimalSeparator:= CustomDecimalSeparator[1];
+      end;
     end;
 
     { Thumbnails }
@@ -3118,6 +3147,7 @@ begin
       gColCount    := GetValue(Node, 'NumberOfColumns', gColCount);
       gTabSpaces := GetValue(Node, 'TabSpaces', gTabSpaces);
       gMaxTextWidth := GetValue(Node, 'MaxTextWidth', gMaxTextWidth);
+      gMaxCodeSize := GetValue(Node, 'MaxCodeSize', gMaxCodeSize);
       gViewerMode  := GetValue(Node, 'ViewerMode'  , gViewerMode);
       gPrintMargins := GetValue(Node, 'PrintMargins'  , gPrintMargins);
       gShowCaret := GetValue(Node, 'ShowCaret'  , gShowCaret);
@@ -3171,11 +3201,13 @@ begin
       gSyncDirsShowFilterCopyRight := GetValue(Node, 'FilterCopyRight', gSyncDirsShowFilterCopyRight);
       gSyncDirsShowFilterEqual := GetValue(Node, 'FilterEqual', gSyncDirsShowFilterEqual);
       gSyncDirsShowFilterNotEqual := GetValue(Node, 'FilterNotEqual', gSyncDirsShowFilterNotEqual);
+      gSyncDirsShowFilterUnknown := GetValue(Node, 'FilterUnknown', gSyncDirsShowFilterUnknown);
       gSyncDirsShowFilterCopyLeft := GetValue(Node, 'FilterCopyLeft', gSyncDirsShowFilterCopyLeft);
       gSyncDirsShowFilterDuplicates := GetValue(Node, 'FilterDuplicates', gSyncDirsShowFilterDuplicates);
       gSyncDirsShowFilterSingles := GetValue(Node, 'FilterSingles', gSyncDirsShowFilterSingles);
       gSyncDirsFileMask := GetValue(Node, 'FileMask', gSyncDirsFileMask);
       gSyncDirsFileMaskSave := GetAttr(Node, 'FileMask/Save', gSyncDirsFileMaskSave);
+      gDateTimeFormatSync := GetValidDateTimeFormat(GetValue(Node, 'DateTimeFormat', gDateTimeFormatSync), DefaultDateTimeFormatSync);
     end;
 
     { Internal Associations}
@@ -3506,6 +3538,7 @@ begin
     SetValue(Node, 'ExtraLineSpan', gExtraLineSpan);
     SetValue(Node, 'FolderPrefix', gFolderPrefix);
     SetValue(Node, 'FolderPostfix', gFolderPostfix);
+    SetValue(Node, 'RenameConfirmMouse', gRenameConfirmMouse);
 
     { Keys page }
     Node := FindNode(Root, 'Keyboard', True);
@@ -3532,6 +3565,7 @@ begin
     SetValue(Node, 'UseTrash', gUseTrash);
     SetValue(Node, 'SkipFileOpError', gSkipFileOpError);
     SetValue(Node, 'TypeOfDuplicatedRename', Integer(gTypeOfDuplicatedRename));
+    SetValue(Node, 'DefaultDropEffect', gDefaultDropEffect);
     SetValue(Node, 'ShowDialogOnDragDrop', gShowDialogOnDragDrop);
     SetValue(Node, 'DragAndDropTextRichtextDesireLevel', gDragAndDropDesiredTextFormat[DropTextRichText_Index].DesireLevel);
     SetValue(Node, 'DragAndDropTextHtmlDesireLevel',gDragAndDropDesiredTextFormat[DropTextHtml_Index].DesireLevel);
@@ -3602,6 +3636,8 @@ begin
     SetAttr(Root, 'Configuration/FolderTabs/Save', gSaveFolderTabs);
     SetAttr(Root, 'History/SearchReplaceHistory/Save', gSaveSearchReplaceHistory);
     SetAttr(Root, 'History/DirHistory/Save', gSaveDirHistory);
+    SetAttr(Root, 'History/DirHistory/Count', gDirHistoryCount);
+    SetAttr(Root, 'History/MaxStringItems', gMaxStringItems);
     SetAttr(Root, 'History/CmdLineHistory/Save', gSaveCmdLineHistory);
     SetAttr(Root, 'History/FileMaskHistory/Save', gSaveFileMaskHistory);
     SetAttr(Root, 'History/VolumeSizeHistory/Save', gSaveVolumeSizeHistory);
@@ -3629,6 +3665,7 @@ begin
     SetValue(Node, 'InplaceRename', gInplaceRename);
     SetValue(Node, 'InplaceRenameButton', gInplaceRenameButton);
     SetValue(Node, 'DblClickToParent', gDblClickToParent);
+    SetValue(Node, 'DoubleClickEditPath', gDblClickEditPath);
     SetValue(Node, 'HotDirAddTargetOrNot',gHotDirAddTargetOrNot);
     SetValue(Node, 'HotDirFullExpandOrNot', gHotDirFullExpandOrNot);
     SetValue(Node, 'ShowPathInPopup', gShowPathInPopup);
@@ -3641,6 +3678,7 @@ begin
 {$IF DEFINED(UNIX) AND NOT (DEFINED(DARWIN) OR DEFINED(HAIKU))}
     SetValue(Node, 'SystemItemProperties', gSystemItemProperties);
 {$ENDIF}
+    SetValue(Node, 'DecimalSeparator', CustomDecimalSeparator);
 
     { Thumbnails }
     Node := FindNode(Root, 'Thumbnails', True);
@@ -3703,6 +3741,7 @@ begin
     SetValue(Node, 'PaintWidth', gImagePaintWidth);
     SetValue(Node, 'NumberOfColumns', gColCount);
     SetValue(Node, 'TabSpaces', gTabSpaces);
+    SetValue(Node, 'MaxCodeSize', gMaxCodeSize);
     SetValue(Node, 'MaxTextWidth', gMaxTextWidth);
     SetValue(Node, 'ViewerMode' , gViewerMode);
     SetValue(Node, 'PrintMargins', gPrintMargins);
@@ -3745,11 +3784,13 @@ begin
     SetValue(Node, 'FilterCopyRight', gSyncDirsShowFilterCopyRight);
     SetValue(Node, 'FilterEqual', gSyncDirsShowFilterEqual);
     SetValue(Node, 'FilterNotEqual', gSyncDirsShowFilterNotEqual);
+    SetValue(Node, 'FilterUnknown', gSyncDirsShowFilterUnknown);
     SetValue(Node, 'FilterCopyLeft', gSyncDirsShowFilterCopyLeft);
     SetValue(Node, 'FilterDuplicates', gSyncDirsShowFilterDuplicates);
     SetValue(Node, 'FilterSingles', gSyncDirsShowFilterSingles);
     SetValue(Node, 'FileMask', gSyncDirsFileMask);
     SetAttr(Node, 'FileMask/Save', gSyncDirsFileMaskSave);
+    SetValue(Node, 'DateTimeFormat', gDateTimeFormatSync);
 
     { Internal Associations}
     Node := FindNode(Root, 'InternalAssociations', True);

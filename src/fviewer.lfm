@@ -1242,7 +1242,6 @@ object frmViewer: TfrmViewer
       ScrollBars = ssAutoVertical
       TabOrder = 1
       TitleStyle = tsNative
-      OnDrawCell = DrawPreviewDrawCell
       OnSelection = DrawPreviewSelection
       OnTopleftChanged = DrawPreviewTopleftChanged
       ColWidths = (
@@ -1376,6 +1375,9 @@ object frmViewer: TfrmViewer
       object miShowCaret: TMenuItem
         Action = actShowCaret
       end
+    end
+    object mnuPlugins: TMenuItem
+      Caption = 'Plugins'
     end
     object miEncoding: TMenuItem
       Caption = 'En&coding'
@@ -1731,13 +1733,16 @@ object frmViewer: TfrmViewer
     object actPrintSetup: TAction
       Category = 'File'
       Caption = 'Print &setup...'
+      Enabled = False
       OnExecute = actExecute
+      Visible = False
     end
     object actPrint: TAction
       Category = 'File'
       Caption = 'P&rint...'
       Enabled = False
       OnExecute = actExecute
+      Visible = False
     end
     object actShowCaret: TAction
       Category = 'View'
@@ -1812,5 +1817,16 @@ object frmViewer: TfrmViewer
   object pmTimeShow: TPopupMenu
     Left = 1088
     Top = 248
+  end
+  object pmStatusBar: TPopupMenu
+    Left = 80
+    Top = 211
+  end
+  object tmUpdateFolderSize: TTimer
+    Enabled = False
+    Interval = 500
+    OnTimer = tmUpdateFolderSizeTimer
+    Left = 196
+    Top = 232
   end
 end

@@ -17,7 +17,7 @@ uses
 type
   TMenuKeyCap = (mkcClear, mkcBkSp, mkcTab, mkcEsc, mkcEnter, mkcSpace, mkcPgUp,
     mkcPgDn, mkcEnd, mkcHome, mkcLeft, mkcUp, mkcRight, mkcDown, mkcIns,
-    mkcDel, mkcShift, mkcCtrl, mkcAlt, mkcWin, mkcNumDivide, mkcNumMultiply,
+    mkcDel, mkcShift, mkcCtrl, mkcAlt, mkcMeta, mkcNumDivide, mkcNumMultiply,
     mkcNumAdd, mkcNumSubstract);
 
 const
@@ -40,17 +40,20 @@ const
   SmkcShift = 'Shift+';
   SmkcCtrl = 'Ctrl+';
   SmkcAlt = 'Alt+';
+  SmkcCmd = 'Cmd+';
   SmkcWin = 'WinKey+';
   SmkcNumDivide = 'Num/';
   SmkcNumMultiply = 'Num*';
   SmkcNumAdd = 'Num+';
   SmkcNumSubstract = 'Num-';
-  SmkcSuper = {$IF DEFINED(DARWIN)}SmkcWin{$ELSE}SmkcCtrl{$ENDIF};
+  SmkcAtem = {$IF DEFINED(DARWIN)}SmkcWin{$ELSE}SmkcCmd{$ENDIF};
+  SmkcMeta = {$IF DEFINED(DARWIN)}SmkcCmd{$ELSE}SmkcWin{$ENDIF};
+  SmkcSuper = {$IF DEFINED(DARWIN)}SmkcCmd{$ELSE}SmkcCtrl{$ENDIF};
 
   MenuKeyCaps: array[TMenuKeyCap] of string = (
     SmkcClear, SmkcBkSp, SmkcTab, SmkcEsc, SmkcEnter, SmkcSpace, SmkcPgUp,
     SmkcPgDn, SmkcEnd, SmkcHome, SmkcLeft, SmkcUp, SmkcRight, SmkcDown,
-    SmkcIns, SmkcDel, SmkcShift, SmkcCtrl, SmkcAlt, SmkcWin,
+    SmkcIns, SmkcDel, SmkcShift, SmkcCtrl, SmkcAlt, SmkcMeta,
     SmkcNumDivide, SmkcNumMultiply, SmkcNumAdd, SmkcNumSubstract);
 
   // Modifiers that can be used for shortcuts (non-toggable).
@@ -157,13 +160,16 @@ uses
   , Gdk2, GLib2, Gtk2Extra
   , Gtk2Proc
 {$ENDIF}
+{$IF DEFINED(LCLGTK3)}
+  , LazGdk3, LazGLib2, LazGObject2
+{$ENDIF}
 {$IF DEFINED(X11) and (DEFINED(LCLQT) or DEFINED(LCLQT5) OR DEFINED(LCLQT6))}
   {$IF DEFINED(LCLQT)}
-  , qt4, qtwidgets
+  , qt4, qtwidgets, qtint
   {$ELSEIF DEFINED(LCLQT5)}
-  , qt5, qtwidgets
+  , qt5, qtwidgets, qtint
   {$ELSEIF DEFINED(LCLQT6)}
-  , qt6, qtwidgets
+  , qt6, qtwidgets, qtint
   {$ENDIF}
   , XLib, X
   , xutil, KeySym
@@ -183,25 +189,27 @@ const
    ((Shift: ssCtrl;  Shortcut: scCtrl;  Text: mkcCtrl),
     (Shift: ssShift; Shortcut: scShift; Text: mkcShift),
     (Shift: ssAlt;   Shortcut: scAlt;   Text: mkcAlt),
-    (Shift: ssMeta;  Shortcut: scMeta;  Text: mkcWin)
+    (Shift: ssMeta;  Shortcut: scMeta;  Text: mkcMeta)
     );
 
 {$IF DEFINED(X11)}
 var
   {$IF DEFINED(LCLGTK)}
   XDisplay: PDisplay = nil;
-  {$ELSEIF DEFINED(LCLGTK2)}
+  {$ELSEIF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
   XDisplay: PGdkDisplay = nil;
   {$ELSEIF (DEFINED(LCLQT) or DEFINED(LCLQT5) OR DEFINED(LCLQT6))}
   XDisplay: PDisplay = nil;
   {$ENDIF}
 {$ENDIF}
 
-{$IF DEFINED(UNIX) and (DEFINED(LCLGTK) or DEFINED(LCLGTK2))}
+{$IF DEFINED(UNIX) and (DEFINED(LCLGTK) or DEFINED(LCLGTK2) or DEFINED(LCLGTK3))}
 var
+  {$IF DEFINED(LCLGTK) or DEFINED(LCLGTK2)}
   // This is set to a virtual key number that AltGr is mapped on.
   VK_ALTGR: Byte = VK_UNDEFINED;
-  {$IF DEFINED(LCLGTK2)}
+  {$ENDIF}
+  {$IF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
   KeysChangesSignalHandlerId : gulong = 0;
   {$ENDIF}
 {$ENDIF}
@@ -506,6 +514,15 @@ begin
         Break;
       end;
     end;
+    // Special case
+    if not Found then
+    begin
+      if CompareFront(SmkcAtem) then
+      begin
+        Result := Result or scMeta;
+        Found := True;
+      end;
+    end;
   end;
   ModLength := StartPos - 1;
 end;
@@ -632,6 +649,8 @@ begin
 
 {$ELSEIF DEFINED(X11) and (DEFINED(LCLQT) or DEFINED(LCLQT5) OR DEFINED(LCLQT6))}
 
+  if (XDisplay = nil) then Exit;
+
   // For QT we'll use Xlib to get text for a key.
 
   KeySym := 0;
@@ -740,7 +759,7 @@ begin
     else               KeySym := 0;
   end;
 
-  if KeySym <> 0 then
+  if (KeySym <> 0) and Assigned(XDisplay) then
   begin
     // Get base character for a key with the given keysym.
     // Don't care about modifiers state, because we already have it.
@@ -1109,7 +1128,7 @@ begin
       end;
   end;
 end;
-{$ELSEIF DEFINED(LCLGTK2)}
+{$ELSEIF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
 procedure KeysChangedSignalHandler(keymap: PGdkKeymap; Data: gpointer); cdecl;
 begin
   OnKeyboardLayoutChanged;
@@ -1124,13 +1143,13 @@ begin
   if Assigned(KeyboardLayoutChangedHook) then
     FreeAndNil(KeyboardLayoutChangedHook);
 
-{$ELSEIF DEFINED(UNIX) and (DEFINED(LCLGTK) or DEFINED(LCLGTK2))}
+{$ELSEIF DEFINED(UNIX) and (DEFINED(LCLGTK) or DEFINED(LCLGTK2) or DEFINED(LCLGTK3))}
 
   {$IF DEFINED(LCLGTK)}
 
   gdk_window_remove_filter(nil, @EventHandler, nil);
 
-  {$ELSEIF DEFINED(LCLGTK2)}
+  {$ELSEIF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
 
   if (KeysChangesSignalHandlerId <> 0)
   and g_signal_handler_is_connected(gdk_keymap_get_for_display(XDisplay),
@@ -1158,7 +1177,7 @@ begin
   KeyboardLayoutChangedHook := KeyboardLayoutChangedHook.Create(
                                TQtWidget(Application.MainForm.Handle).TheObject);
 
-{$ELSEIF DEFINED(UNIX) and (DEFINED(LCLGTK) or DEFINED(LCLGTK2))}
+{$ELSEIF DEFINED(UNIX) and (DEFINED(LCLGTK) or DEFINED(LCLGTK2) or DEFINED(LCLGTK3))}
 
   // On GTK1 XLib's MappingNotify event is used to detect keyboard mapping changes.
   // On GTK2 however (at least on my system), an event of type 112 instead of 34
@@ -1169,13 +1188,13 @@ begin
 
   gdk_window_add_filter(nil, @EventHandler, nil); // Filter events for all windows.
 
-  {$ELSEIF DEFINED(LCLGTK2)}
+  {$ELSEIF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
 
   // Connect to GdkKeymap object for the given display.
   KeysChangesSignalHandlerId :=
-      g_signal_connect(gdk_keymap_get_for_display(XDisplay),
-                       'keys-changed',
-                       TGCallback(@KeysChangedSignalHandler), nil);
+      g_signal_connect_data(gdk_keymap_get_for_display(XDisplay), 'keys-changed',
+                            TGCallback(@KeysChangedSignalHandler), nil, nil,
+                            {$IFDEF LCLGTK2}0{$ELSE}[]{$ENDIF});
 
   {$ENDIF}
 
@@ -1193,7 +1212,7 @@ const
      SmkcRight,                          // Move cursor right
      SmkcSpace,                          // Space
 {$IF DEFINED(DARWIN)}
-     SmkcWin + SmkcSpace,                // Spotlight (Mac OS X)
+     SmkcCmd + SmkcSpace,                // Spotlight (Mac OS X)
 {$ENDIF DARWIN}
      SmkcWin,                            // Context menu
      SmkcShift + 'F10',                  // Context menu
@@ -1242,16 +1261,16 @@ initialization
   // Get connection to X server.
   {$IF DEFINED(LCLGTK)}
   XDisplay := gdk_display;
-  {$ELSEIF DEFINED(LCLGTK2)}
+  {$ELSEIF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
   XDisplay := gdk_display_get_default;
   {$ELSEIF (DEFINED(LCLQT) or DEFINED(LCLQT5) OR DEFINED(LCLQT6))}
-  XDisplay := XOpenDisplay(nil);
+  if not IsWayland then XDisplay := XOpenDisplay(nil);
   {$ENDIF}
 {$ENDIF}
 
 {$IF DEFINED(X11) and (DEFINED(LCLQT) or DEFINED(LCLQT5) OR DEFINED(LCLQT6))}
 finalization
-  XCloseDisplay(XDisplay);
+  if Assigned(XDisplay) then XCloseDisplay(XDisplay);
 {$ENDIF}
 
 end.

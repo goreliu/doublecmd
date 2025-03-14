@@ -4,7 +4,7 @@
    Date and time functions.
 
    Copyright (C) 2009-2012 Przemysław Nagay (cobines@gmail.com)
-   Copyright (C) 2017-2022 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2017-2024 Alexander Koblov (alexx2000@mail.ru)
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -35,10 +35,16 @@ uses
   {$ENDIF}
   ;
 
+const
+  DATE_TIME_NULL = TDateTime(2958466.0);
+
 function FileTimeToDateTime(FileTime : DCBasicTypes.TFileTime) : TDateTime;
 function FileTimeToDateTimeEx(FileTime : DCBasicTypes.TFileTimeEx) : TDateTime;
 function DateTimeToFileTime(DateTime : TDateTime) : DCBasicTypes.TFileTime;
 function DateTimeToFileTimeEx(DateTime : TDateTime) : DCBasicTypes.TFileTimeEx;
+
+function FileTimeToWinFileTime(FileTime : DCBasicTypes.TFileTime) : TWinFileTime;
+function WinFileTimeToFileTimeEx(FileTime: TWinFileTime) : DCBasicTypes.TFileTimeEx;
 
 {en
    Converts system specific UTC time to local time.
@@ -97,6 +103,7 @@ function UnixFileTimeToDateTimeEx(UnixTime: DCBasicTypes.TFileTimeEx) : TDateTim
 {$ENDIF}
 function DateTimeToUnixFileTime(DateTime: TDateTime) : TUnixFileTime;
 function DateTimeToUnixFileTimeEx(DateTime: TDateTime) : DCBasicTypes.TFileTimeEx;
+function UnixFileTimeToFileTime(UnixTime: TUnixFileTime): DCBasicTypes.TFileTime;
 function UnixFileTimeToDosTime(UnixTime: TUnixFileTime): TDosFileTime;
 function UnixFileTimeToWinTime(UnixTime: TUnixFileTime): TWinFileTime;
 function WinFileTimeToUnixTime(WinTime: TWinFileTime) : TUnixFileTime;
@@ -273,6 +280,29 @@ end;
 {$ELSE}
 begin
   Result := 0;
+end;
+{$ENDIF}
+
+function FileTimeToWinFileTime(FileTime: DCBasicTypes.TFileTime): TWinFileTime;
+{$IF DEFINED(MSWINDOWS)}
+begin
+  Result:= TWinFileTime(FileTime)
+end;
+{$ELSEIF DEFINED(UNIX)}
+begin
+  Result:= UnixFileTimeToWinTime(TUnixFileTime(FileTime));
+end;
+{$ENDIF}
+
+function WinFileTimeToFileTimeEx(FileTime: TWinFileTime): DCBasicTypes.TFileTimeEx;
+{$IF DEFINED(MSWINDOWS)}
+begin
+  Result := TFileTimeEx(FileTime);
+end;
+{$ELSEIF DEFINED(UNIX)}
+begin
+  Result.Sec:= Int64((FileTime - UnixWinEpoch) div 10000000);
+  Result.NanoSec:= Int64((FileTime - UnixWinEpoch) mod 10000000) * 100;
 end;
 {$ENDIF}
 
@@ -480,7 +510,7 @@ end;
 function UnixFileTimeToDateTimeEx(UnixTime: DCBasicTypes.TFileTimeEx) : TDateTime;
 var
   ATime: TTimeStruct;
-  milliseconds: Word;
+  Milliseconds: Word;
 begin
   if (fpLocalTime(@UnixTime.sec, @ATime) = nil) then
     Exit(UnixEpoch);
@@ -495,9 +525,11 @@ begin
   if ATime.tm_sec > 59 then
     ATime.tm_sec := 59;
 
-  milliseconds:= round( Extended(UnixTime.nanosec) / (1000.0*1000.0) );
-  if (milliseconds > 999) then
-    milliseconds:= 999;
+  if (UnixTime.nanosec > 999000000) then
+    Milliseconds := 999
+  else begin
+    Milliseconds := Round( Extended(UnixTime.nanosec) / (1000.0 * 1000.0) );
+  end;
 
   Result := ComposeDateTime(EncodeDate(ATime.tm_year, ATime.tm_mon, ATime.tm_mday),
                             EncodeTime(ATime.tm_hour, ATime.tm_min, ATime.tm_sec, milliseconds));
@@ -520,9 +552,6 @@ var
   Year, Month, Day: Word;
   Hour, Minute, Second, MilliSecond: Word;
 begin
-  if DateTime < UnixEpoch then
-    raise EDateOutOfRange.Create(DateTime);
-
   DecodeDate(DateTime, Year, Month, Day);
   DecodeTime(DateTime, Hour, Minute, Second, MilliSecond);
 
@@ -538,7 +567,7 @@ begin
 
   AUnixTime:= fpMkTime(@ATime);
 
-  if (AUnixTime < 0) then
+  if (AUnixTime = -1) then
     Result:= 0
   else begin
     Result:= TUnixFileTime(AUnixTime);
@@ -579,7 +608,7 @@ begin
 
   AUnixTime:= fpMkTime(@ATime);
 
-  if (AUnixTime < 0) then
+  if (AUnixTime = -1) then
     Result:= TFileTimeExNull
   else begin
     Result:= TFileTimeEx.create(AUnixTime, MilliSecond*1000*1000);
@@ -593,6 +622,15 @@ begin
   Result:= WinFileTimeToUnixTime(WinFileTime);
 end;
 {$ENDIF}
+
+function UnixFileTimeToFileTime(UnixTime: TUnixFileTime): DCBasicTypes.TFileTime; inline;
+begin
+{$IF DEFINED(MSWINDOWS)}
+  Result:= UnixFileTimeToWinTime(UnixTime);
+{$ELSE}
+  Result:= UnixTime;
+{$ENDIF}
+end;
 
 function UnixFileTimeToDosTime(UnixTime: TUnixFileTime): TDosFileTime;
 begin

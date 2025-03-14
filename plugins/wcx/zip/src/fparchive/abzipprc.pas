@@ -48,21 +48,15 @@ uses
 implementation
 
 uses
-{$IFDEF MSWINDOWS}
-  Windows,
-{$ENDIF}
-{$IFDEF LibcAPI}
-  Libc,
-{$ENDIF}
   SysUtils,
   AbArcTyp,
   AbExcept,
   AbUtils,
   AbDfCryS,
   AbVMStrm,
-  AbDfBase,
   AbZlibPrc,
   AbZipxPrc,
+  DCcrc32,
   DCClassesUtf8;
 
 
@@ -86,29 +80,29 @@ begin
     Hlpr.StreamSize := InStream.Size;
 
     { set deflation level desired }
-    Hlpr.PKZipOption := '0';
+    Hlpr.CompressionLevel := clNone;
 
     case Archive.DeflationOption of
       doNormal    : begin
-        Hlpr.PKZipOption := 'n';
+        Hlpr.CompressionLevel := clNormal;
         Item.GeneralPurposeBitFlag :=
           Item.GeneralPurposeBitFlag or DEFLATE_NORMAL_MASK;
       end;
 
       doMaximum   : begin
-        Hlpr.PKZipOption := 'x';
+        Hlpr.CompressionLevel := clMaximum;
         Item.GeneralPurposeBitFlag :=
           Item.GeneralPurposeBitFlag or DEFLATE_MAXIMUM_MASK;
       end;
 
       doFast      : begin
-        Hlpr.PKZipOption := 'f';
+        Hlpr.CompressionLevel := clFast;
         Item.GeneralPurposeBitFlag :=
           Item.GeneralPurposeBitFlag or DEFLATE_FAST_MASK;
       end;
 
       doSuperFast : begin
-        Hlpr.PKZipOption := 's';
+        Hlpr.CompressionLevel := clSuperFast;
         Item.GeneralPurposeBitFlag :=
           Item.GeneralPurposeBitFlag or DEFLATE_SUPERFAST_MASK;
       end;
@@ -127,19 +121,19 @@ end;
 { ========================================================================== }
 procedure DoStore(Archive : TAbZipArchive; Item : TAbZipItem; OutStream, InStream : TStream);
 var
-  CRC32       : LongInt;
+  CRC32       : UInt32;
   Percent     : LongInt;
   LastPercent : LongInt;
   InSize      : Int64;
   DataRead    : Int64;
   Total       : Int64;
   Abort       : Boolean;
-  Buffer      : array [0..8191] of byte;
+  Buffer      : array [0..16383] of byte;
 begin
   { setup }
   Item.CompressionMethod := cmStored;
   Abort := False;
-  CRC32 := -1;
+  CRC32 := 0;
   Total := 0;
   Percent := 0;
   LastPercent := 0;
@@ -159,7 +153,7 @@ begin
     end;
 
     { update CRC}
-    AbUpdateCRCBuffer(CRC32, Buffer, DataRead);
+    CRC32 := crc32_16bytes(Buffer, DataRead, CRC32);
 
     { write data (encrypting if needed) }
     OutStream.WriteBuffer(Buffer, DataRead);
@@ -169,7 +163,7 @@ begin
   end;
 
   { finish CRC calculation }
-  Item.CRC32 := not CRC32;
+  Item.CRC32 := LongInt(CRC32);
 
   { show final progress increment }
   if (Percent < 100) and Assigned(Archive.OnProgress) then

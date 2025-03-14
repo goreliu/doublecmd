@@ -3,7 +3,7 @@
     -------------------------------------------------------------------------
     This unit contains some functions for open files in associated applications.
 
-    Copyright (C) 2006-2019 Alexander Koblov (alexx2000@mail.ru)
+    Copyright (C) 2006-2023 Alexander Koblov (alexx2000@mail.ru)
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -34,6 +34,8 @@ const
 type
   TPrepareParameterOption = (ppoNormalizePathDelims, ppoReplaceTilde);
   TPrepareParameterOptions = set of TPrepareParameterOption;
+
+procedure PrepareOutput(var sParams: String; const sWorkPath: String; const ATemp: String = '');
 
 function PrepareParameter(sParam: string; paramFile: TFile = nil; options: TPrepareParameterOptions = []; pbShowCommandLinePriorToExecute: PBoolean = nil; pbRunInTerminal: PBoolean = nil; pbKeepTerminalOpen: PBoolean = nil; pbAbortOperation: PBoolean = nil): string; overload;
 
@@ -691,7 +693,7 @@ type
             begin
               state.files := leftFiles;
               state.fil := leftFile;
-              state.dir := frmMain.FrameLeft.CurrentPath;
+              state.dir := frmMain.FrameLeft.CurrentRealPath;
               state.address := frmMain.FrameLeft.CurrentAddress;
               state.pos := spSide;
               if sSourceStr[index] = 'b' then
@@ -705,7 +707,7 @@ type
             begin
               state.files := rightFiles;
               state.fil := rightFile;
-              state.dir := frmMain.FrameRight.CurrentPath;
+              state.dir := frmMain.FrameRight.CurrentRealPath;
               state.address := frmMain.FrameRight.CurrentAddress;
               state.pos := spSide;
             end;
@@ -906,10 +908,10 @@ begin
       activeFiles := leftFiles;
       activeFile:= leftFile;
       inactiveFile:= rightFile;
-      activeDir := frmMain.FrameLeft.CurrentPath;
+      activeDir := frmMain.FrameLeft.CurrentRealPath;
       activeAddress := frmMain.FrameLeft.CurrentAddress;
       inactiveFiles := rightFiles;
-      inactiveDir := frmMain.FrameRight.CurrentPath;
+      inactiveDir := frmMain.FrameRight.CurrentRealPath;
       inactiveAddress := frmMain.FrameRight.CurrentAddress;
     end
     else
@@ -917,10 +919,10 @@ begin
       activeFiles := rightFiles;
       activeFile:= rightFile;
       inactiveFile:= leftFile;
-      activeDir := frmMain.FrameRight.CurrentPath;
+      activeDir := frmMain.FrameRight.CurrentRealPath;
       activeAddress := frmMain.FrameRight.CurrentAddress;
       inactiveFiles := leftFiles;
-      inactiveDir := frmMain.FrameLeft.CurrentPath;
+      inactiveDir := frmMain.FrameLeft.CurrentRealPath;
       inactiveAddress := frmMain.FrameLeft.CurrentAddress;
     end;
 
@@ -933,6 +935,41 @@ begin
     FreeAndNil(rightFiles);
     FreeAndNil(singleFileFiles);
   end;
+end;
+
+procedure PrepareOutput(var sParams: String; const sWorkPath: String; const ATemp: String);
+var
+  Process: TProcessUTF8;
+  iStart, iCount: Integer;
+  sTmpFile, sShellCmdLine: String;
+  iLastConsoleCommandPos: Integer = 0;
+begin
+  repeat
+    iStart := Posex('<?', sParams, (iLastConsoleCommandPos + 1)) + 2;
+    iCount := Posex('?>', sParams, iStart) - iStart;
+    if (iStart <> 0) and (iCount >= 0) then
+    begin
+      if Length(ATemp) > 0 then
+        sTmpFile:= ATemp
+      else begin
+        sTmpFile:= GetTempFolderDeletableAtTheEnd;
+      end;
+      sTmpFile := GetTempName(sTmpFile);
+      sShellCmdLine := Copy(sParams, iStart, iCount) + ' > ' + QuoteStr(sTmpFile);
+      Process := TProcessUTF8.Create(nil);
+      try
+        Process.CommandLine := FormatShell(sShellCmdLine);
+        Process.CurrentDirectory := sWorkPath;
+        Process.Options := [poWaitOnExit];
+        Process.ShowWindow := swoHide;
+        Process.Execute;
+      finally
+        Process.Free;
+      end;
+      sParams := Copy(sParams, 1, iStart - 3) + sTmpFile + Copy(sParams, iStart + iCount + 2, MaxInt);
+      iLastConsoleCommandPos := iStart;
+    end;
+  until ((iStart = 0) or (iCount < 0));
 end;
 
 { PrepareParameter }
@@ -956,10 +993,6 @@ end;
 { ProcessExtCommandFork }
 function ProcessExtCommandFork(sCmd, sParams, sWorkPath: string; paramFile: TFile; bTerm: boolean; bKeepTerminalOpen: boolean): boolean;
 var
-  sTmpFile, sShellCmdLine: string;
-  iStart, iCount: integer;
-  iLastConsoleCommandPos: integer = 0;
-  Process: TProcessUTF8;
   sl: TStringList;
   bShowCommandLinePriorToExecute: boolean = False;
   bAbortOperationFlag: boolean = false;
@@ -971,9 +1004,9 @@ begin
   sParams := PrepareParameter(sParams, paramFile, [], @bShowCommandLinePriorToExecute, @bTerm, @bKeepTerminalOpen, @bAbortOperationFlag);
   if not bAbortOperationFlag then sWorkPath := PrepareParameter(sWorkPath, paramFile, [ppoNormalizePathDelims, ppoReplaceTilde]);
 
-  // 2. If working directory has been specified, let's switch to it.
   if not bAbortOperationFlag then
   begin
+    // 2. If working directory has been specified, let's switch to it.
     if sWorkPath <> '' then
       mbSetCurrentDir(sWorkPath);
 
@@ -986,26 +1019,7 @@ begin
     // For example:
     // {!VIEWER} <?rpm -qivlp --scripts %p?>
     //  Show in Viewer information about RPM package
-    repeat
-      iStart := Posex('<?', sParams, (iLastConsoleCommandPos + 1)) + 2;
-      iCount := Posex('?>', sParams, iStart) - iStart;
-      if (iStart <> 0) and (iCount >= 0) then
-      begin
-        sTmpFile := GetTempName(GetTempFolderDeletableAtTheEnd);
-        sShellCmdLine := Copy(sParams, iStart, iCount) + ' > ' + QuoteStr(sTmpFile);
-        Process := TProcessUTF8.Create(nil);
-        try
-          Process.CommandLine := FormatShell(sShellCmdLine);
-          Process.Options := [poWaitOnExit];
-          Process.ShowWindow := swoHide;
-          Process.Execute;
-        finally
-          Process.Free;
-        end;
-        sParams := Copy(sParams, 1, iStart - 3) + sTmpFile + Copy(sParams, iStart + iCount + 2, MaxInt);
-        iLastConsoleCommandPos := iStart;
-      end;
-    until ((iStart = 0) or (iCount < 0));
+    PrepareOutput(sParams, sWorkPath);
 
     //4. If user user wanted to execute an internal command, let's do it.
     // @Mine@

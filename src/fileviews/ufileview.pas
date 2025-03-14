@@ -31,7 +31,7 @@ uses
   uFindFiles, Classes, SysUtils, Controls, ExtCtrls, Graphics, ComCtrls, contnrs, fgl, LMessages,
   uFile, uDisplayFile, uFileSource, uFormCommands, uDragDropEx, DCXmlConfig, DCBasicTypes,
   DCClassesUtf8, uFileSorting, uFileViewHistory, uFileProperty, uFileViewWorker,
-  uFunctionThread, uFileSystemWatcher, fQuickSearch, DCStringHashListUtf8, uGlobs;
+  uFunctionThread, uFileSourceWatcher, fQuickSearch, DCStringHashListUtf8, uGlobs;
 
 type
 
@@ -90,7 +90,7 @@ type
 
   { TFileView }
 
-  TFileView = class(TWinControl)
+  TFileView = class(TCustomControl)
   private
     {en
        History of viewed paths and file sources.
@@ -214,7 +214,7 @@ type
     }
     procedure SetFileList(var NewAllDisplayFiles: TDisplayFiles;
                           var NewFilteredDisplayFiles: TDisplayFiles);
-    procedure EnableWatcher(Enable: Boolean);
+    procedure SetFlatView(AFlatView: Boolean);
 
     procedure ActivateEvent(Sender: TObject);
     function CheckIfDelayReload: Boolean;
@@ -223,7 +223,7 @@ type
                                    NewFilesPosition: TNewFilesPosition;
                                    UpdatedFilesPosition: TUpdatedFilesPosition);
     procedure LoadingFileListTimer(Sender: TObject);
-    procedure ReloadEvent(const aFileSource: IFileSource; const ReloadedPaths: TPathsArray);
+    procedure FileSourceEventListener(var params: TFileSourceEventParams);
     procedure ReloadTimerEvent(Sender: TObject);
     procedure WatcherEvent(const EventData: TFSWatcherEventData);
 
@@ -235,12 +235,16 @@ type
     FSavedSelection: TStringListEx;
     FSortingProperties: TFilePropertiesTypes;
 
+    procedure EnableWatcher(Enable: Boolean);
     {en
        Initializes parts of the view common to all creation methods.
     }
     procedure CreateDefault(AOwner: TWinControl); virtual;
 
+    procedure PushRenameEvent(AFile: TFile; const NewFileName: String);
     procedure AddWorker(const Worker: TFileViewWorker; SetEvents: Boolean = True);
+    procedure DoFileChanged(ADisplayFile: TDisplayFile; APropertiesChanged: TFilePropertiesTypes); virtual;
+    procedure DoFileRenamed(ADisplayFile: TDisplayFile); virtual;
     procedure BeginUpdate;
     procedure CalculateSpace(AFile: TDisplayFile);
     procedure CalculateSpace(var AFileList: TFVWorkerFileList);
@@ -265,6 +269,7 @@ type
     }
     procedure FileSourceFileListUpdated; virtual;
     function GetCurrentPath: String; virtual;
+    function GetCurrentRealPath: String; virtual;
     procedure SetCurrentPath(NewPath: String); virtual;
     function GetActiveDisplayFile: TDisplayFile; virtual; abstract;
     function GetWorkersThread: TFunctionThread;
@@ -354,7 +359,6 @@ type
 
     function GetVariantFileProperties: TDynamicStringArray; virtual;
 
-    property Active: Boolean read FActive write SetActive;
     property FilePropertiesNeeded: TFilePropertiesTypes read FFilePropertiesNeeded write FFilePropertiesNeeded;
     property History: TFileViewHistory read FHistory;
     property LastActiveFile: String read FLastActiveFile write FLastActiveFile;
@@ -364,6 +368,7 @@ type
 
   public
     property  DisplayFiles: TDisplayFiles read FFiles;
+    property Active: Boolean read FActive write SetActive;
 
   public
     constructor Create(AOwner: TWinControl;
@@ -446,7 +451,7 @@ type
     procedure SaveConfiguration(AConfig: TXmlConfig; ANode: TXmlNode; ASaveHistory:boolean); virtual;
 
     procedure UpdateView;
-
+    procedure ApplySettings;
     procedure UpdateColor; virtual; abstract;
 
     {en
@@ -523,6 +528,7 @@ type
     property CurrentAddress: String read GetCurrentAddress;
     property CurrentFileSourceIndex: Integer read GetCurrentFileSourceIndex;
     property CurrentPath: String read GetCurrentPath write SetCurrentPath;
+    property CurrentRealPath: String read GetCurrentRealPath;
     property CurrentPathIndex: Integer read GetCurrentPathIndex;
     property CurrentLocation: String read GetCurrentLocation;
     property FileFilter: String read FFileFilter;
@@ -532,7 +538,7 @@ type
     property FileSources[Index: Integer]: IFileSource read GetFileSource;
     property FileSourcesCount: Integer read GetFileSourcesCount;
     property Flags: TFileViewFlags read FFlags write SetFlags;
-    property FlatView: Boolean read FFlatView write FFlatView;
+    property FlatView: Boolean read FFlatView write SetFlatView;
     property Path[FileSourceIndex, PathIndex: Integer]: String read GetPath;
     property PathsCount[FileSourceIndex: Integer]: Integer read GetPathsCount;
 
@@ -620,7 +626,7 @@ begin
 
     FHistory.AddFileSource(AFileSource);
     ChangePathAndSetActiveFile(aPath);
-    FileSource.AddReloadEventListener(@ReloadEvent);
+    FileSource.AddEventListener(@FileSourceEventListener);
 
     // Update view before making file source file list,
     // so that file list isn't unnecessarily displayed twice.
@@ -639,7 +645,7 @@ begin
     CreateDefault(AOwner);
     AFileView.CloneTo(Self);
     if Assigned(FileSource) then
-      FileSource.AddReloadEventListener(@ReloadEvent);
+      FileSource.AddEventListener(@FileSourceEventListener);
     UpdateView;
   finally
     EnableAutoSizing;
@@ -1022,7 +1028,7 @@ begin
   StopWorkers;
 
   for i := 0 to FHistory.Count - 1 do
-    FHistory.FileSource[i].RemoveReloadEventListener(@ReloadEvent);
+    FHistory.FileSource[i].RemoveEventListener(@FileSourceEventListener);
 
   ClearRecentlyUpdatedFiles;
   ClearPendingFilesChanges;
@@ -1058,12 +1064,14 @@ function TFileView.calcFileHashKey(const FileName, APath: String): String;
 var
   subPath: String;
 begin
-  if not FFlatView then begin
-    Result := FileName;
-  end else begin
+  if fspMounted in FileSource.GetProperties then begin
+    Result := ExcludeTrailingPathDelimiter( APath + FileName );
+  end else if FFlatView then begin
     subPath := APath.Substring( currentPath.Length );
     if subPath<>EmptyStr then subPath := IncludeTrailingPathDelimiter(subPath);
     Result := subPath + FileName;
+  end else begin
+    Result := FileName;
   end;
 end;
 
@@ -1082,6 +1090,7 @@ begin
     AFile.Name := FileName;
     try
       FileSource.RetrieveProperties(AFile, FilePropertiesNeeded, GetVariantFileProperties);
+      if FFlatView and AFile.IsDirectory then raise EFileSourceException.Create(EmptyStr);
     except
       on EFileSourceException do
         begin
@@ -1094,7 +1103,7 @@ begin
     FHashedFiles.Add(ADisplayFile, nil);
     FHashedNames.Add(AFileKey, ADisplayFile);
     InsertFile(ADisplayFile, FAllDisplayFiles, NewFilesPosition);
-    if not TFileListBuilder.MatchesFilter(ADisplayFile.FSFile, FileFilter, FFilterOptions) then
+    if not TFileListBuilder.MatchesFilter(FileSource, ADisplayFile.FSFile, FileFilter, FFilterOptions) then
     begin
       InsertFile(ADisplayFile, FFiles, NewFilesPosition);
       VisualizeFileUpdate(ADisplayFile);
@@ -1146,13 +1155,15 @@ begin
       ADisplayFile.FSFile.Name := NewFileName;
       FHashedNames.Remove(OldFileKey);
       FHashedNames.Add(NewFileKey, ADisplayFile);
-      ADisplayFile.Busy:= False;
+      ADisplayFile.Busy:= [];
       ADisplayFile.IconID := -1;
       ADisplayFile.Selected := False;
       ADisplayFile.IconOverlayID := -1;
       ADisplayFile.TextColor := clNone;
       ADisplayFile.DisplayStrings.Clear;
       ResortFile(ADisplayFile, FAllDisplayFiles);
+
+      DoFileRenamed(ADisplayFile);
 
       ANotifications := [fvnFileSourceFileListUpdated];
       case ApplyFilter(ADisplayFile, NewFilesPosition) of
@@ -1266,7 +1277,7 @@ var
     // there are two cases of file update
     // 1. modified: VisualizeFileUpdate() should be called
     // 2. no modified: need not Visual Blink
-    if TFileSystemWatcher.CanWatch(FWatchPath) and
+    if FileSource.GetWatcher.canWatch(FWatchPath) and
        ((propertiesChanged+[fpLastAccessTime,fpChangeTime])=[fpLastAccessTime,fpChangeTime]) then
          exit;
     VisualizeFileUpdate(ADisplayFile);
@@ -1284,6 +1295,7 @@ begin
       try
         FileSource.RetrieveProperties(AFile, FilePropertiesNeeded, GetVariantFileProperties);
         propertiesChanged:= AFile.Compare(OldFile);
+        if propertiesChanged = [] then Exit;
       finally
         FreeAndNil(OldFile);
       end;
@@ -1298,10 +1310,12 @@ begin
           Exit;
         end;
     end;
-    ADisplayFile.Busy := False;
     ADisplayFile.TextColor := clNone;
     ADisplayFile.IconOverlayID := -1;
     ADisplayFile.DisplayStrings.Clear;
+    ADisplayFile.Busy := ADisplayFile.Busy - [bsProp];
+
+    DoFileChanged(ADisplayFile, propertiesChanged);
 
     ANotifications := [fvnFileSourceFileListUpdated];
     case ApplyFilter(ADisplayFile, NewFilesPosition) of
@@ -1395,6 +1409,11 @@ begin
   end;
 end;
 
+procedure TFileView.PushRenameEvent(AFile: TFile; const NewFileName: String);
+begin
+  Self.RenameFile(NewFileName, AFile.Name, AFile.Path, gNewFilesPosition, gUpdatedFilesPosition);
+end;
+
 procedure TFileView.AddWorker(const Worker: TFileViewWorker; SetEvents: Boolean = True);
 begin
   FFileViewWorkers.Add(Worker);
@@ -1404,6 +1423,17 @@ begin
     Worker.OnStarting := @WorkerStarting;
     Worker.OnFinished := @WorkerFinished;
   end;
+end;
+
+procedure TFileView.DoFileChanged(ADisplayFile: TDisplayFile;
+  APropertiesChanged: TFilePropertiesTypes);
+begin
+  // Empty
+end;
+
+procedure TFileView.DoFileRenamed(ADisplayFile: TDisplayFile);
+begin
+  // Empty
 end;
 
 procedure TFileView.BeginUpdate;
@@ -1518,7 +1548,7 @@ var
   Index: Integer;
 begin
   for Index := 0 to FFiles.Count - 1 do
-    FFiles[Index].Busy:= False;
+    FFiles[Index].Busy:= [];
 end;
 
 procedure TFileView.DoOnFileListChanged;
@@ -1549,17 +1579,17 @@ begin
   Result := FHistory.CurrentPath;
 end;
 
+function TFileView.GetCurrentRealPath: String;
+begin
+  Result:= FileSource.GetRealPath( CurrentPath );
+end;
+
 procedure TFileView.SetCurrentPath(NewPath: String);
 begin
   if (NewPath <> CurrentPath) and BeforeChangePath(FileSource, cprChange, NewPath) then
   begin
     FFlatView:= False;
     EnableWatcher(False);
-
-    //-- before changing path, remember currently active filename
-    //   TODO: move this call to some generic place that is called
-    //         ALWAYS when currently selected file is changed
-    FHistory.SetFilenameForCurrentPath(GetActiveFileName());
     FHistory.AddPath(NewPath); // Sets CurrentPath.
     AfterChangePath;
     EnableWatcher(True);
@@ -2013,7 +2043,7 @@ begin
 
   DoFileUpdated(OrigDisplayFile);
 
-  OrigDisplayFile.Busy:= False;
+  OrigDisplayFile.Busy:= OrigDisplayFile.Busy - [bsProp];
 end;
 
 function TFileView.GetActiveFileName: String;
@@ -2171,7 +2201,7 @@ var
   bFilterOut: Boolean;
   FilteredFilesIndex: Integer;
 begin
-  bFilterOut := TFileListBuilder.MatchesFilter(ADisplayFile.FSFile, FileFilter, FFilterOptions);
+  bFilterOut := TFileListBuilder.MatchesFilter(FileSource, ADisplayFile.FSFile, FileFilter, FFilterOptions);
   FilteredFilesIndex := FFiles.Find(ADisplayFile);
   if FilteredFilesIndex >= 0 then
   begin
@@ -2692,7 +2722,7 @@ begin
   if Assigned(aFileSource) then
   begin
     FSortingProperties := GetSortingProperties;
-    FileSource.AddReloadEventListener(@ReloadEvent);
+    FileSource.AddEventListener(@FileSourceEventListener);
   end;
 
   //TODO: probably it's not the best place for calling SetActiveFile() :
@@ -2869,8 +2899,24 @@ begin
   UpdateTitle;
 end;
 
+procedure TFileView.ApplySettings;
+var
+  Index: Integer;
+begin
+  SortAllDisplayFiles;
+  ReDisplayFileList;
+
+  for Index := 0 to FFiles.Count - 1 do
+  begin
+    FFiles[Index].TextColor := clNone;
+  end;
+  Notify([fvnVisibleFilePropertiesChanged]);
+end;
+
 function TFileView.BeforeChangePath(NewFileSource: IFileSource;
   Reason: TChangePathReason; NewPath: String): Boolean;
+var
+  AForm: TCustomForm;
 begin
   if NewPath <> '' then
   begin
@@ -2878,9 +2924,19 @@ begin
       if not OnBeforeChangePath(Self, NewFileSource, Reason, NewPath) then
         Exit(False);
 
+    //-- before changing path, remember currently active filename
+    //   TODO: move this call to some generic place that is called
+    //         ALWAYS when currently selected file is changed
+    FHistory.SetFilenameForCurrentPath(GetActiveFileName());
+
     if Assigned(NewFileSource) and not NewFileSource.SetCurrentWorkingDirectory(NewPath) then
     begin
-      msgError(Format(rsMsgChDirFailed, [NewPath]));
+      AForm:= GetParentForm(Self);
+      if Assigned(AForm) and AForm.Visible then
+      begin
+        msgError(Format(rsMsgChDirFailed, [NewPath]));
+      end;
+      DCDebug(rsMsgChDirFailed, [NewPath]);
       Exit(False);
     end;
 
@@ -2947,7 +3003,7 @@ begin
     if FileSource is TSearchResultFileSource then
       SetFileSystemPath(Self, aFile.FullPath)
     else
-      CurrentPath := CurrentPath + IncludeTrailingPathDelimiter(aFile.Name);
+      CurrentPath := CurrentPath + IncludeTrailingPathDelimiter(FileSource.GetFileName(aFile));
   end;
 end;
 
@@ -2968,7 +3024,7 @@ begin
     FFlatView := False;
 
     if Assigned(FileSource) and IsNewFileSource then
-      FileSource.RemoveReloadEventListener(@ReloadEvent);
+      FileSource.RemoveEventListener(@FileSourceEventListener);
 
     EnableWatcher(False);
 
@@ -2979,7 +3035,7 @@ begin
     if Assigned(FileSource) and IsNewFileSource then
     begin
       UpdatePath(True);
-      FileSource.AddReloadEventListener(@ReloadEvent);
+      FileSource.AddEventListener(@FileSourceEventListener);
     end;
 
     EnableWatcher(True);
@@ -3008,7 +3064,7 @@ begin
     PrevIndex := FHistory.CurrentFileSourceIndex - 1;
     if PrevIndex < 0 then
       begin
-        FileSource.RemoveReloadEventListener(@ReloadEvent);
+        FileSource.RemoveEventListener(@FileSourceEventListener);
         EnableWatcher(False);
 
         FHistory.Clear;
@@ -3024,7 +3080,7 @@ begin
           IsNewFileSource := not NewFileSource.Equals(FileSource);
 
           if IsNewFileSource then
-            FileSource.RemoveReloadEventListener(@ReloadEvent);
+            FileSource.RemoveEventListener(@FileSourceEventListener);
 
           EnableWatcher(False);
 
@@ -3035,7 +3091,7 @@ begin
           if Assigned(FileSource) and IsNewFileSource then
           begin
             UpdatePath(True);
-            FileSource.AddReloadEventListener(@ReloadEvent);
+            FileSource.AddEventListener(@FileSourceEventListener);
           end;
 
           EnableWatcher(True);
@@ -3054,7 +3110,7 @@ procedure TFileView.RemoveAllFileSources;
 begin
   if FileSourcesCount > 0 then
   begin
-    FileSource.RemoveReloadEventListener(@ReloadEvent);
+    FileSource.RemoveEventListener(@FileSourceEventListener);
     EnableWatcher(False);
     FHistory.Clear;
 
@@ -3068,11 +3124,11 @@ end;
 
 procedure TFileView.AssignFileSources(const otherFileView: TFileView);
 begin
-  FileSource.RemoveReloadEventListener(@ReloadEvent);
+  FileSource.RemoveEventListener(@FileSourceEventListener);
   EnableWatcher(False);
   FHistory.Assign(otherFileView.FHistory);
   UpdatePath(True);
-  FileSource.AddReloadEventListener(@ReloadEvent);
+  FileSource.AddEventListener(@FileSourceEventListener);
   AfterChangePath;
   EnableWatcher(True);
 end;
@@ -3176,7 +3232,6 @@ begin
       else if fvnDisplayFileListChanged in FNotifications then
       begin
         FNotifications := FNotifications - [fvnDisplayFileListChanged];
-        ReleaseBusy;
         DisplayFileListChanged;
         StartRecentlyUpdatedTimerIfNeeded;
       end
@@ -3316,16 +3371,22 @@ begin
       if WatchFilter <> [] then
       begin
         FWatchPath := CurrentPath;
-        if TFileSystemWatcher.AddWatch(FWatchPath, WatchFilter, @WatcherEvent, self) = False then
+        if FileSource.GetWatcher.addWatch(FWatchPath, WatchFilter, @WatcherEvent, self) = False then
           FWatchPath := EmptyStr;
       end;
     end;
   end
   else
   begin
-    TFileSystemWatcher.RemoveWatch(FWatchPath, @WatcherEvent);
+    FileSource.GetWatcher.removeWatch(FWatchPath, @WatcherEvent);
     FWatchPath := EmptyStr;
   end;
+end;
+
+procedure TFileView.SetFlatView(AFlatView: Boolean);
+begin
+  FFlatView:= AFlatView;
+  FileSource.GetWatcher.UpdateWatch;
 end;
 
 procedure TFileView.ActivateEvent(Sender: TObject);
@@ -3371,20 +3432,39 @@ begin
   Key := 0;
 end;
 
-procedure TFileView.ReloadEvent(const aFileSource: IFileSource; const ReloadedPaths: TPathsArray);
-var
-  NoWatcher: Boolean;
-begin
-  if aFileSource.Equals(FileSource) then
+procedure TFileView.FileSourceEventListener(var params: TFileSourceEventParams);
+
+  procedure handleReload;
+  var
+    NoWatcher: Boolean;
   begin
-    // Reload file view but only if the file source is
-    // currently viewed and FileSystemWatcher is not being used.
+    // Reload file view but only if the file source is currently viewed
+    // and FileSourceWatcher is not being used.
     NoWatcher:= not (WatcherActive and
-                     TFileSystemWatcher.CanWatch(ReloadedPaths) and
-                     TFileSystemFileSource.ClassNameIs(FileSource.ClassName)
-                     );
-    if (NoWatcher or FlatView) then Reload(ReloadedPaths);
+                     FileSource.GetWatcher.canWatch(params.paths));
+    if (NoWatcher or FlatView) then Reload(params.paths);
   end;
+
+  procedure handleRelocation;
+  begin
+    RequestedActiveFile:= params.newPath;
+  end;
+
+  procedure handleQueryActive;
+  begin
+    params.resultDisplayFile:= GetActiveDisplayFile;
+  end;
+
+begin
+  if NOT params.fs.Equals(FileSource) then
+    Exit;
+
+  if params.eventType = TFileSourceEventType.reload then
+    handleReload
+  else if params.eventType = TFileSourceEventType.relocation then
+    handleRelocation
+  else if params.eventType = TFileSourceEventType.queryActive then
+    handleQueryActive;
 end;
 
 procedure TFileView.ReloadTimerEvent(Sender: TObject);
@@ -3397,10 +3477,18 @@ procedure TFileView.WatcherEvent(const EventData: TFSWatcherEventData);
 var
   CurrentTime: TDateTime;
   AddToPending: Boolean;
+  virtualPath: String;
 begin
+  if (not FReloadNeeded) and CheckIfDelayReload then
+  begin
+    // Delay reloading
+    FReloadNeeded:= True;
+    Exit;
+  end;
+  virtualPath:= (FileSource as TFileSystemFileSource).GetVirtualPath(EventData.Path);
   if not (csDestroying in ComponentState) and
      not FReloadNeeded and
-     String(IncludeTrailingPathDelimiter(EventData.Path)).StartsWith(CurrentPath) then
+     String(IncludeTrailingPathDelimiter(virtualPath)).StartsWith(CurrentPath) then
   begin
     if GetCurrentWorkType = fvwtCreate then
     begin
@@ -3472,7 +3560,7 @@ begin
     FilenameFromHistory := FHistory.Filename[aFileSourceIndex, aPathIndex];
 
     if Assigned(FileSource) and IsNewFileSource then
-      FileSource.RemoveReloadEventListener(@ReloadEvent);
+      FileSource.RemoveEventListener(@FileSourceEventListener);
     EnableWatcher(False);
 
     FHistory.SetIndexes(aFileSourceIndex, aPathIndex);
@@ -3480,7 +3568,7 @@ begin
     if Assigned(FileSource) and IsNewFileSource then
     begin
       UpdatePath(True);
-      FileSource.AddReloadEventListener(@ReloadEvent);
+      FileSource.AddEventListener(@FileSourceEventListener);
     end;
 
     AfterChangePath;
@@ -3555,7 +3643,7 @@ begin
   // relatively short time, so the user usually won't notice it and it is
   // a bit faster this way.
   TFileListBuilder.MakeDisplayFileList(
-    FAllDisplayFiles, FFiles, FileFilter, FFilterOptions);
+    FileSource, FAllDisplayFiles, FFiles, FileFilter, FFilterOptions);
   Notify([fvnDisplayFileListChanged]);
 end;
 

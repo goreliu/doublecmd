@@ -3,7 +3,7 @@
    -------------------------------------------------------------------------
    Several useful functions
    
-   Copyright (C) 2006-2020 Alexander Koblov (alexx2000@mail.ru)
+   Copyright (C) 2006-2024 Alexander Koblov (alexx2000@mail.ru)
 
    contributors:
    
@@ -357,45 +357,63 @@ begin
 end;
 
 function mbExpandFileName(const sFileName: String): String;
+const
+  PATH_DELIM_POS = {$IFDEF MSWINDOWS}1{$ELSE}0{$ENDIF};
 begin
-  if (Pos('://', sFileName) > 0) then
+  if (Pos('://', sFileName) > 2) then
     Result:= sFileName
   else begin
     Result:= NormalizePathDelimiters(sFileName);
     Result:= ReplaceEnvVars(Result);
-    if Pos(PathDelim, Result) <> 0 then
+
+    if Pos(PathDelim, Result) > PATH_DELIM_POS then
+    begin
+{$IF DEFINED(MSWINDOWS)}
+    if (Length(Result) > 1) and (Result[1] in ['A'..'Z', 'a'..'z']) and
+       (Result[2] = DriveSeparator) and (GetDriveType(PAnsiChar(ExtractFileDrive(Result) + PathDelim)) = DRIVE_REMOTE) then
+    begin
+      Result:= ExpandAbsolutePath(Result)
+    end
+    else
+{$ENDIF}
       Result:= ExpandFileName(Result);
+    end;
+
+{$IF DEFINED(MSWINDOWS)}
+    // Remove double backslash '\\' after calling 'ExpandFileName'
+    if (Pos(':\\', Result) = 2) and (Result[1] in ['A'..'Z', 'a'..'z'])  then
+      Result:= Result.Remove(2, 1);
+{$ENDIF}
   end;
 end;
 
 function IntToStrTS(const APositiveValue: Int64): String;
-var i, vSrcLen, vSrcI, vSrcNumberNo, vResLen: byte;
+var
+  // 25 is length of '9,223,372,036,854,775,807' (max Int64 with thousand separators)
+  ShortStringResult: String[25];
+  SmallI, BigI: Byte;
 begin
-  if APositiveValue < 0 then
-    Exit(IntToStr(APositiveValue));
-  Str(APositiveValue, Result);
-  vSrcLen := Result.Length;
-
-  vResLen := vSrcLen + ((vSrcLen - 1) div 3);
-  if vSrcLen = vResLen then
-    Exit;
-
-  SetLength(Result, vResLen);
-
-  vSrcI := vResLen;
-  vSrcNumberNo := 1;
-
-  for i:= vSrcLen downto 1 do
-    begin
-      Result[vSrcI] := Result[i];
-      Dec(vSrcI);
-      if(vSrcNumberNo <> vSrcLen) and (vSrcNumberNo mod 3 = 0) then
-        begin
-          Result[vSrcI] := FormatSettings.ThousandSeparator;
-          Dec(vSrcI);
-        end;
-      Inc(vSrcNumberNo);
-    end;
+  Str(APositiveValue, ShortStringResult);
+  if (APositiveValue > 999) and (DefaultFormatSettings.ThousandSeparator <> #0) then
+  begin
+    SmallI := Length(ShortStringResult);
+    BigI := SmallI + (SmallI - 1) div 3;
+    SetLength(ShortStringResult, BigI);
+    repeat
+      ShortStringResult[BigI] := ShortStringResult[SmallI];
+      Dec(BigI);
+      Dec(SmallI);
+      ShortStringResult[BigI] := ShortStringResult[SmallI];
+      Dec(BigI);
+      Dec(SmallI);
+      ShortStringResult[BigI] := ShortStringResult[SmallI];
+      Dec(BigI);
+      Dec(SmallI);
+      ShortStringResult[BigI] := DefaultFormatSettings.ThousandSeparator;
+      Dec(BigI);
+    until BigI = SmallI;
+  end;
+  Result := ShortStringResult;
 end;
 
 function cnvFormatFileSize(const iSize: int64; FSF: TFileSizeFormat; const Number: integer): string;
@@ -800,8 +818,12 @@ begin
             '\', '''', '"':
               QuoteChar := sCmdLine[I];
             ' ', #9:
-              if CurrentArg <> '' then
-                AddArgument;
+              if not bSplitArgs then
+                CurrentArg := CurrentArg + sCmdLine[I]
+              else begin
+                if CurrentArg <> '' then
+                  AddArgument;
+              end;
             #10:
               AddArgument;
             else

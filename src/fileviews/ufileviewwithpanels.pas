@@ -61,6 +61,8 @@ type
     function AddFileSource(aFileSource: IFileSource; aPath: String): Boolean; override;
     function RemoveCurrentFileSource: Boolean; override;
 
+    procedure UpdateColor; override;
+
   published
     procedure cm_EditPath(const {%H-}Params: array of string);
   end;
@@ -167,6 +169,11 @@ begin
     pnlHeader.UpdateAddressLabel;
 end;
 
+procedure TFileViewWithPanels.UpdateColor;
+begin
+  pnlHeader.UpdateColor;
+end;
+
 procedure TFileViewWithPanels.ShowPathEdit;
 begin
   pnlHeader.ShowPathEdit;
@@ -233,10 +240,13 @@ begin
         begin
           SizeProperty := FSFile.SizeProperty;
 
-          if Selected then
-            SizeSelected := SizeSelected + SizeProperty.Value;
+          if SizeProperty.Value > 0 then
+          begin
+            if Selected then
+              SizeSelected := SizeSelected + SizeProperty.Value;
 
-          SizeInDir := SizeInDir + SizeProperty.Value;
+            SizeInDir := SizeInDir + SizeProperty.Value;
+          end;
         end;
       end;
     end;
