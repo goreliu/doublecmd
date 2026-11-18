@@ -104,6 +104,7 @@ type
    procedure DoMainFontZoom( const inc: Integer );
    function MainFontZoomIn: Boolean;
    function MainFontZoomOut: Boolean;
+   procedure DoChangeDirToSibling(AStep: Integer);
 
    //---------------------
 
@@ -397,6 +398,9 @@ type
    procedure cm_CopyCurrentPathToClip(const Params: array of string);
    // 进入光标所在目录
    procedure cm_EnterActiveDir(const Params: array of string);
+   // 切换到同级下一个/上一个目录
+   procedure cm_ChangeDirToNextSibling(const Params: array of string);
+   procedure cm_ChangeDirToPrevSibling(const Params: array of string);
    // @@
 
    // Internal commands
@@ -3587,6 +3591,101 @@ begin
   Result:= True;
 end;
 
+procedure TMainCommands.DoChangeDirToSibling(AStep: Integer);
+var
+  I: Integer;
+  StartIndex: Integer;
+  ParentPath: String;
+  CurrentName: String;
+  CurrentPathNoDelim: String;
+  TargetPath: String;
+  FileName: String;
+  ADisplayFile: TDisplayFile;
+  AFile: TFile;
+  SourceFiles: TFiles;
+  Files: TDisplayFiles;
+  FileView: TFileView;
+begin
+  FileView := frmMain.ActiveFrame;
+  if not Assigned(FileView) then
+    Exit;
+
+  // Only local file system below a drive/root is supported.
+  if not FileView.FileSource.IsClass(TFileSystemFileSource) then
+    Exit;
+  if FileView.FileSource.IsPathAtRoot(FileView.CurrentPath) then
+    Exit;
+
+  CurrentName := ExtractFileName(ExcludeTrailingPathDelimiter(FileView.CurrentRealPath));
+  CurrentPathNoDelim := ExcludeTrailingPathDelimiter(FileView.CurrentRealPath);
+  if (CurrentName = EmptyStr) or (CurrentName = '.') or (CurrentName = '..') then
+    Exit;
+
+  ParentPath := FileView.FileSource.GetParentDir(FileView.CurrentPath);
+  if (ParentPath = EmptyStr) or (ParentPath = FileView.CurrentPath) then
+    Exit;
+
+  // Clear flat view / thumbnail flat mode before changing path.
+  if FileView.FlatView then
+    FileView.FlatView := False;
+
+  Files := TDisplayFiles.Create(True);
+  SourceFiles := FileView.FileSource.GetFiles(ParentPath);
+  if not Assigned(SourceFiles) then
+    Exit;
+  try
+    for I := 0 to SourceFiles.Count - 1 do
+    begin
+      ADisplayFile := TDisplayFile.Create(SourceFiles[I].Clone);
+      ADisplayFile.DisplayName := FileView.FileSource.GetDisplayFileName(ADisplayFile.FSFile);
+      Files.Add(ADisplayFile);
+    end;
+  finally
+    SourceFiles.Free;
+  end;
+
+  try
+    TDisplayFileSorter.Sort(Files, CloneAndAddSortByNameIfNeeded(FileView.Sorting));
+
+    StartIndex := -1;
+    for I := 0 to Files.Count - 1 do
+    begin
+      ADisplayFile := Files[I];
+      AFile := ADisplayFile.FSFile;
+      if Assigned(AFile) and AFile.IsNameValid and
+         ((CompareText(AFile.Name, CurrentName) = 0) or
+          (CompareText(FileView.FileSource.GetFileName(AFile), CurrentName) = 0) or
+          (CompareText(ADisplayFile.DisplayName, CurrentName) = 0) or
+          (CompareText(ExcludeTrailingPathDelimiter(AFile.FullPath), CurrentPathNoDelim) = 0)) then
+      begin
+        StartIndex := I;
+        Break;
+      end;
+    end;
+
+    if StartIndex < 0 then
+      Exit; // Current directory not found in parent list: keep current path.
+
+    I := StartIndex + AStep;
+    while (I >= 0) and (I < Files.Count) do
+    begin
+      AFile := Files[I].FSFile;
+      if Assigned(AFile) and AFile.IsNameValid and
+         (AFile.IsDirectory or AFile.IsLinkToDirectory) then
+      begin
+        FileName := FileView.FileSource.GetFileName(AFile);
+        TargetPath := IncludeTrailingPathDelimiter(ParentPath) + FileName;
+        FileView.CurrentPath := TargetPath;
+        Exit;
+      end;
+      Inc(I, AStep);
+    end;
+    // No sibling directory in that direction: keep current path.
+  finally
+    Files.Free;
+  end;
+end;
+
 procedure TMainCommands.cm_MainFontZoomIn(const Params: array of string);
 begin
   self.MainFontZoomIn;
@@ -5491,6 +5590,16 @@ begin
   if assigned(activeFile) then
     frmMain.ActiveFrame.ChangePathToChild(activeFile);
   FreeAndNil(activeFile);
+end;
+
+procedure TMainCommands.cm_ChangeDirToNextSibling(const Params: array of string);
+begin
+  DoChangeDirToSibling(1);
+end;
+
+procedure TMainCommands.cm_ChangeDirToPrevSibling(const Params: array of string);
+begin
+  DoChangeDirToSibling(-1);
 end;
 
 // @@

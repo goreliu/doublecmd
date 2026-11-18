@@ -2910,6 +2910,18 @@ object frmMain: TfrmMain
       Caption = 'Enter active dir'
       OnExecute = actExecute
     end
+    object actChangeDirToNextSibling: TAction
+      Tag = 14
+      Category = 'Navigation'
+      Caption = 'Change to next sibling directory'
+      OnExecute = actExecute
+    end
+    object actChangeDirToPrevSibling: TAction
+      Tag = 14
+      Category = 'Navigation'
+      Caption = 'Change to previous sibling directory'
+      OnExecute = actExecute
+    end
   end
   object pmHotList: TPopupMenu
     Images = imgLstDirectoryHotlist

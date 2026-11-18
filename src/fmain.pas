@@ -582,6 +582,8 @@ type
     actCopyPanelInfoToClip: TAction;
     actCopyCurrentPathToClip: TAction;
     actEnterActiveDir: TAction;
+    actChangeDirToNextSibling: TAction;
+    actChangeDirToPrevSibling: TAction;
     // @@
     procedure actExecute(Sender: TObject);
     procedure btnF3MouseWheelDown(Sender: TObject; Shift: TShiftState;
