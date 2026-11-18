@@ -5454,9 +5454,10 @@ end;
 
 procedure TMainCommands.cm_Test(const Params: array of string);
 var
-  sParamValue : String;
+  sParamValue : String = '';
 begin
-  GetParamValue(Params[0], 'mine', sParamValue);
+  if Length(Params) > 0 then
+    GetParamValue(Params[0], 'mine', sParamValue);
   Clipboard.Clear;
   ClipboardSetText(sParamValue);
   // if (frmMain.SelectedPanel = fpRight) then frmMain.SelectedPanel := fpLeft;

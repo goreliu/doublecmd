@@ -385,7 +385,9 @@ begin
 
 {$IF DEFINED(MSWINDOWS)}
     // Remove double backslash '\\' after calling 'ExpandFileName'
-    if (Pos(':\\', Result) = 2) and (Result[1] in ['A'..'Z', 'a'..'z'])  then
+    if (Length(Result) >= 2) and
+       (Pos(':\\', Result) = 2) and
+       (Result[1] in ['A'..'Z', 'a'..'z']) then
       Result:= Result.Remove(2, 1);
 {$ENDIF}
   end;

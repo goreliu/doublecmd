@@ -793,7 +793,8 @@ begin
 
                 if MenuItem.IsLine then
                   InsertMenuItemEx(FShellMenu, 0, nil, I + J, 0, MFT_SEPARATOR)
-                else begin
+                else if Assigned(MenuItem.Action) then
+                begin
                   sVerb:= 'cm_' + Copy(MenuItem.Action.Name, 4, MaxInt);
                   iCmd:= InnerExtActionList.Add(TExtActionCommand.Create(MenuItem.Caption, sVerb, '', ''));
                   InsertMenuItemEx(FShellMenu, 0, PWideChar(CeUtf8ToUtf16(MenuItem.Caption)), I + J, iCmd + USER_CMD_ID, MFT_STRING);

@@ -2902,11 +2902,13 @@ object frmMain: TfrmMain
       Tag = 12
       Category = 'Clipboard'
       Caption = 'Copy current path to clipboard'
+      OnExecute = actExecute
     end
     object actEnterActiveDir: TAction
       Tag = 14
       Category = 'Navigation'
       Caption = 'Enter active dir'
+      OnExecute = actExecute
     end
   end
   object pmHotList: TPopupMenu
