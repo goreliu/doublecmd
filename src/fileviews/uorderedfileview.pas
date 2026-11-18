@@ -904,8 +904,13 @@ function TOrderedFileView.SetActiveFileNow(aFilePath: String;
 var
   APath: String;
   Index: PtrInt;
+  NewIndex: PtrInt;
   PathIsAbsolute: Boolean;
 begin
+  Result := False;
+  if (FFiles.Count = 0) then
+    Exit;
+
   if aFilePath <> '' then // find correct cursor position in Panel (drawgrid)
   begin
     PathIsAbsolute := FileSource.GetPathType(aFilePath) = ptAbsolute;
@@ -935,13 +940,14 @@ begin
         if (PathIsAbsolute and mbCompareFileNames(LastActiveFile, aFilePath)) or
            (FlatView) or (mbCompareFileNames(LastActiveFile, CurrentPath + aFilePath)) then
         begin
-          if FLastActiveFileIndex < FFiles.Count then
-            SetUpdate(FLastActiveFileIndex)
-          else begin
-            SetUpdate(FFiles.Count - 1);
-          end;
+          if (FLastActiveFileIndex >= 0) and (FLastActiveFileIndex < FFiles.Count) then
+            NewIndex := FLastActiveFileIndex
+          else
+            NewIndex := FFiles.Count - 1;
+
+          SetUpdate(NewIndex);
           if Assigned(OnChangeActiveFile) then
-            OnChangeActiveFile(Self, FFiles[FLastActiveFileIndex].FSFile);
+            OnChangeActiveFile(Self, FFiles[NewIndex].FSFile);
         end;
       end;
     end;
