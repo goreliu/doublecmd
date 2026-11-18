@@ -164,6 +164,16 @@ uses
 {$ENDIF}
   ;
 
+function NormalizeHotDirPath(const APath: String): String;
+begin
+  Result:= ExcludeBackPathDelimiter(APath);
+  {$IFDEF MSWINDOWS}
+  // The recycle bin VFS accepts only its root path with trailing delimiter.
+  if SameText(Result, PathDelim + PathDelim + PathDelim + rsVfsRecycleBin) then
+    Result:= IncludeTrailingPathDelimiter(Result);
+  {$ENDIF}
+end;
+
 function GetCaption(const ACaption: TCaption): TCaption;
 begin
 {$IF not (DEFINED(LCLWIN32) or DEFINED(LCLCOCOA))}
@@ -672,8 +682,8 @@ begin
                   LocalHotDir.HotDirPathSort := AConfig.GetAttr(Anode, 'PathSort', 0);
                   LocalHotDir.HotDirTarget := AConfig.GetAttr(ANode, 'Target', '');
                   LocalHotDir.HotDirTargetSort := AConfig.GetAttr(Anode, 'TargetSort', 0);
-                  if Pos('://', LocalHotDir.HotDirPath) = 0 then LocalHotDir.HotDirPath:=ExcludeBackPathDelimiter(LocalHotDir.HotDirPath);
-                  if Pos('://', LocalHotDir.HotDirTarget) = 0 then LocalHotDir.HotDirTarget:=ExcludeBackPathDelimiter(LocalHotDir.HotDirTarget);
+                  if Pos('://', LocalHotDir.HotDirPath) = 0 then LocalHotDir.HotDirPath:= NormalizeHotDirPath(LocalHotDir.HotDirPath);
+                  if Pos('://', LocalHotDir.HotDirTarget) = 0 then LocalHotDir.HotDirTarget:= NormalizeHotDirPath(LocalHotDir.HotDirTarget);
                   LocalHotDir.Dispatcher := hd_CHANGEPATH;
                 end
                 else
