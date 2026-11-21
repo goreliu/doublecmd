@@ -51,12 +51,14 @@ GOTO:EOF
 GOTO:EOF
 
 :release
+  call :remove_old
   call :components
   call :plugins
   call :doublecmd
 GOTO:EOF
 
 :debug
+  call :remove_old
   call :components
   call :plugins
 
@@ -66,6 +68,7 @@ GOTO:EOF
 GOTO:EOF
 
 :doublecmd
+  call :remove_old_doublecmd
   rem Build Double Commander
   call :replace_old
   lazbuild src\doublecmd.lpi --bm=release %DC_ARCH%
@@ -74,6 +77,7 @@ GOTO:EOF
 GOTO:EOF
 
 :darkwin
+  call :remove_old
   call :components
   call :plugins
 
@@ -90,6 +94,43 @@ GOTO:EOF
 
   rem Extract debug line info
   tools\extractdwrflnfo doublecmd.dbg
+GOTO:EOF
+
+:remove_old
+  call :remove_old_components
+  call :remove_old_plugins
+  call :remove_old_doublecmd
+GOTO:EOF
+
+:remove_old_components
+GOTO:EOF
+
+:remove_old_plugins
+  del /Q /S plugins\wcx\base64\lib\*.ppu plugins\wcx\base64\lib\*.o 2>NUL
+  del /Q /S plugins\wcx\cpio\lib\*.ppu plugins\wcx\cpio\lib\*.o 2>NUL
+  del /Q /S plugins\wcx\deb\lib\*.ppu plugins\wcx\deb\lib\*.o 2>NUL
+  del /Q /S plugins\wcx\rpm\lib\*.ppu plugins\wcx\rpm\lib\*.o 2>NUL
+  del /Q /S plugins\wcx\sevenzip\lib\*.ppu plugins\wcx\sevenzip\lib\*.o 2>NUL
+  del /Q /S plugins\wcx\unrar\lib\*.ppu plugins\wcx\unrar\lib\*.o 2>NUL
+  del /Q /S plugins\wcx\zip\lib\*.ppu plugins\wcx\zip\lib\*.o 2>NUL
+  del /Q /S plugins\wdx\rpm_wdx\lib\*.ppu plugins\wdx\rpm_wdx\lib\*.o 2>NUL
+  del /Q /S plugins\wdx\deb_wdx\lib\*.ppu plugins\wdx\deb_wdx\lib\*.o 2>NUL
+  del /Q /S plugins\wdx\audioinfo\lib\*.ppu plugins\wdx\audioinfo\lib\*.o 2>NUL
+  del /Q /S plugins\wfx\ftp\lib\*.ppu plugins\wfx\ftp\lib\*.o 2>NUL
+  del /Q /S plugins\wlx\wmp\lib\*.ppu plugins\wlx\wmp\lib\*.o 2>NUL
+  del /Q /S plugins\wlx\preview\lib\*.ppu plugins\wlx\preview\lib\*.o 2>NUL
+  del /Q /S plugins\wlx\richview\lib\*.ppu plugins\wlx\richview\lib\*.o 2>NUL
+
+  del /Q /S plugins\*.dsx 2>NUL
+  del /Q /S plugins\*.w?x 2>NUL
+GOTO:EOF
+
+:remove_old_doublecmd
+  del /Q units\i386-win32-win32\*.ppu units\i386-win32-win32\*.o 2>NUL
+  del /Q units\x86_64-win64-win32\*.ppu units\x86_64-win64-win32\*.o 2>NUL
+
+  del /Q doublecmd.dbg 2>NUL
+  del /Q doublecmd.zdli 2>NUL
 GOTO:EOF
 
 :replace_old

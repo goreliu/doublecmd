@@ -35,12 +35,15 @@
 @del /Q /S plugins\wdx\audioinfo\lib\*.*
 
 @del /Q /S plugins\wfx\ftp\lib\*.*
+@del /Q /S plugins\wfx\samba\lib\*.*
 @del /Q /S plugins\wfx\sample\lib\*.*
 
+@del /Q /S plugins\wlx\peekhead\lib\*.*
 @del /Q /S plugins\wlx\preview\lib\*.*
 @del /Q /S plugins\wlx\richview\lib\*.*
 @del /Q /S plugins\wlx\simplewlx\lib\*.*
 @del /Q /S plugins\wlx\wmp\lib\*.*
+@del /Q /S plugins\wlx\wlxmplayer\lib\*.*
 
 @echo Remove backup files
 @del /Q /S plugins\*.*~
@@ -52,6 +55,8 @@
 @del /Q /S components\kascrypt\lib\*.*
 @del /Q /S components\doublecmd\lib\*.*
 @del /Q /S components\gifanim\lib\*.*
+@del /Q /S components\gifview\lib\*.*
+@del /Q /S components\Image32\lib\*.*
 @del /Q /S components\KASToolBar\lib\*.*
 @del /Q /S components\multithreadprocs\lib\*.*
 @del /Q /S components\viewer\lib\*.*
