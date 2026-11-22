@@ -14,8 +14,8 @@ uses
 const
   PEEK_SIZE = 4096;
   EDIT_CLASS = 'Edit';
-  DEFAULT_FONT_NAME: PWideChar = 'Segoe UI';
-  DEFAULT_FONT_SIZE = 10;
+  DEFAULT_FONT_NAME: PWideChar = 'Microsoft YaHei';
+  DEFAULT_FONT_SIZE = 12;
 
 type
   TTextBuffer = array[0..PEEK_SIZE * 2 - 1] of Byte;
